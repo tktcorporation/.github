@@ -1,4 +1,4 @@
 document:
   - README.md
 ci:
-  - .github/**/*
+  - .github/workflows/**/*
