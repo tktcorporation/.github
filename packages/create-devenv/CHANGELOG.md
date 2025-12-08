@@ -1,5 +1,17 @@
 # @tktco/create-devenv
 
+## 0.1.2
+
+### Patch Changes
+
+- [#4](https://github.com/tktcorporation/.github/pull/4) [`ae7c5e7`](https://github.com/tktcorporation/.github/commit/ae7c5e712b1a16963cd0cd920a92dd589f5e9f84) Thanks [@tktcorporation](https://github.com/tktcorporation)! - fix: overwriteStrategy オプションが正しく機能するように修正
+
+  - "prompt" 戦略: ファイルごとにユーザーに上書き確認を表示
+  - "skip" 戦略: 既存ファイルをスキップして新規ファイルのみコピー
+  - "overwrite" 戦略: 既存ファイルを全て上書き
+
+  また、Vitest によるテスト環境を追加
+
 ## 0.1.1
 
 ### Patch Changes
