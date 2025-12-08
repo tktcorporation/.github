@@ -4,8 +4,7 @@
   "workspaces": ["packages/*"],
   "scripts": {
     "version": "changeset version",
-    "build": "npm run build --workspaces --if-present",
-    "release": "npm run build && changeset publish"
+    "release": "changeset publish"
   },
   "devDependencies": {
     "@changesets/changelog-github": "^0.5.2",
