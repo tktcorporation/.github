@@ -28,6 +28,7 @@
     "defu": "^6.1.4",
     "giget": "^2.0.0",
     "pathe": "^2.0.3",
+    "ts-pattern": "^5.9.0",
     "zod": "^4.1.13"
   },
   "devDependencies": {
