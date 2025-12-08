@@ -4,7 +4,7 @@
   "workspaces": ["packages/*"],
   "scripts": {
     "version": "changeset version",
-    "release": "npm run build --workspace=packages/create-devenv && npm publish --workspace=packages/create-devenv --provenance --access public"
+    "release": "cd packages/create-devenv && npm run build && npm publish --provenance --access public"
   },
   "devDependencies": {
     "@changesets/changelog-github": "^0.5.2",
