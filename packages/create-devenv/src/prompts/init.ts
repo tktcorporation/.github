@@ -29,7 +29,7 @@ export async function promptInit(): Promise<Answers> {
   });
 
   if (!result.success) {
-    throw new Error(result.error.errors.map((e) => e.message).join("\n"));
+    throw new Error(result.error.issues.map((e) => e.message).join("\n"));
   }
 
   return result.data;
