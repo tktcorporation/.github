@@ -20,27 +20,30 @@ export const fileOperationResultSchema = z.object({
 });
 export type FileOperationResult = z.infer<typeof fileOperationResultSchema>;
 
-// テンプレートモジュール
+// テンプレートモジュール（新: patterns 形式）
 export const moduleSchema = z.object({
   id: z.string(),
   name: z.string(),
   description: z.string(),
   setupDescription: z.string().optional(), // セットアップ後の説明
-  files: z.array(z.string()),
-  excludeFiles: z.array(z.string()).optional(),
+  patterns: z.array(z.string()), // glob パターン配列（ホワイトリスト形式）
 });
 
 export type TemplateModule = z.infer<typeof moduleSchema>;
 
+// DevEnvConfig（拡張: カスタムパターン対応）
 export const configSchema = z.object({
   version: z.string(),
-  installedAt: z.string().datetime(),
+  installedAt: z.string().datetime({ offset: true }),
   modules: z.array(z.string()),
   source: z.object({
     owner: z.string(),
     repo: z.string(),
     ref: z.string().optional(),
   }),
+  // 追加のカスタマイズ
+  customPatterns: z.record(z.string(), z.array(z.string())).optional(), // モジュールIDごとの追加パターン
+  excludePatterns: z.array(z.string()).optional(), // グローバル除外パターン
 });
 
 export type DevEnvConfig = z.infer<typeof configSchema>;
@@ -53,3 +56,41 @@ export const answersSchema = z.object({
 });
 
 export type Answers = z.infer<typeof answersSchema>;
+
+// 差分タイプ
+export const diffTypeSchema = z.enum([
+  "added", // ローカルで新規追加（テンプレートにはない）
+  "modified", // 変更あり
+  "deleted", // ローカルで削除（テンプレートにはある）
+  "unchanged", // 変更なし
+]);
+export type DiffType = z.infer<typeof diffTypeSchema>;
+
+// ファイル差分
+export const fileDiffSchema = z.object({
+  path: z.string(),
+  type: diffTypeSchema,
+  localContent: z.string().optional(),
+  templateContent: z.string().optional(),
+});
+export type FileDiff = z.infer<typeof fileDiffSchema>;
+
+// 差分結果
+export const diffResultSchema = z.object({
+  files: z.array(fileDiffSchema),
+  summary: z.object({
+    added: z.number(),
+    modified: z.number(),
+    deleted: z.number(),
+    unchanged: z.number(),
+  }),
+});
+export type DiffResult = z.infer<typeof diffResultSchema>;
+
+// PR 結果
+export const prResultSchema = z.object({
+  url: z.string(),
+  number: z.number(),
+  branch: z.string(),
+});
+export type PrResult = z.infer<typeof prResultSchema>;

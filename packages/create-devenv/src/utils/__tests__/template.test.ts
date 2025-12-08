@@ -25,9 +25,7 @@ vi.mock("consola", () => ({
 }));
 
 // モック後にインポート
-const { copyFile, copyDirectory, writeFileWithStrategy } = await import(
-  "../template"
-);
+const { copyFile, writeFileWithStrategy } = await import("../template");
 const { confirm } = await import("@inquirer/prompts");
 const mockConfirm = vi.mocked(confirm);
 
@@ -172,91 +170,6 @@ describe("copyFile", () => {
       });
       expect(vol.readFileSync("/dest/file.txt", "utf8")).toBe("old content");
     });
-  });
-});
-
-describe("copyDirectory", () => {
-  beforeEach(() => {
-    vol.reset();
-    vi.clearAllMocks();
-  });
-
-  it("ディレクトリ構造を再帰的にコピーする", async () => {
-    vol.fromJSON({
-      "/src/dir/file1.txt": "content1",
-      "/src/dir/subdir/file2.txt": "content2",
-    });
-
-    const results = await copyDirectory("/src/dir", "/dest/dir", [], "skip");
-
-    expect(results).toHaveLength(2);
-    expect(vol.readFileSync("/dest/dir/file1.txt", "utf8")).toBe("content1");
-    expect(vol.readFileSync("/dest/dir/subdir/file2.txt", "utf8")).toBe(
-      "content2",
-    );
-  });
-
-  it("除外パターンに一致するファイルをスキップする", async () => {
-    vol.fromJSON({
-      "/src/dir/file1.txt": "content1",
-      "/src/dir/excluded.txt": "excluded",
-      "/src/dir/subdir/file2.txt": "content2",
-    });
-
-    const results = await copyDirectory(
-      "/src/dir",
-      "/dest/dir",
-      ["excluded.txt"],
-      "skip",
-    );
-
-    expect(results).toHaveLength(2);
-    expect(vol.existsSync("/dest/dir/file1.txt")).toBe(true);
-    expect(vol.existsSync("/dest/dir/excluded.txt")).toBe(false);
-    expect(vol.existsSync("/dest/dir/subdir/file2.txt")).toBe(true);
-  });
-
-  it("各戦略を子ファイルに適用する", async () => {
-    vol.fromJSON({
-      "/src/dir/new.txt": "new content",
-      "/src/dir/existing.txt": "updated content",
-      "/dest/dir/existing.txt": "old content",
-    });
-
-    const results = await copyDirectory(
-      "/src/dir",
-      "/dest/dir",
-      [],
-      "overwrite",
-    );
-
-    expect(results).toContainEqual<CopyResult>({
-      action: "copied",
-      path: "new.txt",
-    });
-    expect(results).toContainEqual<CopyResult>({
-      action: "overwritten",
-      path: "existing.txt",
-    });
-    expect(vol.readFileSync("/dest/dir/existing.txt", "utf8")).toBe(
-      "updated content",
-    );
-  });
-
-  it("basePath を正しく伝播する", async () => {
-    vol.fromJSON({
-      "/src/dir/subdir/file.txt": "content",
-    });
-
-    const results = await copyDirectory(
-      "/src/dir",
-      "/dest/dir",
-      [],
-      "skip",
-      "mydir",
-    );
-
-    expect(results[0].path).toBe("mydir/subdir/file.txt");
   });
 });
 
