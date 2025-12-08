@@ -1,6 +1,6 @@
 {
   "name": "@tktco/create-devenv",
-  "version": "0.1.3",
+  "version": "0.2.0",
   "description": "Interactive CLI to scaffold development environment templates",
   "type": "module",
   "bin": {

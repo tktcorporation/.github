@@ -1,5 +1,43 @@
 # @tktco/create-devenv
 
+## 0.2.0
+
+### Minor Changes
+
+- [#12](https://github.com/tktcorporation/.github/pull/12) [`798d3fb`](https://github.com/tktcorporation/.github/commit/798d3fb332bdffbc4feac24d9ed89a1b510d7fcf) Thanks [@tktcorporation](https://github.com/tktcorporation)! - 双方向同期機能とホワイトリスト形式を追加
+
+  ### 新機能
+
+  - `push` コマンド: ローカル変更を GitHub PR として自動送信
+  - `diff` コマンド: ローカルとテンプレートの差分をプレビュー
+
+  ### 破壊的変更
+
+  - モジュール定義を `files` + `excludeFiles` 形式から `patterns` (glob) 形式に移行
+  - テンプレート対象ファイルをホワイトリスト形式で明示的に指定するように変更
+
+  ### 使用例
+
+  ```bash
+  # 差分を確認
+  npx @tktco/create-devenv diff
+
+  # ローカル変更を PR として送信
+  npx @tktco/create-devenv push --message "feat: DevContainer設定を更新"
+
+  # ドライラン
+  npx @tktco/create-devenv push --dry-run
+  ```
+
+- [#10](https://github.com/tktcorporation/.github/pull/10) [`d932401`](https://github.com/tktcorporation/.github/commit/d93240170c298d5469e4c7646c383ac8e6aed90c) Thanks [@tktcorporation](https://github.com/tktcorporation)! - CLI 出力を改善
+
+  - すべてのファイル操作に上書き戦略を適用
+  - .devenv.json は常に更新（設定管理ファイルとして特別扱い）
+  - セットアップ後にモジュール別説明を表示
+  - 全スキップ時は「変更はありませんでした」と表示
+  - ts-pattern で網羅的なパターンマッチング
+  - Zod スキーマで型安全性を向上
+
 ## 0.1.3
 
 ### Patch Changes
