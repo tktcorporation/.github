@@ -38,11 +38,10 @@ jobs:
         id: changesets
         uses: changesets/action@v1
         with:
-          cwd: packages/create-devenv
           commit: "chore: release packages"
           title: "chore: release packages"
-          version: npm run version
-          publish: npm run release
+          version: npm run --prefix packages/create-devenv version
+          publish: npm run --prefix packages/create-devenv release
           createGithubReleases: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
