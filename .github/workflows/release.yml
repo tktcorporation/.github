@@ -16,14 +16,9 @@ jobs:
   release:
     name: Release
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: packages/create-devenv
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -31,38 +26,14 @@ jobs:
           node-version: "22"
           registry-url: "https://registry.npmjs.org"
 
-      - name: Install latest npm
-        run: npm install -g npm@latest
-
       - name: Install Dependencies
-        run: npm ci
+        run: npm install
 
-      - name: Setup Git User
-        run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-      - name: Check for changesets
+      - name: Create Release PR or Publish
         id: changesets
-        run: |
-          if [ -n "$(ls -A .changeset/*.md 2>/dev/null | grep -v README.md)" ]; then
-            echo "has_changesets=true" >> $GITHUB_OUTPUT
-          else
-            echo "has_changesets=false" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Version packages
-        if: steps.changesets.outputs.has_changesets == 'true'
-        run: |
-          npx changeset version
-          git add -A
-          git commit -m "chore: release packages" || echo "No changes to commit"
-          git push
+        uses: changesets/action@v1
+        with:
+          version: npm run version
+          publish: npm run release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build and Publish
-        if: steps.changesets.outputs.has_changesets == 'false'
-        run: |
-          npm run build
-          npm publish --provenance --access public

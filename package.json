@@ -1,0 +1,13 @@
+{
+  "name": "tktcorporation-github",
+  "private": true,
+  "workspaces": ["packages/*"],
+  "scripts": {
+    "version": "changeset version",
+    "release": "npm run build --workspace=packages/create-devenv && npm publish --workspace=packages/create-devenv --provenance --access public"
+  },
+  "devDependencies": {
+    "@changesets/changelog-github": "^0.5.2",
+    "@changesets/cli": "^2.29.8"
+  }
+}
