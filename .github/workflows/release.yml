@@ -29,7 +29,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "22"
-          registry-url: "https://registry.npmjs.org"
+          # registry-url を設定しない - OIDC では不要で干渉する可能性あり
 
       - name: Install Dependencies
         run: npm ci
