@@ -32,7 +32,9 @@ export const initCommand = defineCommand({
     },
   },
   async run({ args }) {
-    const targetDir = resolve(args.dir);
+    // "init" という引数は無視して現在のディレクトリを使用
+    const dir = args.dir === "init" ? "." : args.dir;
+    const targetDir = resolve(dir);
 
     consola.box("Create DevEnv");
     consola.info(`ターゲット: ${targetDir}`);
