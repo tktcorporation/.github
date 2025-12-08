@@ -1,7 +1,7 @@
 {
   "name": "tktcorporation-github",
   "private": true,
-  "workspaces": ["packages/*"],
+  "packageManager": "pnpm@10.0.0",
   "scripts": {
     "version": "changeset version",
     "release": "changeset publish"
