@@ -1,5 +1,11 @@
 # @tktco/create-devenv
 
+## 0.1.3
+
+### Patch Changes
+
+- [#6](https://github.com/tktcorporation/.github/pull/6) [`91d9a86`](https://github.com/tktcorporation/.github/commit/91d9a86b9097af297c848eaf06ca58736dd552a5) Thanks [@tktcorporation](https://github.com/tktcorporation)! - feat: ビルド時にバージョン情報を埋め込み、実行時に表示するように改善
+
 ## 0.1.2
 
 ### Patch Changes
