@@ -29,7 +29,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "22"
-          # registry-url を設定しない - OIDC では不要で干渉する可能性あり
+          registry-url: "https://registry.npmjs.org"
 
       - name: Install Dependencies
         run: npm ci
@@ -58,10 +58,12 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and Publish
+      - name: Build
         if: steps.changesets.outputs.has_changesets == 'false'
-        run: |
-          npm run build
-          npm publish --provenance --access public
+        run: npm run build
+
+      - name: Publish to npm with OIDC
+        if: steps.changesets.outputs.has_changesets == 'false'
+        run: npm publish --provenance --access public
         env:
-          NPM_CONFIG_PROVENANCE: true
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
