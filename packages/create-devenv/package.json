@@ -17,6 +17,7 @@
     "lint:fix": "biome check --write .",
     "typecheck": "tsc --noEmit",
     "prepublishOnly": "npm run build",
+    "changeset": "changeset",
     "version": "changeset version",
     "release": "npm run build && npm publish --provenance --access public"
   },

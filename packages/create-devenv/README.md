@@ -12,41 +12,14 @@
 
 ## インストール
 
-GitHub Packages からのインストールには認証が必要です。
-
-### 1. .npmrc を設定
-
 ```bash
-# ~/.npmrc に追加
-echo "@tktco:registry=https://npm.pkg.github.com" >> ~/.npmrc
-echo "//npm.pkg.github.com/:_authToken=YOUR_GITHUB_PAT" >> ~/.npmrc
-```
-
-`YOUR_GITHUB_PAT` は `read:packages` スコープを持つ GitHub Personal Access Token に置き換えてください。
-
-### 2. 実行
-
-```bash
-npx @tktco/create-devenv init
+npx @tktco/create-devenv
 ```
 
 または、プロジェクトディレクトリを指定：
 
 ```bash
-npx @tktco/create-devenv init ./my-project
-```
-
-## GitHub Actions での使用
-
-```yaml
-- uses: actions/setup-node@v4
-  with:
-    registry-url: "https://npm.pkg.github.com"
-    scope: "@tktco"
-
-- run: npx @tktco/create-devenv init
-  env:
-    NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+npx @tktco/create-devenv ./my-project
 ```
 
 ## CLI オプション
@@ -89,6 +62,34 @@ npm run dev
 # ビルド
 npm run build
 ```
+
+## リリース
+
+[Changesets](https://github.com/changesets/changesets) を使用した自動リリースフローです。
+
+### 手順
+
+```bash
+cd packages/create-devenv
+
+# 1. changeset 作成（対話式で patch/minor/major を選択）
+npm run changeset
+
+# 2. コミット & プッシュ
+git add . && git commit -m "chore: add changeset" && git push
+```
+
+これで CI が自動的に：
+1. バージョン更新 & CHANGELOG 生成 → コミット
+2. npm publish（OIDC Trusted Publishing）
+
+を実行します。
+
+### バージョニング
+
+- `patch`: バグ修正（0.1.0 → 0.1.1）
+- `minor`: 機能追加（0.1.0 → 0.2.0）
+- `major`: 破壊的変更（0.1.0 → 1.0.0）
 
 ## ライセンス
 
