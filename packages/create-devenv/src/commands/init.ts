@@ -65,7 +65,7 @@ export const initCommand = defineCommand({
     await fetchTemplates({
       targetDir,
       modules: answers.modules,
-      force: args.force || answers.overwriteStrategy === "overwrite",
+      overwriteStrategy: args.force ? "overwrite" : answers.overwriteStrategy,
     });
 
     // devcontainer.env.example を作成
