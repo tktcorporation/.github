@@ -34,14 +34,32 @@ jobs:
       - name: Install Dependencies
         run: npm ci
 
-      - name: Create Release Pull Request or Publish
+      - name: Setup Git User
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Check for changesets
         id: changesets
-        uses: changesets/action@v1
-        with:
-          cwd: packages/create-devenv
-          commit: "chore: release packages"
-          title: "chore: release packages"
-          publish: npm run release
-          createGithubReleases: true
+        run: |
+          if [ -d ".changeset" ] && [ -n "$(ls -A .changeset/*.md 2>/dev/null | grep -v README.md)" ]; then
+            echo "has_changesets=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_changesets=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create Release PR
+        if: steps.changesets.outputs.has_changesets == 'true'
+        run: |
+          npx changeset version
+          git add -A
+          git commit -m "chore: release packages" || echo "No changes to commit"
+          git push
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and Publish
+        if: steps.changesets.outputs.has_changesets == 'false'
+        run: npm run release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
