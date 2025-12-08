@@ -34,16 +34,14 @@ jobs:
       - name: Install Dependencies
         run: npm ci
 
-      - name: Build Package
-        run: npm run build
-
       - name: Create Release Pull Request or Publish
         id: changesets
         uses: changesets/action@v1
         with:
+          cwd: packages/create-devenv
           commit: "chore: release packages"
           title: "chore: release packages"
-          publish: npx changeset publish
+          publish: npm run release
           createGithubReleases: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
