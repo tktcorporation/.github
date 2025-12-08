@@ -7,10 +7,14 @@ import type { Answers } from "../modules/schemas";
 import { promptInit } from "../prompts/init";
 import { fetchTemplates } from "../utils/template";
 
+// ビルド時に置換される定数
+declare const __VERSION__: string;
+const version = typeof __VERSION__ !== "undefined" ? __VERSION__ : "dev";
+
 export const initCommand = defineCommand({
   meta: {
     name: "create-devenv",
-    version: "0.1.0",
+    version,
     description: "開発環境テンプレートを適用",
   },
   args: {
@@ -32,6 +36,9 @@ export const initCommand = defineCommand({
     },
   },
   async run({ args }) {
+    // バージョン情報を最初に表示
+    consola.info(`@tktco/create-devenv v${version}`);
+
     // "init" という引数は無視して現在のディレクトリを使用
     const dir = args.dir === "init" ? "." : args.dir;
     const targetDir = resolve(dir);
