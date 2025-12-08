@@ -18,7 +18,7 @@
     "typecheck": "tsc --noEmit",
     "prepublishOnly": "npm run build",
     "version": "changeset version",
-    "release": "npm run build && changeset publish"
+    "release": "npm run build && npm publish --provenance --access public"
   },
   "dependencies": {
     "@inquirer/prompts": "^8.0.2",
