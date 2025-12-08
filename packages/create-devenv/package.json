@@ -1,0 +1,43 @@
+{
+  "name": "@tktco/create-devenv",
+  "version": "0.1.0",
+  "description": "Interactive CLI to scaffold development environment templates",
+  "type": "module",
+  "bin": {
+    "create-devenv": "./dist/index.mjs"
+  },
+  "files": ["dist", "templates"],
+  "scripts": {
+    "build": "unbuild",
+    "dev": "unbuild --stub",
+    "lint": "biome check .",
+    "lint:fix": "biome check --write .",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run build"
+  },
+  "dependencies": {
+    "@inquirer/prompts": "^7.0.0",
+    "citty": "^0.1.6",
+    "consola": "^3.2.3",
+    "defu": "^6.1.4",
+    "giget": "^1.2.3",
+    "pathe": "^1.1.2",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^1.9.0",
+    "@types/node": "^22.0.0",
+    "typescript": "^5.0.0",
+    "unbuild": "^2.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tktcorporation/.github.git"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
