@@ -25,9 +25,14 @@ vi.mock("consola", () => ({
 }));
 
 // モック後にインポート
-const { copyFile, copyDirectory } = await import("../template");
+const { copyFile, copyDirectory, writeFileWithStrategy } = await import(
+  "../template"
+);
 const { confirm } = await import("@inquirer/prompts");
 const mockConfirm = vi.mocked(confirm);
+
+// 型をインポート
+import type { FileOperationResult } from "../../modules/schemas";
 
 describe("copyFile", () => {
   beforeEach(() => {
@@ -252,5 +257,138 @@ describe("copyDirectory", () => {
     );
 
     expect(results[0].path).toBe("mydir/subdir/file.txt");
+  });
+});
+
+describe("writeFileWithStrategy", () => {
+  beforeEach(() => {
+    vol.reset();
+    vi.clearAllMocks();
+  });
+
+  describe("新規ファイル", () => {
+    it("常に作成する（skip戦略でも）", async () => {
+      vol.fromJSON({});
+
+      const result = await writeFileWithStrategy({
+        destPath: "/dest/file.txt",
+        content: "new content",
+        strategy: "skip",
+        relativePath: "file.txt",
+      });
+
+      expect(result).toEqual<FileOperationResult>({
+        action: "created",
+        path: "file.txt",
+      });
+      expect(vol.readFileSync("/dest/file.txt", "utf8")).toBe("new content");
+    });
+
+    it("親ディレクトリが存在しない場合は作成する", async () => {
+      vol.fromJSON({});
+
+      await writeFileWithStrategy({
+        destPath: "/dest/nested/dir/file.txt",
+        content: "new content",
+        strategy: "skip",
+        relativePath: "nested/dir/file.txt",
+      });
+
+      expect(vol.existsSync("/dest/nested/dir")).toBe(true);
+      expect(vol.readFileSync("/dest/nested/dir/file.txt", "utf8")).toBe(
+        "new content",
+      );
+    });
+  });
+
+  describe("既存ファイル - overwrite 戦略", () => {
+    it("上書きする", async () => {
+      vol.fromJSON({
+        "/dest/file.txt": "old content",
+      });
+
+      const result = await writeFileWithStrategy({
+        destPath: "/dest/file.txt",
+        content: "new content",
+        strategy: "overwrite",
+        relativePath: "file.txt",
+      });
+
+      expect(result).toEqual<FileOperationResult>({
+        action: "overwritten",
+        path: "file.txt",
+      });
+      expect(vol.readFileSync("/dest/file.txt", "utf8")).toBe("new content");
+    });
+  });
+
+  describe("既存ファイル - skip 戦略", () => {
+    it("スキップする（書き込まない）", async () => {
+      vol.fromJSON({
+        "/dest/file.txt": "old content",
+      });
+
+      const result = await writeFileWithStrategy({
+        destPath: "/dest/file.txt",
+        content: "new content",
+        strategy: "skip",
+        relativePath: "file.txt",
+      });
+
+      expect(result).toEqual<FileOperationResult>({
+        action: "skipped",
+        path: "file.txt",
+      });
+      // 元のファイルが保持されている
+      expect(vol.readFileSync("/dest/file.txt", "utf8")).toBe("old content");
+    });
+  });
+
+  describe("既存ファイル - prompt 戦略", () => {
+    it("ユーザーが Yes の場合は上書きする", async () => {
+      vol.fromJSON({
+        "/dest/file.txt": "old content",
+      });
+
+      mockConfirm.mockResolvedValueOnce(true);
+
+      const result = await writeFileWithStrategy({
+        destPath: "/dest/file.txt",
+        content: "new content",
+        strategy: "prompt",
+        relativePath: "file.txt",
+      });
+
+      expect(result).toEqual<FileOperationResult>({
+        action: "overwritten",
+        path: "file.txt",
+      });
+      expect(vol.readFileSync("/dest/file.txt", "utf8")).toBe("new content");
+      expect(mockConfirm).toHaveBeenCalledWith({
+        message: "file.txt は既に存在します。上書きしますか?",
+        default: false,
+      });
+    });
+
+    it("ユーザーが No の場合はスキップする", async () => {
+      vol.fromJSON({
+        "/dest/file.txt": "old content",
+      });
+
+      mockConfirm.mockResolvedValueOnce(false);
+
+      const result = await writeFileWithStrategy({
+        destPath: "/dest/file.txt",
+        content: "new content",
+        strategy: "prompt",
+        relativePath: "file.txt",
+      });
+
+      expect(result).toEqual<FileOperationResult>({
+        action: "skipped",
+        path: "file.txt",
+      });
+      expect(vol.readFileSync("/dest/file.txt", "utf8")).toBe("old content");
+    });
   });
 });

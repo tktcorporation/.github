@@ -5,21 +5,23 @@ import {
   readdirSync,
   rmSync,
   statSync,
+  writeFileSync,
 } from "node:fs";
 import { confirm } from "@inquirer/prompts";
 import { consola } from "consola";
 import { downloadTemplate } from "giget";
 import { join } from "pathe";
+import { match } from "ts-pattern";
 import { getModuleById } from "../modules/index";
+import type {
+  FileOperationResult,
+  OverwriteStrategy,
+} from "../modules/schemas";
 
 const TEMPLATE_SOURCE = "gh:tktcorporation/.github";
 
-export type OverwriteStrategy = "overwrite" | "skip" | "prompt";
-
-export interface CopyResult {
-  action: "copied" | "skipped" | "overwritten";
-  path: string;
-}
+// 後方互換性のためのエイリアス
+export type CopyResult = FileOperationResult;
 
 export interface DownloadOptions {
   targetDir: string;
@@ -28,8 +30,60 @@ export interface DownloadOptions {
   overwriteStrategy: OverwriteStrategy;
 }
 
-export async function fetchTemplates(options: DownloadOptions): Promise<void> {
+export interface WriteFileOptions {
+  destPath: string;
+  content: string;
+  strategy: OverwriteStrategy;
+  relativePath: string;
+}
+
+/**
+ * 上書き戦略に従ってファイルを書き込む
+ */
+export async function writeFileWithStrategy(
+  options: WriteFileOptions,
+): Promise<FileOperationResult> {
+  const { destPath, content, strategy, relativePath } = options;
+  const destExists = existsSync(destPath);
+
+  // ファイルが存在しない場合は常に作成
+  if (!destExists) {
+    const destDir = join(destPath, "..");
+    if (!existsSync(destDir)) {
+      mkdirSync(destDir, { recursive: true });
+    }
+    writeFileSync(destPath, content);
+    return { action: "created", path: relativePath };
+  }
+
+  // 既存ファイルの処理 - ts-pattern で網羅的にマッチ
+  return match(strategy)
+    .with("overwrite", () => {
+      writeFileSync(destPath, content);
+      return { action: "overwritten" as const, path: relativePath };
+    })
+    .with("skip", () => {
+      return { action: "skipped" as const, path: relativePath };
+    })
+    .with("prompt", async () => {
+      const shouldOverwrite = await confirm({
+        message: `${relativePath} は既に存在します。上書きしますか?`,
+        default: false,
+      });
+      if (shouldOverwrite) {
+        writeFileSync(destPath, content);
+        return { action: "overwritten" as const, path: relativePath };
+      }
+      return { action: "skipped" as const, path: relativePath };
+    })
+    .exhaustive();
+}
+
+export async function fetchTemplates(
+  options: DownloadOptions,
+): Promise<FileOperationResult[]> {
   const { targetDir, modules, excludeFiles = [], overwriteStrategy } = options;
+  const allResults: FileOperationResult[] = [];
 
   // 一時ディレクトリにテンプレートをダウンロード
   const tempDir = join(targetDir, ".devenv-temp");
@@ -79,6 +133,7 @@ export async function fetchTemplates(options: DownloadOptions): Promise<void> {
             pattern,
           );
           logResults(results, pattern);
+          allResults.push(...results);
         } else {
           const result = await copyFile(
             srcPath,
@@ -87,6 +142,7 @@ export async function fetchTemplates(options: DownloadOptions): Promise<void> {
             pattern,
           );
           logResult(result);
+          allResults.push(result);
         }
       }
     }
@@ -96,6 +152,8 @@ export async function fetchTemplates(options: DownloadOptions): Promise<void> {
       rmSync(tempDir, { recursive: true, force: true });
     }
   }
+
+  return allResults;
 }
 
 export async function copyFile(
@@ -183,26 +241,23 @@ export async function copyDirectory(
   return results;
 }
 
-function logResult(result: CopyResult): void {
-  switch (result.action) {
-    case "copied":
-      consola.success(`コピー: ${result.path}`);
-      break;
-    case "overwritten":
-      consola.success(`上書き: ${result.path}`);
-      break;
-    case "skipped":
-      consola.info(`スキップ: ${result.path}`);
-      break;
-  }
+export function logResult(result: FileOperationResult): void {
+  match(result.action)
+    .with("copied", () => consola.success(`コピー: ${result.path}`))
+    .with("created", () => consola.success(`作成: ${result.path}`))
+    .with("overwritten", () => consola.success(`上書き: ${result.path}`))
+    .with("skipped", () => consola.info(`スキップ: ${result.path}`))
+    .exhaustive();
 }
 
-function logResults(results: CopyResult[], prefix: string): void {
+function logResults(results: FileOperationResult[], prefix: string): void {
   const copied = results.filter((r) => r.action === "copied").length;
+  const created = results.filter((r) => r.action === "created").length;
   const overwritten = results.filter((r) => r.action === "overwritten").length;
   const skipped = results.filter((r) => r.action === "skipped").length;
 
   if (copied > 0) consola.success(`コピー: ${prefix}/ (${copied} files)`);
+  if (created > 0) consola.success(`作成: ${prefix}/ (${created} files)`);
   if (overwritten > 0)
     consola.success(`上書き: ${prefix}/ (${overwritten} files)`);
   if (skipped > 0) consola.info(`スキップ: ${prefix}/ (${skipped} files)`);

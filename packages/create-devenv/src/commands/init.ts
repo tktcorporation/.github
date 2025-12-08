@@ -1,11 +1,19 @@
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync } from "node:fs";
 import { defineCommand } from "citty";
 import { consola } from "consola";
 import { resolve } from "pathe";
-import { modules } from "../modules/index";
-import type { Answers } from "../modules/schemas";
+import { getModuleById, modules } from "../modules/index";
+import type {
+  Answers,
+  FileOperationResult,
+  OverwriteStrategy,
+} from "../modules/schemas";
 import { promptInit } from "../prompts/init";
-import { fetchTemplates } from "../utils/template";
+import {
+  fetchTemplates,
+  logResult,
+  writeFileWithStrategy,
+} from "../utils/template";
 
 // ビルド時に置換される定数
 declare const __VERSION__: string;
@@ -68,31 +76,39 @@ export const initCommand = defineCommand({
       return;
     }
 
-    // テンプレート取得・適用
-    await fetchTemplates({
+    const effectiveStrategy: OverwriteStrategy = args.force
+      ? "overwrite"
+      : answers.overwriteStrategy;
+
+    // テンプレート取得・適用（結果を収集）
+    const templateResults = await fetchTemplates({
       targetDir,
       modules: answers.modules,
-      overwriteStrategy: args.force ? "overwrite" : answers.overwriteStrategy,
+      overwriteStrategy: effectiveStrategy,
     });
 
-    // devcontainer.env.example を作成
+    const allResults: FileOperationResult[] = [...templateResults];
+
+    // devcontainer.env.example を戦略に従って作成
     if (answers.modules.includes("devcontainer")) {
-      createEnvExample(targetDir);
+      const envResult = await createEnvExample(targetDir, effectiveStrategy);
+      logResult(envResult);
+      allResults.push(envResult);
     }
 
-    // 設定ファイル生成
-    createDevEnvConfig(targetDir, answers.modules);
+    // 設定ファイル生成（常に更新）
+    const configResult = await createDevEnvConfig(targetDir, answers.modules);
+    logResult(configResult);
+    allResults.push(configResult);
 
     consola.box("セットアップ完了!");
-    consola.info("次のステップ:");
-    consola.info("  1. .devcontainer/devcontainer.env を作成");
-    consola.info("  2. code . で VS Code を開く");
-    consola.info("  3. DevContainer で再オープン");
+
+    // モジュール別の説明を表示
+    displayModuleDescriptions(answers.modules, allResults);
   },
 });
 
-function createEnvExample(targetDir: string): void {
-  const content = `# 環境変数サンプル
+const ENV_EXAMPLE_CONTENT = `# 環境変数サンプル
 # このファイルを devcontainer.env にコピーして値を設定してください
 
 # GitHub Personal Access Token
@@ -107,31 +123,68 @@ AWS_DEFAULT_REGION=ap-northeast-1
 WAKATIME_API_KEY=
 `;
 
-  const devcontainerDir = resolve(targetDir, ".devcontainer");
-  if (!existsSync(devcontainerDir)) {
-    mkdirSync(devcontainerDir, { recursive: true });
-  }
-
-  const examplePath = resolve(
-    targetDir,
-    ".devcontainer/devcontainer.env.example",
-  );
-  writeFileSync(examplePath, content);
-  consola.success("作成: .devcontainer/devcontainer.env.example");
+async function createEnvExample(
+  targetDir: string,
+  strategy: OverwriteStrategy,
+): Promise<FileOperationResult> {
+  return writeFileWithStrategy({
+    destPath: resolve(targetDir, ".devcontainer/devcontainer.env.example"),
+    content: ENV_EXAMPLE_CONTENT,
+    strategy,
+    relativePath: ".devcontainer/devcontainer.env.example",
+  });
 }
 
-function createDevEnvConfig(targetDir: string, modules: string[]): void {
+/**
+ * 設定ファイル生成（常に更新 - 特別枠）
+ */
+async function createDevEnvConfig(
+  targetDir: string,
+  selectedModules: string[],
+): Promise<FileOperationResult> {
   const config = {
     version: "0.1.0",
     installedAt: new Date().toISOString(),
-    modules,
+    modules: selectedModules,
     source: {
       owner: "tktcorporation",
       repo: ".github",
     },
   };
 
-  const configPath = resolve(targetDir, ".devenv.json");
-  writeFileSync(configPath, JSON.stringify(config, null, 2));
-  consola.success("作成: .devenv.json");
+  // .devenv.json は常に上書き（設定管理ファイルなので）
+  return writeFileWithStrategy({
+    destPath: resolve(targetDir, ".devenv.json"),
+    content: JSON.stringify(config, null, 2),
+    strategy: "overwrite",
+    relativePath: ".devenv.json",
+  });
+}
+
+/**
+ * モジュール別の説明を表示
+ */
+function displayModuleDescriptions(
+  selectedModules: string[],
+  fileResults: FileOperationResult[],
+): void {
+  const hasChanges = fileResults.some(
+    (r) =>
+      r.action === "copied" ||
+      r.action === "created" ||
+      r.action === "overwritten",
+  );
+
+  if (!hasChanges) {
+    consola.info("変更はありませんでした");
+    return;
+  }
+
+  consola.info("追加されたモジュール:");
+  for (const moduleId of selectedModules) {
+    const mod = getModuleById(moduleId);
+    if (mod?.setupDescription) {
+      consola.info(`  ${mod.name}: ${mod.setupDescription}`);
+    }
+  }
 }
