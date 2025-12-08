@@ -38,6 +38,7 @@ jobs:
         id: changesets
         uses: changesets/action@v1
         with:
+          cwd: packages/create-devenv
           commit: "chore: release packages"
           title: "chore: release packages"
           version: npm run version
