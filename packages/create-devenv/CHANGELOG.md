@@ -1,5 +1,21 @@
 # @tktco/create-devenv
 
+## 0.3.0
+
+### Minor Changes
+
+- [#14](https://github.com/tktcorporation/.github/pull/14) [`c026ed5`](https://github.com/tktcorporation/.github/commit/c026ed55da57df6599f7c57cdbb5d29c05e3273d) Thanks [@tktcorporation](https://github.com/tktcorporation)! - .gitignore に記載されたファイルを自動的に除外する機能を追加
+
+  - init, diff, push の全コマンドで .gitignore にマッチするファイルを除外
+  - ローカルディレクトリとテンプレートリポジトリ両方の .gitignore をチェック
+  - クレデンシャル等の機密情報の誤流出を防止
+
+- [#16](https://github.com/tktcorporation/.github/pull/16) [`3d89baa`](https://github.com/tktcorporation/.github/commit/3d89baa1c236998be4cfb72b68b9b4a6480a7b4e) Thanks [@tktcorporation](https://github.com/tktcorporation)! - push コマンドに unified diff を見ながらファイルを選択できる機能を追加
+
+  - デフォルトで差分を表示しながらチェックボックスでファイル選択が可能に
+  - `--no-interactive` オプションで従来の確認プロンプトに切り替え可能
+  - `--force` オプションは引き続き確認なしで全ファイルを push
+
 ## 0.2.0
 
 ### Minor Changes
