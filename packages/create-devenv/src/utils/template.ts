@@ -16,6 +16,7 @@ import type {
   FileOperationResult,
   OverwriteStrategy,
 } from "../modules/schemas";
+import { filterByGitignore, loadMergedGitignore } from "./gitignore";
 import { getEffectivePatterns, resolvePatterns } from "./patterns";
 
 const TEMPLATE_SOURCE = "gh:tktcorporation/.github";
@@ -101,6 +102,10 @@ export async function fetchTemplates(
 
     consola.success("テンプレートを取得しました");
 
+    // ローカルとテンプレート両方の .gitignore をマージして読み込み
+    // クレデンシャル等の機密情報の誤流出を防止
+    const gitignore = await loadMergedGitignore([targetDir, templateDir]);
+
     // 選択されたモジュールのファイルをパターンベースでコピー
     for (const moduleId of modules) {
       const moduleDef = getModuleById(moduleId);
@@ -113,8 +118,9 @@ export async function fetchTemplates(
         config,
       );
 
-      // パターンにマッチするファイル一覧を取得
-      const files = resolvePatterns(templateDir, patterns);
+      // パターンにマッチするファイル一覧を取得し、gitignore でフィルタリング
+      const resolvedFiles = resolvePatterns(templateDir, patterns);
+      const files = filterByGitignore(resolvedFiles, gitignore);
 
       if (files.length === 0) {
         consola.warn(
