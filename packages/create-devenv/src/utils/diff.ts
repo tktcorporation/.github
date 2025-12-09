@@ -9,6 +9,7 @@ import type {
   DiffType,
   FileDiff,
 } from "../modules/schemas";
+import { filterByGitignore, loadMergedGitignore } from "./gitignore";
 import { getEffectivePatterns, resolvePatterns } from "./patterns";
 
 export interface DiffOptions {
@@ -30,6 +31,10 @@ export async function detectDiff(options: DiffOptions): Promise<DiffResult> {
   let deleted = 0;
   let unchanged = 0;
 
+  // ローカルとテンプレート両方の .gitignore をマージして読み込み
+  // クレデンシャル等の機密情報の誤流出を防止
+  const gitignore = await loadMergedGitignore([targetDir, templateDir]);
+
   for (const moduleId of moduleIds) {
     const mod = getModuleById(moduleId);
     if (!mod) {
@@ -40,10 +45,16 @@ export async function detectDiff(options: DiffOptions): Promise<DiffResult> {
     // 有効なパターンを取得（カスタムパターン考慮）
     const patterns = getEffectivePatterns(moduleId, mod.patterns, config);
 
-    // テンプレート側のファイル一覧を取得
-    const templateFiles = resolvePatterns(templateDir, patterns);
-    // ローカル側のファイル一覧を取得
-    const localFiles = resolvePatterns(targetDir, patterns);
+    // テンプレート側のファイル一覧を取得し、gitignore でフィルタリング
+    const templateFiles = filterByGitignore(
+      resolvePatterns(templateDir, patterns),
+      gitignore,
+    );
+    // ローカル側のファイル一覧を取得し、gitignore でフィルタリング
+    const localFiles = filterByGitignore(
+      resolvePatterns(targetDir, patterns),
+      gitignore,
+    );
 
     const allFiles = new Set([...templateFiles, ...localFiles]);
 
