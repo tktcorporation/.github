@@ -11,6 +11,7 @@ import {
   promptPrBody,
   promptPrTitle,
   promptPushConfirm,
+  promptSelectFilesWithDiff,
 } from "../prompts/push";
 import { detectDiff, formatDiff, getPushableFiles } from "../utils/diff";
 import { createPullRequest, getGitHubToken } from "../utils/github";
@@ -44,6 +45,12 @@ export const pushCommand = defineCommand({
       alias: "f",
       description: "確認プロンプトをスキップ",
       default: false,
+    },
+    interactive: {
+      type: "boolean",
+      alias: "i",
+      description: "差分を確認しながらファイルを選択（デフォルト有効）",
+      default: true,
     },
   },
   async run({ args }) {
@@ -100,7 +107,7 @@ export const pushCommand = defineCommand({
       });
 
       // push 対象ファイルを取得
-      const pushableFiles = getPushableFiles(diff);
+      let pushableFiles = getPushableFiles(diff);
 
       if (pushableFiles.length === 0) {
         consola.info("push するファイルがありません。");
@@ -119,8 +126,15 @@ export const pushCommand = defineCommand({
         return;
       }
 
-      // 確認プロンプト
-      if (!args.force) {
+      // ファイル選択（デフォルト動作）
+      if (args.interactive && !args.force) {
+        pushableFiles = await promptSelectFilesWithDiff(pushableFiles);
+        if (pushableFiles.length === 0) {
+          consola.info("ファイルが選択されませんでした。キャンセルします。");
+          return;
+        }
+      } else if (!args.force) {
+        // --no-interactive 時は従来の確認プロンプト
         const confirmed = await promptPushConfirm(diff);
         if (!confirmed) {
           consola.info("キャンセルしました。");

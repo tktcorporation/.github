@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import consola from "consola";
+import { createPatch } from "diff";
 import { join } from "pathe";
 import { getModuleById } from "../modules";
 import type {
@@ -173,4 +174,44 @@ export function hasDiff(diff: DiffResult): boolean {
     diff.summary.modified > 0 ||
     diff.summary.deleted > 0
   );
+}
+
+/**
+ * FileDiff から unified diff 形式の文字列を生成
+ */
+export function generateUnifiedDiff(fileDiff: FileDiff): string {
+  const { path, type, localContent, templateContent } = fileDiff;
+
+  switch (type) {
+    case "added":
+      return createPatch(path, "", localContent || "", "template", "local");
+    case "modified":
+      return createPatch(
+        path,
+        templateContent || "",
+        localContent || "",
+        "template",
+        "local",
+      );
+    default:
+      return "";
+  }
+}
+
+/**
+ * unified diff にカラーを適用
+ */
+export function colorizeUnifiedDiff(diff: string): string {
+  return diff
+    .split("\n")
+    .map((line) => {
+      if (line.startsWith("+++") || line.startsWith("---")) {
+        return `\x1b[1m${line}\x1b[0m`; // ボールド
+      }
+      if (line.startsWith("+")) return `\x1b[32m${line}\x1b[0m`; // 緑
+      if (line.startsWith("-")) return `\x1b[31m${line}\x1b[0m`; // 赤
+      if (line.startsWith("@@")) return `\x1b[36m${line}\x1b[0m`; // シアン
+      return line;
+    })
+    .join("\n");
 }

@@ -1,6 +1,10 @@
-import { confirm, input, password } from "@inquirer/prompts";
-import type { DiffResult } from "../modules/schemas";
-import { formatDiff } from "../utils/diff";
+import { checkbox, confirm, input, password } from "@inquirer/prompts";
+import type { DiffResult, FileDiff } from "../modules/schemas";
+import {
+  colorizeUnifiedDiff,
+  formatDiff,
+  generateUnifiedDiff,
+} from "../utils/diff";
 
 /**
  * push 実行前の確認プロンプト
@@ -76,5 +80,37 @@ export async function promptGitHubToken(): Promise<string> {
       }
       return true;
     },
+  });
+}
+
+/**
+ * diff を表示しながらファイルを選択するプロンプト
+ */
+export async function promptSelectFilesWithDiff(
+  pushableFiles: FileDiff[],
+): Promise<FileDiff[]> {
+  if (pushableFiles.length === 0) {
+    return [];
+  }
+
+  // 各ファイルの unified diff を表示
+  console.log("\n=== 変更内容（unified diff）===\n");
+  for (const file of pushableFiles) {
+    const icon = file.type === "added" ? "[+]" : "[~]";
+    console.log(`--- ${icon} ${file.path} ---`);
+    console.log(colorizeUnifiedDiff(generateUnifiedDiff(file)));
+    console.log();
+  }
+
+  // チェックボックスでファイル選択
+  const choices = pushableFiles.map((file) => ({
+    name: `[${file.type === "added" ? "+" : "~"}] ${file.path}`,
+    value: file,
+    checked: true,
+  }));
+
+  return checkbox<FileDiff>({
+    message: "PR に含めるファイルを選択してください",
+    choices,
   });
 }
