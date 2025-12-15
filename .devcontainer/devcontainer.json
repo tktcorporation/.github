@@ -1,11 +1,11 @@
 {
   "image": "mcr.microsoft.com/devcontainers/base:bookworm",
   "features": {
-    // "ghcr.io/devcontainers/features/docker-in-docker:2": {
-    //   "version": "latest",
-    //   "enableNonRootDocker": "true",
-    //   "moby": "true"
-    // },
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {
+      "version": "latest",
+      "enableNonRootDocker": "true",
+      "moby": "true"
+    },
     "ghcr.io/devcontainers/features/aws-cli:1": {},
     "ghcr.io/devcontainers/features/github-cli:1": {},
     "ghcr.io/devcontainers-extra/features/mise:1": {}
@@ -14,36 +14,57 @@
   "customizations": {
     "vscode": {
       "extensions": [
+        "ms-azuretools.vscode-docker",
         "GitHub.copilot",
+        "donjayamanne.githistory",
+        "eamodio.gitlens",
         "mhutchie.git-graph",
         "steoates.autoimport",
+        "Atishay-Jain.All-Autocomplete",
+        "usernamehw.errorlens",
+        "dbaeumer.vscode-eslint",
+        "mgmcdermott.vscode-language-babel",
+        "pflannery.vscode-versionlens",
         "editorconfig.editorconfig",
         "WakaTime.vscode-wakatime",
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
+        "ms-python.python",
+        "kawamataryo.copy-python-dotted-path",
+        "zxh404.vscode-proto3",
+        "Vue.volar",
+        "ms-python.flake8",
+        "ms-python.mypy-type-checker",
+        "ms-python.isort",
+        "ms-python.autopep8",
         "nemesv.copy-file-name"
       ]
     }
   },
   "onCreateCommand": {
-    "update-apt": ["sudo", "apt-get", "update"]
-  },
-  "updateContentCommand": {
     "install-packages": [
-      "sudo",
-      "apt-get",
-      "install",
-      "-y",
-      "build-essential",
-      "fzf",
-      "ripgrep",
-      "bc"
+      "bash",
+      "-c",
+      "set -e; sudo apt-get update && sudo apt-get install -y build-essential fzf ripgrep bc gpg ca-certificates curl"
     ]
   },
-  "postCreateCommand": {
+  "updateContentCommand": {
+    "add-node-gpg-key-mise": [
+      "bash",
+      "-c",
+      "set -e; curl -fsSL https://raw.githubusercontent.com/nodejs/release-keys/b362bd15f2ac7ce350d7563fc03e0c625e455e5f/cli.sh | bash -s import"
+    ],
     "setup-mise-bash": ["bash", "-c", "echo 'eval \"$(mise activate bash)\"' >> ~/.bashrc"],
     "trust-mise": ["mise", "trust"]
   },
+  "postCreateCommand": {
+    "mise-install": "mise install"
+  },
   "postStartCommand": {
-    "mise-install": "mise install",
-    "setup-chrome-devtools-mcp": ".devcontainer/setup-chrome-devtools-mcp.sh"
+    "setup-chrome-devtools-mcp": [
+      "bash",
+      "-lc",
+      ".devcontainer/setup-chrome-devtools-mcp.sh"
+    ]
   }
 }
