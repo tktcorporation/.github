@@ -14,29 +14,11 @@
   "customizations": {
     "vscode": {
       "extensions": [
-        "ms-azuretools.vscode-docker",
         "GitHub.copilot",
-        "donjayamanne.githistory",
-        "eamodio.gitlens",
         "mhutchie.git-graph",
         "steoates.autoimport",
-        "Atishay-Jain.All-Autocomplete",
-        "usernamehw.errorlens",
-        "dbaeumer.vscode-eslint",
-        "mgmcdermott.vscode-language-babel",
-        "pflannery.vscode-versionlens",
         "editorconfig.editorconfig",
         "WakaTime.vscode-wakatime",
-        "dbaeumer.vscode-eslint",
-        "esbenp.prettier-vscode",
-        "ms-python.python",
-        "kawamataryo.copy-python-dotted-path",
-        "zxh404.vscode-proto3",
-        "Vue.volar",
-        "ms-python.flake8",
-        "ms-python.mypy-type-checker",
-        "ms-python.isort",
-        "ms-python.autopep8",
         "nemesv.copy-file-name"
       ]
     }
