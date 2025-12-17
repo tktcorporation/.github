@@ -10,7 +10,7 @@
     "ghcr.io/devcontainers/features/github-cli:1": {},
     "ghcr.io/devcontainers-extra/features/mise:1": {}
   },
-  "runArgs": ["--env-file", ".devcontainer/devcontainer.env"],
+  "runArgs": ["--env-file", ".devcontainer/.env.devcontainer"],
   "customizations": {
     "vscode": {
       "extensions": [
