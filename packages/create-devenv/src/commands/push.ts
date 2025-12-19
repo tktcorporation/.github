@@ -7,14 +7,17 @@ import { join, resolve } from "pathe";
 import type { DevEnvConfig } from "../modules/schemas";
 import { configSchema } from "../modules/schemas";
 import {
+  promptAddUntrackedFiles,
   promptGitHubToken,
   promptPrBody,
   promptPrTitle,
   promptPushConfirm,
   promptSelectFilesWithDiff,
 } from "../prompts/push";
+import { addMultipleToCustomPatterns, saveConfig } from "../utils/config";
 import { detectDiff, formatDiff, getPushableFiles } from "../utils/diff";
 import { createPullRequest, getGitHubToken } from "../utils/github";
+import { detectUntrackedFiles } from "../utils/untracked";
 
 const TEMPLATE_SOURCE = "gh:tktcorporation/.github";
 
@@ -78,7 +81,7 @@ export const pushCommand = defineCommand({
       process.exit(1);
     }
 
-    const config: DevEnvConfig = parseResult.data;
+    let config: DevEnvConfig = parseResult.data;
 
     if (config.modules.length === 0) {
       consola.warn("インストール済みのモジュールがありません。");
@@ -96,9 +99,48 @@ export const pushCommand = defineCommand({
         force: true,
       });
 
+      // ホワイトリスト外ファイルの検出と追加確認
+      if (!args.force) {
+        const untrackedByFolder = await detectUntrackedFiles({
+          targetDir,
+          moduleIds: config.modules,
+          config,
+        });
+
+        if (untrackedByFolder.length > 0) {
+          const selectedFiles =
+            await promptAddUntrackedFiles(untrackedByFolder);
+
+          if (selectedFiles.length > 0) {
+            // customPatterns に追加
+            const additions = selectedFiles.map((s) => ({
+              moduleId: s.moduleId,
+              patterns: s.files,
+            }));
+            config = addMultipleToCustomPatterns(config, additions);
+
+            // .devenv.json を更新
+            if (!args.dryRun) {
+              await saveConfig(targetDir, config);
+              const totalAdded = selectedFiles.reduce(
+                (sum, s) => sum + s.files.length,
+                0,
+              );
+              consola.success(
+                `${totalAdded} 件のパターンを .devenv.json に追加しました`,
+              );
+            } else {
+              consola.info(
+                "[ドライラン] .devenv.json への書き込みはスキップされました",
+              );
+            }
+          }
+        }
+      }
+
       consola.start("差分を検出中...");
 
-      // 差分検出
+      // 差分検出（更新された config を使用）
       const diff = await detectDiff({
         targetDir,
         templateDir,
