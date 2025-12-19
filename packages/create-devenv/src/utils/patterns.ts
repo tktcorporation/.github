@@ -45,15 +45,12 @@ function isGlobPattern(pattern: string): boolean {
 }
 
 /**
- * モジュールの全パターンを結合（customPatterns 考慮）
+ * パターン配列を結合（重複排除）
  */
-export function mergePatterns(
-  modulePatterns: string[],
-  customPatterns?: string[],
-): string[] {
-  const merged = [...modulePatterns];
-  if (customPatterns) {
-    merged.push(...customPatterns);
+export function mergePatterns(...patternArrays: string[][]): string[] {
+  const merged: string[] = [];
+  for (const patterns of patternArrays) {
+    merged.push(...patterns);
   }
   return [...new Set(merged)]; // 重複排除
 }
@@ -75,14 +72,11 @@ export function filterByExcludePatterns(
  * 設定からモジュールの有効パターンを取得
  */
 export function getEffectivePatterns(
-  moduleId: string,
+  _moduleId: string,
   modulePatterns: string[],
   config?: DevEnvConfig,
 ): string[] {
-  const customPatterns = config?.customPatterns?.[moduleId] as
-    | string[]
-    | undefined;
-  let patterns = mergePatterns(modulePatterns, customPatterns);
+  let patterns = [...modulePatterns];
 
   // グローバル除外パターンを適用
   if (config?.excludePatterns) {

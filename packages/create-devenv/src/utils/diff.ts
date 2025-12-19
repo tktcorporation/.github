@@ -3,12 +3,13 @@ import { readFile } from "node:fs/promises";
 import consola from "consola";
 import { createPatch } from "diff";
 import { join } from "pathe";
-import { getModuleById } from "../modules";
+import { defaultModules, getModuleById } from "../modules";
 import type {
   DevEnvConfig,
   DiffResult,
   DiffType,
   FileDiff,
+  TemplateModule,
 } from "../modules/schemas";
 import { filterByGitignore, loadMergedGitignore } from "./gitignore";
 import { getEffectivePatterns, resolvePatterns } from "./patterns";
@@ -18,13 +19,20 @@ export interface DiffOptions {
   templateDir: string;
   moduleIds: string[];
   config?: DevEnvConfig;
+  moduleList?: TemplateModule[];
 }
 
 /**
  * ローカルとテンプレート間の差分を検出
  */
 export async function detectDiff(options: DiffOptions): Promise<DiffResult> {
-  const { targetDir, templateDir, moduleIds, config } = options;
+  const {
+    targetDir,
+    templateDir,
+    moduleIds,
+    config,
+    moduleList = defaultModules,
+  } = options;
 
   const files: FileDiff[] = [];
   let added = 0;
@@ -37,13 +45,13 @@ export async function detectDiff(options: DiffOptions): Promise<DiffResult> {
   const gitignore = await loadMergedGitignore([targetDir, templateDir]);
 
   for (const moduleId of moduleIds) {
-    const mod = getModuleById(moduleId);
+    const mod = getModuleById(moduleId, moduleList);
     if (!mod) {
       consola.warn(`モジュール "${moduleId}" が見つかりません`);
       continue;
     }
 
-    // 有効なパターンを取得（カスタムパターン考慮）
+    // 有効なパターンを取得
     const patterns = getEffectivePatterns(moduleId, mod.patterns, config);
 
     // テンプレート側のファイル一覧を取得し、gitignore でフィルタリング

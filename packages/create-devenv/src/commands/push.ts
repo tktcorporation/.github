@@ -4,7 +4,13 @@ import { defineCommand } from "citty";
 import consola from "consola";
 import { downloadTemplate } from "giget";
 import { join, resolve } from "pathe";
-import type { DevEnvConfig } from "../modules/schemas";
+import {
+  addPatternToModulesFile,
+  defaultModules,
+  loadModulesFile,
+  modulesFileExists,
+} from "../modules";
+import type { DevEnvConfig, TemplateModule } from "../modules/schemas";
 import { configSchema } from "../modules/schemas";
 import {
   promptAddUntrackedFiles,
@@ -14,12 +20,12 @@ import {
   promptPushConfirm,
   promptSelectFilesWithDiff,
 } from "../prompts/push";
-import { addMultipleToCustomPatterns, saveConfig } from "../utils/config";
 import { detectDiff, formatDiff, getPushableFiles } from "../utils/diff";
 import { createPullRequest, getGitHubToken } from "../utils/github";
 import { detectUntrackedFiles } from "../utils/untracked";
 
 const TEMPLATE_SOURCE = "gh:tktcorporation/.github";
+const MODULES_FILE_PATH = ".devenv/modules.jsonc";
 
 export const pushCommand = defineCommand({
   meta: {
@@ -81,7 +87,7 @@ export const pushCommand = defineCommand({
       process.exit(1);
     }
 
-    let config: DevEnvConfig = parseResult.data;
+    const config: DevEnvConfig = parseResult.data;
 
     if (config.modules.length === 0) {
       consola.warn("インストール済みのモジュールがありません。");
@@ -99,12 +105,27 @@ export const pushCommand = defineCommand({
         force: true,
       });
 
+      // modules.jsonc を読み込み
+      let moduleList: TemplateModule[];
+      let modulesRawContent: string | undefined;
+
+      if (modulesFileExists(templateDir)) {
+        const loaded = await loadModulesFile(templateDir);
+        moduleList = loaded.modules;
+        modulesRawContent = loaded.rawContent;
+      } else {
+        moduleList = defaultModules;
+      }
+
       // ホワイトリスト外ファイルの検出と追加確認
-      if (!args.force) {
+      let updatedModulesContent: string | undefined;
+
+      if (!args.force && modulesRawContent) {
         const untrackedByFolder = await detectUntrackedFiles({
           targetDir,
           moduleIds: config.modules,
           config,
+          moduleList,
         });
 
         if (untrackedByFolder.length > 0) {
@@ -112,46 +133,43 @@ export const pushCommand = defineCommand({
             await promptAddUntrackedFiles(untrackedByFolder);
 
           if (selectedFiles.length > 0) {
-            // customPatterns に追加
-            const additions = selectedFiles.map((s) => ({
-              moduleId: s.moduleId,
-              patterns: s.files,
-            }));
-            config = addMultipleToCustomPatterns(config, additions);
-
-            // .devenv.json を更新
-            if (!args.dryRun) {
-              await saveConfig(targetDir, config);
-              const totalAdded = selectedFiles.reduce(
-                (sum, s) => sum + s.files.length,
-                0,
-              );
-              consola.success(
-                `${totalAdded} 件のパターンを .devenv.json に追加しました`,
-              );
-            } else {
-              consola.info(
-                "[ドライラン] .devenv.json への書き込みはスキップされました",
+            // modules.jsonc にパターンを追加（メモリ上）
+            let currentContent = modulesRawContent;
+            for (const { moduleId, files } of selectedFiles) {
+              currentContent = addPatternToModulesFile(
+                currentContent,
+                moduleId,
+                files,
               );
             }
+            updatedModulesContent = currentContent;
+
+            const totalAdded = selectedFiles.reduce(
+              (sum, s) => sum + s.files.length,
+              0,
+            );
+            consola.info(
+              `${totalAdded} 件のパターンを modules.jsonc に追加します（PR に含まれます）`,
+            );
           }
         }
       }
 
       consola.start("差分を検出中...");
 
-      // 差分検出（更新された config を使用）
+      // 差分検出
       const diff = await detectDiff({
         targetDir,
         templateDir,
         moduleIds: config.modules,
         config,
+        moduleList,
       });
 
       // push 対象ファイルを取得
       let pushableFiles = getPushableFiles(diff);
 
-      if (pushableFiles.length === 0) {
+      if (pushableFiles.length === 0 && !updatedModulesContent) {
         consola.info("push するファイルがありません。");
         console.log();
         console.log(formatDiff(diff, false));
@@ -163,6 +181,9 @@ export const pushCommand = defineCommand({
         consola.info("[ドライラン] 以下のファイルが PR として送信されます:");
         console.log();
         console.log(formatDiff(diff, true));
+        if (updatedModulesContent) {
+          console.log(`  [+] ${MODULES_FILE_PATH} (パターン追加)`);
+        }
         console.log();
         consola.info("[ドライラン] 実際の PR は作成されませんでした。");
         return;
@@ -171,7 +192,7 @@ export const pushCommand = defineCommand({
       // ファイル選択（デフォルト動作）
       if (args.interactive && !args.force) {
         pushableFiles = await promptSelectFilesWithDiff(pushableFiles);
-        if (pushableFiles.length === 0) {
+        if (pushableFiles.length === 0 && !updatedModulesContent) {
           consola.info("ファイルが選択されませんでした。キャンセルします。");
           return;
         }
@@ -201,6 +222,14 @@ export const pushCommand = defineCommand({
         path: f.path,
         content: f.localContent || "",
       }));
+
+      // modules.jsonc の変更があれば追加
+      if (updatedModulesContent) {
+        files.push({
+          path: MODULES_FILE_PATH,
+          content: updatedModulesContent,
+        });
+      }
 
       consola.start("PR を作成中...");
 
