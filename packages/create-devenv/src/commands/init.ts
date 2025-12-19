@@ -2,14 +2,21 @@ import { existsSync, mkdirSync } from "node:fs";
 import { defineCommand } from "citty";
 import { consola } from "consola";
 import { resolve } from "pathe";
-import { getModuleById, modules } from "../modules/index";
+import {
+  defaultModules,
+  getModuleById,
+  loadModulesFile,
+  modulesFileExists,
+} from "../modules/index";
 import type {
   Answers,
   FileOperationResult,
   OverwriteStrategy,
+  TemplateModule,
 } from "../modules/schemas";
 import { promptInit } from "../prompts/init";
 import {
+  downloadTemplateToTemp,
   fetchTemplates,
   logResult,
   writeFileWithStrategy,
@@ -59,52 +66,70 @@ export const initCommand = defineCommand({
       mkdirSync(targetDir, { recursive: true });
     }
 
-    // プロンプトまたは自動選択
-    let answers: Answers;
-    if (args.yes) {
-      answers = {
-        modules: modules.map((m) => m.id),
-        overwriteStrategy: "overwrite",
-      };
-      consola.info("すべてのモジュールを自動選択しました");
-    } else {
-      answers = await promptInit();
+    // テンプレートをダウンロード
+    const { templateDir, cleanup } = await downloadTemplateToTemp(targetDir);
+
+    try {
+      // modules.jsonc からモジュールを読み込み（なければデフォルト使用）
+      let moduleList: TemplateModule[];
+      if (modulesFileExists(templateDir)) {
+        const { modules: loadedModules } = await loadModulesFile(templateDir);
+        moduleList = loadedModules;
+      } else {
+        moduleList = defaultModules;
+      }
+
+      // プロンプトまたは自動選択
+      let answers: Answers;
+      if (args.yes) {
+        answers = {
+          modules: moduleList.map((m) => m.id),
+          overwriteStrategy: "overwrite",
+        };
+        consola.info("すべてのモジュールを自動選択しました");
+      } else {
+        answers = await promptInit(moduleList);
+      }
+
+      if (answers.modules.length === 0) {
+        consola.warn("テンプレートが選択されませんでした");
+        return;
+      }
+
+      const effectiveStrategy: OverwriteStrategy = args.force
+        ? "overwrite"
+        : answers.overwriteStrategy;
+
+      // テンプレート取得・適用（結果を収集）
+      const templateResults = await fetchTemplates({
+        targetDir,
+        modules: answers.modules,
+        overwriteStrategy: effectiveStrategy,
+        moduleList,
+        templateDir,
+      });
+
+      const allResults: FileOperationResult[] = [...templateResults];
+
+      // devcontainer.env.example を戦略に従って作成
+      if (answers.modules.includes("devcontainer")) {
+        const envResult = await createEnvExample(targetDir, effectiveStrategy);
+        logResult(envResult);
+        allResults.push(envResult);
+      }
+
+      // 設定ファイル生成（常に更新）
+      const configResult = await createDevEnvConfig(targetDir, answers.modules);
+      logResult(configResult);
+      allResults.push(configResult);
+
+      consola.box("セットアップ完了!");
+
+      // モジュール別の説明を表示
+      displayModuleDescriptions(answers.modules, allResults, moduleList);
+    } finally {
+      cleanup();
     }
-
-    if (answers.modules.length === 0) {
-      consola.warn("テンプレートが選択されませんでした");
-      return;
-    }
-
-    const effectiveStrategy: OverwriteStrategy = args.force
-      ? "overwrite"
-      : answers.overwriteStrategy;
-
-    // テンプレート取得・適用（結果を収集）
-    const templateResults = await fetchTemplates({
-      targetDir,
-      modules: answers.modules,
-      overwriteStrategy: effectiveStrategy,
-    });
-
-    const allResults: FileOperationResult[] = [...templateResults];
-
-    // devcontainer.env.example を戦略に従って作成
-    if (answers.modules.includes("devcontainer")) {
-      const envResult = await createEnvExample(targetDir, effectiveStrategy);
-      logResult(envResult);
-      allResults.push(envResult);
-    }
-
-    // 設定ファイル生成（常に更新）
-    const configResult = await createDevEnvConfig(targetDir, answers.modules);
-    logResult(configResult);
-    allResults.push(configResult);
-
-    consola.box("セットアップ完了!");
-
-    // モジュール別の説明を表示
-    displayModuleDescriptions(answers.modules, allResults);
   },
 });
 
@@ -167,6 +192,7 @@ async function createDevEnvConfig(
 function displayModuleDescriptions(
   selectedModules: string[],
   fileResults: FileOperationResult[],
+  moduleList: TemplateModule[],
 ): void {
   const hasChanges = fileResults.some(
     (r) =>
@@ -182,7 +208,7 @@ function displayModuleDescriptions(
 
   consola.info("追加されたモジュール:");
   for (const moduleId of selectedModules) {
-    const mod = getModuleById(moduleId);
+    const mod = getModuleById(moduleId, moduleList);
     if (mod?.setupDescription) {
       consola.info(`  ${mod.name}: ${mod.setupDescription}`);
     }

@@ -5,6 +5,12 @@ import {
   formatDiff,
   generateUnifiedDiff,
 } from "../utils/diff";
+import type { UntrackedFile, UntrackedFilesByFolder } from "../utils/untracked";
+
+export interface SelectedUntrackedFiles {
+  moduleId: string;
+  files: string[];
+}
 
 /**
  * push 実行前の確認プロンプト
@@ -113,4 +119,82 @@ export async function promptSelectFilesWithDiff(
     message: "PR に含めるファイルを選択してください",
     choices,
   });
+}
+
+/**
+ * ホワイトリスト外ファイルの追加確認プロンプト
+ * 2ステップUI: フォルダ選択 → ファイル選択
+ */
+export async function promptAddUntrackedFiles(
+  untrackedByFolder: UntrackedFilesByFolder[],
+): Promise<SelectedUntrackedFiles[]> {
+  if (untrackedByFolder.length === 0) {
+    return [];
+  }
+
+  // サマリー表示
+  console.log();
+  console.log("=== ホワイトリスト外のファイルが見つかりました ===");
+  console.log();
+  for (const { folder, files } of untrackedByFolder) {
+    console.log(`  ${folder}: ${files.length}件`);
+  }
+  console.log();
+
+  // Step 1: 詳細を確認するフォルダを選択
+  const folderChoices = untrackedByFolder.map(({ folder, files }) => ({
+    name: `${folder} (${files.length}件)`,
+    value: folder,
+    checked: true, // デフォルトで全選択
+  }));
+
+  const selectedFolders = await checkbox<string>({
+    message: "詳細を確認するフォルダを選択してください",
+    choices: folderChoices,
+  });
+
+  if (selectedFolders.length === 0) {
+    return [];
+  }
+
+  // 選択されたフォルダのファイルのみを抽出
+  const selectedFolderData = untrackedByFolder.filter((f) =>
+    selectedFolders.includes(f.folder),
+  );
+
+  // Step 2: ファイルを選択（フォルダごとにグループ化して一括表示）
+  const allFileChoices: { name: string; value: UntrackedFile }[] = [];
+
+  for (const { files } of selectedFolderData) {
+    for (const file of files) {
+      allFileChoices.push({
+        name: file.path,
+        value: file,
+      });
+    }
+  }
+
+  const selectedFiles = await checkbox<UntrackedFile>({
+    message: "push 対象に追加するファイルを選択してください",
+    choices: allFileChoices,
+  });
+
+  if (selectedFiles.length === 0) {
+    return [];
+  }
+
+  // moduleId ごとにグループ化
+  const byModuleId = new Map<string, string[]>();
+  for (const file of selectedFiles) {
+    const existing = byModuleId.get(file.moduleId) || [];
+    existing.push(file.path);
+    byModuleId.set(file.moduleId, existing);
+  }
+
+  const result: SelectedUntrackedFiles[] = [];
+  for (const [moduleId, files] of byModuleId) {
+    result.push({ moduleId, files });
+  }
+
+  return result;
 }

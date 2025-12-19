@@ -15,20 +15,49 @@ import type {
   DevEnvConfig,
   FileOperationResult,
   OverwriteStrategy,
+  TemplateModule,
 } from "../modules/schemas";
 import { filterByGitignore, loadMergedGitignore } from "./gitignore";
 import { getEffectivePatterns, resolvePatterns } from "./patterns";
 
-const TEMPLATE_SOURCE = "gh:tktcorporation/.github";
+export const TEMPLATE_SOURCE = "gh:tktcorporation/.github";
 
 // 後方互換性のためのエイリアス
 export type CopyResult = FileOperationResult;
+
+/**
+ * テンプレートをダウンロードして一時ディレクトリのパスを返す
+ */
+export async function downloadTemplateToTemp(
+  targetDir: string,
+): Promise<{ templateDir: string; cleanup: () => void }> {
+  const tempDir = join(targetDir, ".devenv-temp");
+
+  consola.start("テンプレートを取得中...");
+
+  const { dir: templateDir } = await downloadTemplate(TEMPLATE_SOURCE, {
+    dir: tempDir,
+    force: true,
+  });
+
+  consola.success("テンプレートを取得しました");
+
+  const cleanup = () => {
+    if (existsSync(tempDir)) {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  };
+
+  return { templateDir, cleanup };
+}
 
 export interface DownloadOptions {
   targetDir: string;
   modules: string[];
   overwriteStrategy: OverwriteStrategy;
   config?: DevEnvConfig;
+  moduleList?: TemplateModule[]; // 外部からロードしたモジュールリスト
+  templateDir?: string; // 事前にダウンロードしたテンプレートディレクトリ
 }
 
 export interface WriteFileOptions {
@@ -86,21 +115,36 @@ export async function writeFileWithStrategy(
 export async function fetchTemplates(
   options: DownloadOptions,
 ): Promise<FileOperationResult[]> {
-  const { targetDir, modules, overwriteStrategy, config } = options;
+  const {
+    targetDir,
+    modules,
+    overwriteStrategy,
+    config,
+    moduleList,
+    templateDir: preDownloadedDir,
+  } = options;
   const allResults: FileOperationResult[] = [];
 
-  // 一時ディレクトリにテンプレートをダウンロード
+  // 事前ダウンロード済みか、新規ダウンロードか
+  const shouldDownload = !preDownloadedDir;
   const tempDir = join(targetDir, ".devenv-temp");
 
+  let templateDir: string;
+
   try {
-    consola.start("テンプレートを取得中...");
+    if (shouldDownload) {
+      consola.start("テンプレートを取得中...");
 
-    const { dir: templateDir } = await downloadTemplate(TEMPLATE_SOURCE, {
-      dir: tempDir,
-      force: true,
-    });
+      const result = await downloadTemplate(TEMPLATE_SOURCE, {
+        dir: tempDir,
+        force: true,
+      });
+      templateDir = result.dir;
 
-    consola.success("テンプレートを取得しました");
+      consola.success("テンプレートを取得しました");
+    } else {
+      templateDir = preDownloadedDir;
+    }
 
     // ローカルとテンプレート両方の .gitignore をマージして読み込み
     // クレデンシャル等の機密情報の誤流出を防止
@@ -108,10 +152,13 @@ export async function fetchTemplates(
 
     // 選択されたモジュールのファイルをパターンベースでコピー
     for (const moduleId of modules) {
-      const moduleDef = getModuleById(moduleId);
+      // moduleList が指定されていればそちらから、なければデフォルトから取得
+      const moduleDef = moduleList
+        ? moduleList.find((m) => m.id === moduleId)
+        : getModuleById(moduleId);
       if (!moduleDef) continue;
 
-      // 有効なパターンを取得（カスタムパターン考慮）
+      // 有効なパターンを取得
       const patterns = getEffectivePatterns(
         moduleId,
         moduleDef.patterns,
@@ -145,8 +192,8 @@ export async function fetchTemplates(
       }
     }
   } finally {
-    // 一時ディレクトリを削除
-    if (existsSync(tempDir)) {
+    // 新規ダウンロードした場合のみ一時ディレクトリを削除
+    if (shouldDownload && existsSync(tempDir)) {
       rmSync(tempDir, { recursive: true, force: true });
     }
   }

@@ -31,7 +31,7 @@ export const moduleSchema = z.object({
 
 export type TemplateModule = z.infer<typeof moduleSchema>;
 
-// DevEnvConfig（拡張: カスタムパターン対応）
+// DevEnvConfig
 export const configSchema = z.object({
   version: z.string(),
   installedAt: z.string().datetime({ offset: true }),
@@ -41,8 +41,6 @@ export const configSchema = z.object({
     repo: z.string(),
     ref: z.string().optional(),
   }),
-  // 追加のカスタマイズ
-  customPatterns: z.record(z.string(), z.array(z.string())).optional(), // モジュールIDごとの追加パターン
   excludePatterns: z.array(z.string()).optional(), // グローバル除外パターン
 });
 
