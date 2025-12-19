@@ -1,0 +1,53 @@
+{
+  "$schema": "./modules.schema.json",
+  "modules": [
+    {
+      // ルート直下のファイル（ディレクトリに属さないファイル）
+      "id": ".",
+      "name": "ルート設定",
+      "description": "MCP、mise などのルート設定ファイル",
+      "setupDescription": "プロジェクトルートの設定ファイルが適用されます",
+      "patterns": [
+        ".mcp.json",
+        ".mise.toml"
+      ]
+    },
+    {
+      "id": ".devcontainer",
+      "name": "DevContainer",
+      "description": "VS Code DevContainer、Docker-in-Docker",
+      "setupDescription": "VS Code で DevContainer を開くと自動でセットアップされます",
+      // ホワイトリスト形式: テンプレートとして配布するファイルのみを明示
+      "patterns": [
+        ".devcontainer/devcontainer.json",
+        ".devcontainer/.gitignore",
+        ".devcontainer/setup-*.sh",
+        ".devcontainer/test-*.sh",
+        ".devcontainer/.env.devcontainer.example"
+        // 除外: devcontainer.env（秘密情報）
+      ]
+    },
+    {
+      "id": ".github",
+      "name": "GitHub",
+      "description": "GitHub Actions、labeler ワークフロー",
+      "setupDescription": "PR 作成時に自動でラベル付け、Issue リンクが行われます",
+      "patterns": [
+        ".github/workflows/issue-link.yml",
+        ".github/workflows/label.yml",
+        ".github/labeler.yml"
+        // 除外: ci.yml, release.yml（リポジトリ固有のCI/CD設定）
+      ]
+    },
+    {
+      "id": ".claude",
+      "name": "Claude",
+      "description": "Claude Code のプロジェクト共通設定",
+      "setupDescription": "Claude Code のプロジェクト設定が適用されます",
+      "patterns": [
+        ".claude/settings.json"
+        // 除外: settings.local.json（個人設定）
+      ]
+    }
+  ]
+}
