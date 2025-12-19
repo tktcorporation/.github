@@ -1,5 +1,30 @@
 # @tktco/create-devenv
 
+## 0.4.0
+
+### Minor Changes
+
+- [#23](https://github.com/tktcorporation/.github/pull/23) [`ec36c47`](https://github.com/tktcorporation/.github/commit/ec36c474aac4e01b30ad018507f5fe7f9a305da2) Thanks [@tktcorporation](https://github.com/tktcorporation)! - push コマンドにホワイトリスト外ファイル検知機能を追加し、モジュール定義を外部化
+
+  ### ホワイトリスト外ファイル検知
+
+  - push 時にホワイトリスト（patterns）に含まれていないファイルを検出
+  - モジュールごとにグループ化して選択 UI を表示
+  - 選択したファイルを modules.jsonc に自動追加（PR に含まれる）
+  - gitignore されているファイルは自動で除外
+
+  ### モジュール定義の外部化
+
+  - モジュール定義をコードから `.devenv/modules.jsonc` に外部化
+  - テンプレートリポジトリの modules.jsonc から動的に読み込み
+  - `customPatterns` を廃止し modules.jsonc に統合
+
+  ### ディレクトリベースのモジュール設計
+
+  - モジュール ID をディレクトリパスベースに変更（例: `.devcontainer`, `.github`, `.`）
+  - ファイルパスから即座にモジュール ID を導出可能に
+  - モジュール間のファイル重複を構造的に防止
+
 ## 0.3.0
 
 ### Minor Changes
