@@ -1,4 +1,4 @@
-import { checkbox, confirm, input, password } from "@inquirer/prompts";
+import { checkbox, confirm, input, password, Separator } from "@inquirer/prompts";
 import type { DiffResult, FileDiff } from "../modules/schemas";
 import {
   colorizeUnifiedDiff,
@@ -162,13 +162,32 @@ export async function promptAddUntrackedFiles(
     selectedFolders.includes(f.folder),
   );
 
-  // Step 2: ファイルを選択（フォルダごとにグループ化して一括表示）
-  const allFileChoices: { name: string; value: UntrackedFile }[] = [];
+  // Step 2: ファイルを選択（罫線付きツリー形式で表示）
+  const allFileChoices: (
+    | { name: string; value: UntrackedFile }
+    | Separator
+  )[] = [];
 
-  for (const { files } of selectedFolderData) {
-    for (const file of files) {
+  for (const { folder, files } of selectedFolderData) {
+    // フォルダヘッダーを追加
+    allFileChoices.push(new Separator(`\n  ── ${folder} ──`));
+
+    // フォルダ内のファイルをソート
+    const sortedFiles = [...files].sort((a, b) => a.path.localeCompare(b.path));
+
+    // ツリー形式で表示
+    for (let i = 0; i < sortedFiles.length; i++) {
+      const file = sortedFiles[i];
+      const isLast = i === sortedFiles.length - 1;
+      const prefix = isLast ? "└─" : "├─";
+
+      // フォルダ部分を除いたファイル名を取得
+      const relativePath = file.path.startsWith(`${folder}/`)
+        ? file.path.slice(folder.length + 1)
+        : file.path;
+
       allFileChoices.push({
-        name: file.path,
+        name: `${prefix} ${relativePath}`,
         value: file,
       });
     }
