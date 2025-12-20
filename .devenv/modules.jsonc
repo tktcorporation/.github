@@ -23,8 +23,8 @@
         ".devcontainer/.gitignore",
         ".devcontainer/setup-*.sh",
         ".devcontainer/test-*.sh",
-        ".devcontainer/.env.devcontainer.example"
-        // 除外: devcontainer.env（秘密情報）
+        ".devcontainer/.env.devcontainer.example",
+        ".devcontainer/run-chrome-devtools-mcp.sh"
       ]
     },
     {
