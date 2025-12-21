@@ -23,10 +23,12 @@ import {
 } from "../prompts/push";
 import { detectDiff, formatDiff, getPushableFiles } from "../utils/diff";
 import { createPullRequest, getGitHubToken } from "../utils/github";
+import { detectAndUpdateReadme } from "../utils/readme";
+import { TEMPLATE_SOURCE } from "../utils/template";
 import { detectUntrackedFiles } from "../utils/untracked";
 
-const TEMPLATE_SOURCE = "gh:tktcorporation/.github";
 const MODULES_FILE_PATH = ".devenv/modules.jsonc";
+const README_PATH = "README.md";
 
 export const pushCommand = defineCommand({
   meta: {
@@ -225,6 +227,9 @@ export const pushCommand = defineCommand({
       // PR 本文取得
       const body = await promptPrBody();
 
+      // README を更新（対象の場合のみ）
+      const readmeResult = await detectAndUpdateReadme(targetDir, templateDir);
+
       // ファイル内容を準備
       const files = pushableFiles.map((f) => ({
         path: f.path,
@@ -236,6 +241,14 @@ export const pushCommand = defineCommand({
         files.push({
           path: MODULES_FILE_PATH,
           content: updatedModulesContent,
+        });
+      }
+
+      // README の変更があれば追加
+      if (readmeResult?.updated) {
+        files.push({
+          path: README_PATH,
+          content: readmeResult.content,
         });
       }
 

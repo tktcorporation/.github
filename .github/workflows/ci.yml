@@ -81,3 +81,22 @@ jobs:
           node packages/create-devenv/dist/index.mjs /tmp/test-project --yes
           ls -la /tmp/test-project
           cat /tmp/test-project/.devenv.json
+
+  docs:
+    name: Check README
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Check README is up to date
+        run: pnpm --filter @tktco/create-devenv run docs:check
