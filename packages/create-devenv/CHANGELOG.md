@@ -1,5 +1,16 @@
 # @tktco/create-devenv
 
+## 0.5.0
+
+### Minor Changes
+
+- [#32](https://github.com/tktcorporation/.github/pull/32) [`69db290`](https://github.com/tktcorporation/.github/commit/69db290f4757f65910f41f4557847c3e3d94540c) Thanks [@tktcorporation](https://github.com/tktcorporation)! - README 自動生成機能を追加
+
+  - `pnpm run docs` で README のセクション（機能一覧・コマンド・生成ファイル）を自動生成
+  - push コマンド実行時に README を自動更新して PR に含める
+  - デフォルトコマンドをインタラクティブ選択に変更
+  - 開発者向けドキュメントを CONTRIBUTING.md に移動
+
 ## 0.4.1
 
 ### Patch Changes
