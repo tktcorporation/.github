@@ -19,9 +19,9 @@ process.env.COLUMNS = "80";
 
 import { readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
+import { stripVTControlCharacters } from "node:util";
 import { renderUsage } from "citty";
 import { parse } from "jsonc-parser";
-import { stripVTControlCharacters } from "node:util";
 import { diffCommand } from "../src/commands/diff";
 import { initCommand } from "../src/commands/init";
 import { pushCommand } from "../src/commands/push";
@@ -62,8 +62,7 @@ interface ModulesFile {
 
 interface CommandInfo {
   name: string;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  command: any;
+  command: Parameters<typeof renderUsage>[0];
   description: string;
 }
 
