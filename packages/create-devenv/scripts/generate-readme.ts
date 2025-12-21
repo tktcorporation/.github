@@ -12,10 +12,16 @@
  *   - 生成されるファイル (modules.jsonc から)
  */
 
+// 環境によるrenderUsage出力の差異を防ぐ
+process.env.NO_COLOR = "1";
+process.env.FORCE_COLOR = "0";
+process.env.COLUMNS = "80";
+
 import { readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { renderUsage } from "citty";
 import { parse } from "jsonc-parser";
+import { stripVTControlCharacters } from "node:util";
 import { diffCommand } from "../src/commands/diff";
 import { initCommand } from "../src/commands/init";
 import { pushCommand } from "../src/commands/push";
@@ -117,7 +123,8 @@ async function generateCommandsSection(): Promise<string> {
     sections.push("```");
 
     const usage = await renderUsage(command);
-    sections.push(usage.trim());
+    // ANSIエスケープコードを除去（CI環境との一貫性を保つ）
+    sections.push(stripVTControlCharacters(usage.trim()));
 
     sections.push("```\n");
   }
