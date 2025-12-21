@@ -2,13 +2,16 @@
 
 開発環境テンプレートをインタラクティブにセットアップする CLI ツール。
 
+<!-- FEATURES:START -->
+
 ## 機能
 
-- DevContainer 設定（VS Code 拡張、mise、Docker-in-Docker）
-- GitHub Actions（issue-link、labeler ワークフロー）
-- MCP サーバー設定（Context7、Playwright、Chrome DevTools）
-- mise 設定（Node.js、uv、Claude Code など）
-- Claude IDE 設定
+- **ルート設定** - MCP、mise などのルート設定ファイル
+- **DevContainer** - VS Code DevContainer、Docker-in-Docker
+- **GitHub** - GitHub Actions、labeler ワークフロー
+- **Claude** - Claude Code のプロジェクト共通設定
+
+<!-- FEATURES:END -->
 
 ## インストール
 
@@ -22,74 +25,117 @@ npx @tktco/create-devenv
 npx @tktco/create-devenv ./my-project
 ```
 
-## CLI オプション
+<!-- COMMANDS:START -->
 
-```
-Usage: create-devenv init [dir] [options]
+## コマンド
+
+### `init`
 
 開発環境テンプレートを適用
 
-Arguments:
-  dir           プロジェクトディレクトリ (default: ".")
-
-Options:
-  --force       既存ファイルを強制上書き
-  -h, --help    ヘルプを表示
 ```
+開発環境テンプレートを適用 (create-devenv vdev)
+
+USAGE `create-devenv [OPTIONS] [DIR]`
+
+ARGUMENTS
+
+  `DIR="."`    プロジェクトディレクトリ    
+
+OPTIONS
+
+    `--force`    既存ファイルを強制上書き                
+  `-y, --yes`    すべてのモジュールを自動選択（非インタラクティブモード）
+```
+
+### `push`
+
+ローカル変更をテンプレートリポジトリに PR として送信
+
+```
+ローカル変更をテンプレートリポジトリに PR として送信 (push)
+
+USAGE `push [OPTIONS] [DIR]`
+
+ARGUMENTS
+
+  `DIR="."`    プロジェクトディレクトリ    
+
+OPTIONS
+
+              `-n, --dryRun`    実際の PR を作成せず、プレビューのみ表示   
+             `-m, --message`    PR のタイトル                 
+               `-f, --force`    確認プロンプトをスキップ             
+  `--no-i, --no-interactive`    差分を確認しながらファイルを選択（デフォルト有効）
+```
+
+### `diff`
+
+ローカルとテンプレートの差分を表示
+
+```
+ローカルとテンプレートの差分を表示 (diff)
+
+USAGE `diff [OPTIONS] [DIR]`
+
+ARGUMENTS
+
+  `DIR="."`    プロジェクトディレクトリ    
+
+OPTIONS
+
+  `-v, --verbose`    詳細な差分を表示
+```
+
+<!-- COMMANDS:END -->
+
+<!-- FILES:START -->
 
 ## 生成されるファイル
 
 選択したモジュールに応じて以下のファイルが生成されます：
 
-- `.devcontainer/` - DevContainer 設定
-- `.github/` - GitHub Actions ワークフロー
-- `.mcp.json` - MCP サーバー設定
-- `.mise.toml` - mise ツール設定
-- `.claude/` - Claude IDE 設定
+### ルート
+
+MCP、mise などのルート設定ファイル
+
+- `.mcp.json`
+- `.mise.toml`
+
+### `.devcontainer/`
+
+VS Code DevContainer、Docker-in-Docker
+
+- `.devcontainer/devcontainer.json`
+- `.devcontainer/.gitignore`
+- `.devcontainer/setup-*.sh` (パターン)
+- `.devcontainer/test-*.sh` (パターン)
+- `.devcontainer/.env.devcontainer.example`
+- `.devcontainer/run-chrome-devtools-mcp.sh`
+
+### `.github/`
+
+GitHub Actions、labeler ワークフロー
+
+- `.github/workflows/issue-link.yml`
+- `.github/workflows/label.yml`
+- `.github/labeler.yml`
+
+### `.claude/`
+
+Claude Code のプロジェクト共通設定
+
+- `.claude/settings.json`
+
+### 設定ファイル
+
 - `.devenv.json` - このツールの設定（適用したモジュール情報）
 
-## 開発
+<!-- FILES:END -->
 
-```bash
-cd packages/create-devenv
+## 開発・コントリビュート
 
-# 依存関係のインストール
-npm install
-
-# 開発モード（stub）
-npm run dev
-
-# ビルド
-npm run build
-```
-
-## リリース
-
-[Changesets](https://github.com/changesets/changesets) を使用した自動リリースフローです。
-
-### 手順
-
-```bash
-cd packages/create-devenv
-
-# 1. changeset 作成（対話式で patch/minor/major を選択）
-npm run changeset
-
-# 2. コミット & プッシュ
-git add . && git commit -m "chore: add changeset" && git push
-```
-
-これで CI が自動的に：
-1. バージョン更新 & CHANGELOG 生成 → コミット
-2. npm publish（OIDC Trusted Publishing）
-
-を実行します。
-
-### バージョニング
-
-- `patch`: バグ修正（0.1.0 → 0.1.1）
-- `minor`: 機能追加（0.1.0 → 0.2.0）
-- `major`: 破壊的変更（0.1.0 → 1.0.0）
+[CONTRIBUTING.md](./CONTRIBUTING.md) を参照してください。
 
 ## ライセンス
 

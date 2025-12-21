@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { select } from "@inquirer/prompts";
 import { defineCommand, runMain } from "citty";
 import { version } from "../package.json";
 import { diffCommand } from "./commands/diff";
@@ -18,7 +19,41 @@ const main = defineCommand({
   },
 });
 
-// サブコマンドなしで実行された場合は init を実行（後方互換性）
+const commandMap = {
+  init: initCommand,
+  push: pushCommand,
+  diff: diffCommand,
+} as const;
+
+/**
+ * コマンド選択プロンプト
+ */
+async function promptCommand(): Promise<void> {
+  const command = await select({
+    message: "実行するコマンドを選択してください",
+    choices: [
+      {
+        name: "init - 開発環境テンプレートを適用",
+        value: "init" as const,
+        description: "テンプレートをダウンロードしてプロジェクトに適用",
+      },
+      {
+        name: "push - ローカル変更を PR として送信",
+        value: "push" as const,
+        description: "ローカルの変更をテンプレートリポジトリに PR として送信",
+      },
+      {
+        name: "diff - ローカルとテンプレートの差分を表示",
+        value: "diff" as const,
+        description: "現在のファイルとテンプレートの差分を確認",
+      },
+    ],
+  });
+
+  runMain(commandMap[command]);
+}
+
+// サブコマンドなしで実行された場合の処理
 const args = process.argv.slice(2);
 const hasSubCommand =
   args.length > 0 &&
@@ -28,8 +63,8 @@ if (!hasSubCommand && args.length > 0 && !args[0].startsWith("-")) {
   // npx @tktco/create-devenv . のような形式は init コマンドとして実行
   runMain(initCommand);
 } else if (!hasSubCommand && args.length === 0) {
-  // 引数なしの場合はヘルプを表示
-  runMain(main);
+  // 引数なしの場合はコマンド選択プロンプトを表示
+  promptCommand();
 } else {
   runMain(main);
 }
