@@ -19,11 +19,13 @@ const main = defineCommand({
   },
 });
 
-const commandMap = {
+type CommandType = typeof initCommand | typeof pushCommand | typeof diffCommand;
+
+const commandMap: Record<"init" | "push" | "diff", CommandType> = {
   init: initCommand,
   push: pushCommand,
   diff: diffCommand,
-} as const;
+};
 
 /**
  * コマンド選択プロンプト
@@ -50,7 +52,8 @@ async function promptCommand(): Promise<void> {
     ],
   });
 
-  runMain(commandMap[command]);
+  const selectedCommand = commandMap[command];
+  runMain(selectedCommand as typeof diffCommand);
 }
 
 // サブコマンドなしで実行された場合の処理
