@@ -1,5 +1,14 @@
 # @tktco/create-devenv
 
+## 0.4.1
+
+### Patch Changes
+
+- [#26](https://github.com/tktcorporation/.github/pull/26) [`c490325`](https://github.com/tktcorporation/.github/commit/c4903250a0a7f8f84dae429ac5d7536b02af019f) Thanks [@tktcorporation](https://github.com/tktcorporation)! - ホワイトリスト追加フローを改善
+
+  - ファイル選択 UI を罫線付きツリー形式に変更し、ディレクトリ構造を視覚化
+  - ホワイトリスト追加後に moduleList を再パースし、新規ファイルが即座に PUSH 対象に含まれるように修正
+
 ## 0.4.0
 
 ### Minor Changes
