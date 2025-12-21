@@ -1,4 +1,10 @@
-import { checkbox, confirm, input, password, Separator } from "@inquirer/prompts";
+import {
+  checkbox,
+  confirm,
+  input,
+  password,
+  Separator,
+} from "@inquirer/prompts";
 import type { DiffResult, FileDiff } from "../modules/schemas";
 import {
   colorizeUnifiedDiff,
@@ -163,10 +169,8 @@ export async function promptAddUntrackedFiles(
   );
 
   // Step 2: ファイルを選択（罫線付きツリー形式で表示）
-  const allFileChoices: (
-    | { name: string; value: UntrackedFile }
-    | Separator
-  )[] = [];
+  const allFileChoices: ({ name: string; value: UntrackedFile } | Separator)[] =
+    [];
 
   for (const { folder, files } of selectedFolderData) {
     // フォルダヘッダーを追加
