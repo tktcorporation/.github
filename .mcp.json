@@ -1,21 +1,15 @@
 {
   "mcpServers": {
-    "playwright": {
-      "type": "stdio",
-      "command": "npx",
-      "args": [
-        "-y",
-        "@playwright/mcp@latest"
-      ],
-      "env": {}
-    },
     "chrome-devtools": {
       "type": "stdio",
-      "command": "bash",
-      "args": [
-        "-c",
-        "npx -y chrome-devtools-mcp@latest --headless=true --isolated=true --executablePath=$(mise run chromium-path)"
-      ],
+      "command": ".devcontainer/run-chrome-devtools-mcp.sh",
+      "args": [],
+      "env": {}
+    },
+    "context7": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@upstash/context7-mcp"],
       "env": {}
     },
     "ide": {
