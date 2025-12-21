@@ -3,6 +3,7 @@ import { readFile, rm } from "node:fs/promises";
 import { defineCommand } from "citty";
 import consola from "consola";
 import { downloadTemplate } from "giget";
+import { parse } from "jsonc-parser";
 import { join, resolve } from "pathe";
 import {
   addPatternToModulesFile,
@@ -143,6 +144,13 @@ export const pushCommand = defineCommand({
               );
             }
             updatedModulesContent = currentContent;
+
+            // 更新されたモジュールリストを再パースして反映
+            // これにより、新しく追加したパターンが差分検出で使用される
+            const parsedUpdated = parse(updatedModulesContent) as {
+              modules: TemplateModule[];
+            };
+            moduleList = parsedUpdated.modules;
 
             const totalAdded = selectedFiles.reduce(
               (sum, s) => sum + s.files.length,
