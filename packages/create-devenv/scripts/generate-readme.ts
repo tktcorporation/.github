@@ -119,8 +119,13 @@ async function generateCommandsSection(): Promise<string> {
     sections.push("```");
 
     const usage = await renderUsage(command);
-    // ANSIエスケープコードを除去（CI環境との一貫性を保つ）
-    sections.push(stripVTControlCharacters(usage.trim()));
+    // ANSIエスケープコードを除去し、各行の末尾空白も除去（CI環境との一貫性を保つ）
+    const cleanedUsage = stripVTControlCharacters(usage)
+      .split("\n")
+      .map((line) => line.trimEnd())
+      .join("\n")
+      .trim();
+    sections.push(cleanedUsage);
 
     sections.push("```\n");
   }
