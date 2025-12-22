@@ -83,10 +83,7 @@ export function getRootDotFiles(baseDir: string): string[] {
  * 複数ディレクトリの .gitignore をマージして読み込み
  * サブディレクトリの .gitignore も含める
  */
-export async function loadAllGitignores(
-  baseDir: string,
-  dirs: string[],
-): Promise<Ignore> {
+export async function loadAllGitignores(baseDir: string, dirs: string[]): Promise<Ignore> {
   const ig = ignore();
 
   // ルートの .gitignore
@@ -155,11 +152,7 @@ export async function detectUntrackedFiles(options: {
     }
 
     // ホワイトリスト済みファイルを収集
-    const effectivePatterns = getEffectivePatterns(
-      moduleId,
-      mod.patterns,
-      config,
-    );
+    const effectivePatterns = getEffectivePatterns(moduleId, mod.patterns, config);
     const trackedFiles = resolvePatterns(targetDir, effectivePatterns);
     for (const file of trackedFiles) {
       allTrackedFiles.add(file);
@@ -174,9 +167,7 @@ export async function detectUntrackedFiles(options: {
   const filteredDirFiles = gitignore.filter(allDirFiles);
 
   // ルート直下のファイルを取得（ルートモジュールがインストールされている場合のみ）
-  const filteredRootFiles = hasRootModule
-    ? gitignore.filter(getRootDotFiles(targetDir))
-    : [];
+  const filteredRootFiles = hasRootModule ? gitignore.filter(getRootDotFiles(targetDir)) : [];
 
   // 全ファイルをマージ（重複なし）
   const allFiles = new Set([...filteredDirFiles, ...filteredRootFiles]);
@@ -231,8 +222,6 @@ export async function detectUntrackedFiles(options: {
 /**
  * 全フォルダの未追跡ファイル数を取得
  */
-export function getTotalUntrackedCount(
-  untrackedByFolder: UntrackedFilesByFolder[],
-): number {
+export function getTotalUntrackedCount(untrackedByFolder: UntrackedFilesByFolder[]): number {
   return untrackedByFolder.reduce((sum, f) => sum + f.files.length, 0);
 }

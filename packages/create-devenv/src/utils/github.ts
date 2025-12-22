@@ -14,10 +14,7 @@ export interface PushOptions {
 /**
  * GitHub API を使って PR を作成
  */
-export async function createPullRequest(
-  token: string,
-  options: PushOptions,
-): Promise<PrResult> {
+export async function createPullRequest(token: string, options: PushOptions): Promise<PrResult> {
   const octokit = new Octokit({ auth: token });
   const { owner, repo, files, title, body, baseBranch = "main" } = options;
 
@@ -124,9 +121,7 @@ export async function createPullRequest(
 /**
  * PR の本文を生成
  */
-function generatePrBody(
-  files: Array<{ path: string; content: string }>,
-): string {
+function generatePrBody(files: Array<{ path: string; content: string }>): string {
   const fileList = files.map((f) => `- \`${f.path}\``).join("\n");
 
   return `## 概要

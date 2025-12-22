@@ -53,21 +53,20 @@ async function promptCommand(): Promise<void> {
   });
 
   const selectedCommand = commandMap[command];
-  runMain(selectedCommand as typeof diffCommand);
+  void runMain(selectedCommand as typeof diffCommand);
 }
 
 // サブコマンドなしで実行された場合の処理
 const args = process.argv.slice(2);
 const hasSubCommand =
-  args.length > 0 &&
-  ["init", "push", "diff", "--help", "-h", "--version", "-v"].includes(args[0]);
+  args.length > 0 && ["init", "push", "diff", "--help", "-h", "--version", "-v"].includes(args[0]);
 
 if (!hasSubCommand && args.length > 0 && !args[0].startsWith("-")) {
   // npx @tktco/create-devenv . のような形式は init コマンドとして実行
-  runMain(initCommand);
+  void runMain(initCommand);
 } else if (!hasSubCommand && args.length === 0) {
   // 引数なしの場合はコマンド選択プロンプトを表示
-  promptCommand();
+  void promptCommand();
 } else {
-  runMain(main);
+  void runMain(main);
 }

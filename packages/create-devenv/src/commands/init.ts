@@ -195,10 +195,7 @@ function displayModuleDescriptions(
   moduleList: TemplateModule[],
 ): void {
   const hasChanges = fileResults.some(
-    (r) =>
-      r.action === "copied" ||
-      r.action === "created" ||
-      r.action === "overwritten",
+    (r) => r.action === "copied" || r.action === "created" || r.action === "overwritten",
   );
 
   if (!hasChanges) {

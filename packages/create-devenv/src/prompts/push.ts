@@ -1,16 +1,6 @@
-import {
-  checkbox,
-  confirm,
-  input,
-  password,
-  Separator,
-} from "@inquirer/prompts";
+import { checkbox, confirm, input, password, Separator } from "@inquirer/prompts";
 import type { DiffResult, FileDiff } from "../modules/schemas";
-import {
-  colorizeUnifiedDiff,
-  formatDiff,
-  generateUnifiedDiff,
-} from "../utils/diff";
+import { colorizeUnifiedDiff, formatDiff, generateUnifiedDiff } from "../utils/diff";
 import type { UntrackedFile, UntrackedFilesByFolder } from "../utils/untracked";
 
 export interface SelectedUntrackedFiles {
@@ -98,9 +88,7 @@ export async function promptGitHubToken(): Promise<string> {
 /**
  * diff を表示しながらファイルを選択するプロンプト
  */
-export async function promptSelectFilesWithDiff(
-  pushableFiles: FileDiff[],
-): Promise<FileDiff[]> {
+export async function promptSelectFilesWithDiff(pushableFiles: FileDiff[]): Promise<FileDiff[]> {
   if (pushableFiles.length === 0) {
     return [];
   }
@@ -164,13 +152,10 @@ export async function promptAddUntrackedFiles(
   }
 
   // 選択されたフォルダのファイルのみを抽出
-  const selectedFolderData = untrackedByFolder.filter((f) =>
-    selectedFolders.includes(f.folder),
-  );
+  const selectedFolderData = untrackedByFolder.filter((f) => selectedFolders.includes(f.folder));
 
   // Step 2: ファイルを選択（罫線付きツリー形式で表示）
-  const allFileChoices: ({ name: string; value: UntrackedFile } | Separator)[] =
-    [];
+  const allFileChoices: ({ name: string; value: UntrackedFile } | Separator)[] = [];
 
   for (const { folder, files } of selectedFolderData) {
     // フォルダヘッダーを追加

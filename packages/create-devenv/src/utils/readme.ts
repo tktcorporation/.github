@@ -31,9 +31,7 @@ interface ModulesFile {
 /**
  * modules.jsonc を読み込み
  */
-async function loadModulesFromFile(
-  modulesPath: string,
-): Promise<TemplateModule[]> {
+async function loadModulesFromFile(modulesPath: string): Promise<TemplateModule[]> {
   if (!existsSync(modulesPath)) {
     return [];
   }
@@ -71,9 +69,7 @@ function generateFilesSection(modules: TemplateModule[]): string {
     lines.push(`${mod.description}\n`);
 
     for (const pattern of mod.patterns) {
-      const displayPattern = pattern.includes("*")
-        ? `\`${pattern}\` (パターン)`
-        : `\`${pattern}\``;
+      const displayPattern = pattern.includes("*") ? `\`${pattern}\` (パターン)` : `\`${pattern}\``;
       lines.push(`- ${displayPattern}`);
     }
     lines.push("");
@@ -174,12 +170,7 @@ export async function generateReadme(
   // ファイルセクション
   if (modules.length > 0) {
     const filesSection = generateFilesSection(modules);
-    const result = updateSection(
-      readme,
-      MARKERS.files.start,
-      MARKERS.files.end,
-      filesSection,
-    );
+    const result = updateSection(readme, MARKERS.files.start, MARKERS.files.end, filesSection);
     readme = result.content;
     anyUpdated = anyUpdated || result.updated;
   }
@@ -221,8 +212,7 @@ export async function detectAndUpdateReadme(
 
   const readmeContent = await readFile(readmePath, "utf-8");
   const hasMarkers =
-    readmeContent.includes(MARKERS.features.start) ||
-    readmeContent.includes(MARKERS.files.start);
+    readmeContent.includes(MARKERS.features.start) || readmeContent.includes(MARKERS.files.start);
 
   if (!hasMarkers) {
     return null;

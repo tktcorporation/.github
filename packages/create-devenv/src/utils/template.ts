@@ -1,10 +1,4 @@
-import {
-  copyFileSync,
-  existsSync,
-  mkdirSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { confirm } from "@inquirer/prompts";
 import { consola } from "consola";
 import { downloadTemplate } from "giget";
@@ -112,9 +106,7 @@ export async function writeFileWithStrategy(
 /**
  * テンプレートを取得してパターンベースでコピー
  */
-export async function fetchTemplates(
-  options: DownloadOptions,
-): Promise<FileOperationResult[]> {
+export async function fetchTemplates(options: DownloadOptions): Promise<FileOperationResult[]> {
   const {
     targetDir,
     modules,
@@ -159,20 +151,14 @@ export async function fetchTemplates(
       if (!moduleDef) continue;
 
       // 有効なパターンを取得
-      const patterns = getEffectivePatterns(
-        moduleId,
-        moduleDef.patterns,
-        config,
-      );
+      const patterns = getEffectivePatterns(moduleId, moduleDef.patterns, config);
 
       // パターンにマッチするファイル一覧を取得し、gitignore でフィルタリング
       const resolvedFiles = resolvePatterns(templateDir, patterns);
       const files = filterByGitignore(resolvedFiles, gitignore);
 
       if (files.length === 0) {
-        consola.warn(
-          `モジュール "${moduleId}" にマッチするファイルがありません`,
-        );
+        consola.warn(`モジュール "${moduleId}" にマッチするファイルがありません`);
         continue;
       }
 
@@ -181,12 +167,7 @@ export async function fetchTemplates(
         const srcPath = join(templateDir, relativePath);
         const destPath = join(targetDir, relativePath);
 
-        const result = await copyFile(
-          srcPath,
-          destPath,
-          overwriteStrategy,
-          relativePath,
-        );
+        const result = await copyFile(srcPath, destPath, overwriteStrategy, relativePath);
         logResult(result);
         allResults.push(result);
       }

@@ -5,7 +5,6 @@
 ### Minor Changes
 
 - [#32](https://github.com/tktcorporation/.github/pull/32) [`69db290`](https://github.com/tktcorporation/.github/commit/69db290f4757f65910f41f4557847c3e3d94540c) Thanks [@tktcorporation](https://github.com/tktcorporation)! - README 自動生成機能を追加
-
   - `pnpm run docs` で README のセクション（機能一覧・コマンド・生成ファイル）を自動生成
   - push コマンド実行時に README を自動更新して PR に含める
   - デフォルトコマンドをインタラクティブ選択に変更
@@ -16,7 +15,6 @@
 ### Patch Changes
 
 - [#26](https://github.com/tktcorporation/.github/pull/26) [`c490325`](https://github.com/tktcorporation/.github/commit/c4903250a0a7f8f84dae429ac5d7536b02af019f) Thanks [@tktcorporation](https://github.com/tktcorporation)! - ホワイトリスト追加フローを改善
-
   - ファイル選択 UI を罫線付きツリー形式に変更し、ディレクトリ構造を視覚化
   - ホワイトリスト追加後に moduleList を再パースし、新規ファイルが即座に PUSH 対象に含まれるように修正
 
@@ -27,20 +25,17 @@
 - [#23](https://github.com/tktcorporation/.github/pull/23) [`ec36c47`](https://github.com/tktcorporation/.github/commit/ec36c474aac4e01b30ad018507f5fe7f9a305da2) Thanks [@tktcorporation](https://github.com/tktcorporation)! - push コマンドにホワイトリスト外ファイル検知機能を追加し、モジュール定義を外部化
 
   ### ホワイトリスト外ファイル検知
-
   - push 時にホワイトリスト（patterns）に含まれていないファイルを検出
   - モジュールごとにグループ化して選択 UI を表示
   - 選択したファイルを modules.jsonc に自動追加（PR に含まれる）
   - gitignore されているファイルは自動で除外
 
   ### モジュール定義の外部化
-
   - モジュール定義をコードから `.devenv/modules.jsonc` に外部化
   - テンプレートリポジトリの modules.jsonc から動的に読み込み
   - `customPatterns` を廃止し modules.jsonc に統合
 
   ### ディレクトリベースのモジュール設計
-
   - モジュール ID をディレクトリパスベースに変更（例: `.devcontainer`, `.github`, `.`）
   - ファイルパスから即座にモジュール ID を導出可能に
   - モジュール間のファイル重複を構造的に防止
@@ -50,13 +45,11 @@
 ### Minor Changes
 
 - [#14](https://github.com/tktcorporation/.github/pull/14) [`c026ed5`](https://github.com/tktcorporation/.github/commit/c026ed55da57df6599f7c57cdbb5d29c05e3273d) Thanks [@tktcorporation](https://github.com/tktcorporation)! - .gitignore に記載されたファイルを自動的に除外する機能を追加
-
   - init, diff, push の全コマンドで .gitignore にマッチするファイルを除外
   - ローカルディレクトリとテンプレートリポジトリ両方の .gitignore をチェック
   - クレデンシャル等の機密情報の誤流出を防止
 
 - [#16](https://github.com/tktcorporation/.github/pull/16) [`3d89baa`](https://github.com/tktcorporation/.github/commit/3d89baa1c236998be4cfb72b68b9b4a6480a7b4e) Thanks [@tktcorporation](https://github.com/tktcorporation)! - push コマンドに unified diff を見ながらファイルを選択できる機能を追加
-
   - デフォルトで差分を表示しながらチェックボックスでファイル選択が可能に
   - `--no-interactive` オプションで従来の確認プロンプトに切り替え可能
   - `--force` オプションは引き続き確認なしで全ファイルを push
@@ -68,12 +61,10 @@
 - [#12](https://github.com/tktcorporation/.github/pull/12) [`798d3fb`](https://github.com/tktcorporation/.github/commit/798d3fb332bdffbc4feac24d9ed89a1b510d7fcf) Thanks [@tktcorporation](https://github.com/tktcorporation)! - 双方向同期機能とホワイトリスト形式を追加
 
   ### 新機能
-
   - `push` コマンド: ローカル変更を GitHub PR として自動送信
   - `diff` コマンド: ローカルとテンプレートの差分をプレビュー
 
   ### 破壊的変更
-
   - モジュール定義を `files` + `excludeFiles` 形式から `patterns` (glob) 形式に移行
   - テンプレート対象ファイルをホワイトリスト形式で明示的に指定するように変更
 
@@ -91,7 +82,6 @@
   ```
 
 - [#10](https://github.com/tktcorporation/.github/pull/10) [`d932401`](https://github.com/tktcorporation/.github/commit/d93240170c298d5469e4c7646c383ac8e6aed90c) Thanks [@tktcorporation](https://github.com/tktcorporation)! - CLI 出力を改善
-
   - すべてのファイル操作に上書き戦略を適用
   - .devenv.json は常に更新（設定管理ファイルとして特別扱い）
   - セットアップ後にモジュール別説明を表示
@@ -110,7 +100,6 @@
 ### Patch Changes
 
 - [#4](https://github.com/tktcorporation/.github/pull/4) [`ae7c5e7`](https://github.com/tktcorporation/.github/commit/ae7c5e712b1a16963cd0cd920a92dd589f5e9f84) Thanks [@tktcorporation](https://github.com/tktcorporation)! - fix: overwriteStrategy オプションが正しく機能するように修正
-
   - "prompt" 戦略: ファイルごとにユーザーに上書き確認を表示
   - "skip" 戦略: 既存ファイルをスキップして新規ファイルのみコピー
   - "overwrite" 戦略: 既存ファイルを全て上書き

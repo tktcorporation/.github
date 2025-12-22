@@ -47,6 +47,7 @@ git add . && git commit -m "chore: add changeset" && git push
 ```
 
 これで CI が自動的に：
+
 1. バージョン更新 & CHANGELOG 生成 → コミット
 2. npm publish（OIDC Trusted Publishing）
 

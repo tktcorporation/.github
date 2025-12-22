@@ -25,8 +25,7 @@ export const defaultModules: TemplateModule[] = [
     id: ".devcontainer",
     name: "DevContainer",
     description: "VS Code DevContainer、Docker-in-Docker",
-    setupDescription:
-      "VS Code で DevContainer を開くと自動でセットアップされます",
+    setupDescription: "VS Code で DevContainer を開くと自動でセットアップされます",
     patterns: [
       ".devcontainer/devcontainer.json",
       ".devcontainer/.gitignore",
@@ -71,9 +70,7 @@ export function getModuleById(
 /**
  * 全モジュールのパターンを取得
  */
-export function getAllPatterns(
-  moduleList: TemplateModule[] = defaultModules,
-): string[] {
+export function getAllPatterns(moduleList: TemplateModule[] = defaultModules): string[] {
   return moduleList.flatMap((m) => m.patterns);
 }
 
@@ -84,7 +81,5 @@ export function getPatternsByModuleIds(
   moduleIds: string[],
   moduleList: TemplateModule[] = defaultModules,
 ): string[] {
-  return moduleList
-    .filter((m) => moduleIds.includes(m.id))
-    .flatMap((m) => m.patterns);
+  return moduleList.filter((m) => moduleIds.includes(m.id)).flatMap((m) => m.patterns);
 }

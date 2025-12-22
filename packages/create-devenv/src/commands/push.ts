@@ -71,9 +71,7 @@ export const pushCommand = defineCommand({
 
     // .devenv.json の存在確認
     if (!existsSync(configPath)) {
-      consola.error(
-        ".devenv.json が見つかりません。先に init コマンドを実行してください。",
-      );
+      consola.error(".devenv.json が見つかりません。先に init コマンドを実行してください。");
       process.exit(1);
     }
 
@@ -83,10 +81,7 @@ export const pushCommand = defineCommand({
     const parseResult = configSchema.safeParse(configData);
 
     if (!parseResult.success) {
-      consola.error(
-        ".devenv.json の形式が不正です:",
-        parseResult.error.message,
-      );
+      consola.error(".devenv.json の形式が不正です:", parseResult.error.message);
       process.exit(1);
     }
 
@@ -132,18 +127,13 @@ export const pushCommand = defineCommand({
         });
 
         if (untrackedByFolder.length > 0) {
-          const selectedFiles =
-            await promptAddUntrackedFiles(untrackedByFolder);
+          const selectedFiles = await promptAddUntrackedFiles(untrackedByFolder);
 
           if (selectedFiles.length > 0) {
             // modules.jsonc にパターンを追加（メモリ上）
             let currentContent = modulesRawContent;
             for (const { moduleId, files } of selectedFiles) {
-              currentContent = addPatternToModulesFile(
-                currentContent,
-                moduleId,
-                files,
-              );
+              currentContent = addPatternToModulesFile(currentContent, moduleId, files);
             }
             updatedModulesContent = currentContent;
 
@@ -154,10 +144,7 @@ export const pushCommand = defineCommand({
             };
             moduleList = parsedUpdated.modules;
 
-            const totalAdded = selectedFiles.reduce(
-              (sum, s) => sum + s.files.length,
-              0,
-            );
+            const totalAdded = selectedFiles.reduce((sum, s) => sum + s.files.length, 0);
             consola.info(
               `${totalAdded} 件のパターンを modules.jsonc に追加します（PR に含まれます）`,
             );

@@ -16,10 +16,7 @@ export async function loadConfig(targetDir: string): Promise<DevEnvConfig> {
 /**
  * .devenv.json を保存
  */
-export async function saveConfig(
-  targetDir: string,
-  config: DevEnvConfig,
-): Promise<void> {
+export async function saveConfig(targetDir: string, config: DevEnvConfig): Promise<void> {
   const configPath = join(targetDir, ".devenv.json");
   await writeFile(configPath, `${JSON.stringify(config, null, 2)}\n`);
 }

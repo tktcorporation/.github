@@ -38,9 +38,7 @@ describe("gitignore", () => {
 
       const ig = await loadMergedGitignore(["/project"]);
 
-      expect(ig.filter(["app.ts", "secret.env", "node_modules/pkg"])).toEqual([
-        "app.ts",
-      ]);
+      expect(ig.filter(["app.ts", "secret.env", "node_modules/pkg"])).toEqual(["app.ts"]);
     });
 
     it("複数ディレクトリの .gitignore をマージする", async () => {
@@ -52,9 +50,10 @@ describe("gitignore", () => {
       const ig = await loadMergedGitignore(["/local", "/template"]);
 
       // 両方の .gitignore ルールが適用される
-      expect(
-        ig.filter(["app.ts", "config.env", "api.secret", "readme.md"]),
-      ).toEqual(["app.ts", "readme.md"]);
+      expect(ig.filter(["app.ts", "config.env", "api.secret", "readme.md"])).toEqual([
+        "app.ts",
+        "readme.md",
+      ]);
     });
 
     it("片方のディレクトリにのみ .gitignore がある場合", async () => {
@@ -169,9 +168,7 @@ node_modules/
         ".github/workflows/ci.yml",
       ];
 
-      expect(filterByGitignore(files, ig)).toEqual([
-        ".github/workflows/ci.yml",
-      ]);
+      expect(filterByGitignore(files, ig)).toEqual([".github/workflows/ci.yml"]);
     });
   });
 });
