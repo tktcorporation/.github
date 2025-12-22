@@ -40,11 +40,11 @@ USAGE `create-devenv [OPTIONS] [DIR]`
 
 ARGUMENTS
 
-  `DIR="."`    プロジェクトディレクトリ
+  `DIR="."`    プロジェクトディレクトリ    
 
 OPTIONS
 
-    `--force`    既存ファイルを強制上書き
+    `--force`    既存ファイルを強制上書き                
   `-y, --yes`    すべてのモジュールを自動選択（非インタラクティブモード）
 ```
 
@@ -59,13 +59,13 @@ USAGE `push [OPTIONS] [DIR]`
 
 ARGUMENTS
 
-  `DIR="."`    プロジェクトディレクトリ
+  `DIR="."`    プロジェクトディレクトリ    
 
 OPTIONS
 
-              `-n, --dryRun`    実際の PR を作成せず、プレビューのみ表示
-             `-m, --message`    PR のタイトル
-               `-f, --force`    確認プロンプトをスキップ
+              `-n, --dryRun`    実際の PR を作成せず、プレビューのみ表示   
+             `-m, --message`    PR のタイトル                 
+               `-f, --force`    確認プロンプトをスキップ             
   `--no-i, --no-interactive`    差分を確認しながらファイルを選択（デフォルト有効）
 ```
 
@@ -80,7 +80,7 @@ USAGE `diff [OPTIONS] [DIR]`
 
 ARGUMENTS
 
-  `DIR="."`    プロジェクトディレクトリ
+  `DIR="."`    プロジェクトディレクトリ    
 
 OPTIONS
 
