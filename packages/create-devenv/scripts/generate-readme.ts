@@ -27,10 +27,7 @@ import { initCommand } from "../src/commands/init";
 import { pushCommand } from "../src/commands/push";
 
 const README_PATH = resolve(import.meta.dirname, "../README.md");
-const MODULES_PATH = resolve(
-  import.meta.dirname,
-  "../../../.devenv/modules.jsonc",
-);
+const MODULES_PATH = resolve(import.meta.dirname, "../../../.devenv/modules.jsonc");
 
 // マーカー定義
 const MARKERS = {
@@ -69,17 +66,17 @@ interface CommandInfo {
 const commands: CommandInfo[] = [
   {
     name: "init",
-    command: initCommand,
+    command: initCommand as CommandInfo["command"],
     description: "開発環境テンプレートを適用",
   },
   {
     name: "push",
-    command: pushCommand,
+    command: pushCommand as CommandInfo["command"],
     description: "ローカル変更をテンプレートリポジトリに PR として送信",
   },
   {
     name: "diff",
-    command: diffCommand,
+    command: diffCommand as CommandInfo["command"],
     description: "ローカルとテンプレートの差分を表示",
   },
 ];
@@ -147,9 +144,7 @@ function generateFilesSection(modules: TemplateModule[]): string {
 
     for (const pattern of mod.patterns) {
       // glob パターンを説明的に表示
-      const displayPattern = pattern.includes("*")
-        ? `\`${pattern}\` (パターン)`
-        : `\`${pattern}\``;
+      const displayPattern = pattern.includes("*") ? `\`${pattern}\` (パターン)` : `\`${pattern}\``;
       lines.push(`- ${displayPattern}`);
     }
     lines.push("");
@@ -209,24 +204,9 @@ async function main(): Promise<void> {
   let readme = await readFile(README_PATH, "utf-8");
   const originalReadme = readme;
 
-  readme = updateSection(
-    readme,
-    MARKERS.features.start,
-    MARKERS.features.end,
-    featuresSection,
-  );
-  readme = updateSection(
-    readme,
-    MARKERS.commands.start,
-    MARKERS.commands.end,
-    commandsSection,
-  );
-  readme = updateSection(
-    readme,
-    MARKERS.files.start,
-    MARKERS.files.end,
-    filesSection,
-  );
+  readme = updateSection(readme, MARKERS.features.start, MARKERS.features.end, featuresSection);
+  readme = updateSection(readme, MARKERS.commands.start, MARKERS.commands.end, commandsSection);
+  readme = updateSection(readme, MARKERS.files.start, MARKERS.files.end, filesSection);
 
   const updated = readme !== originalReadme;
 

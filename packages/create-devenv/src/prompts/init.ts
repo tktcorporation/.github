@@ -1,14 +1,8 @@
 import { checkbox, select } from "@inquirer/prompts";
 import { defaultModules } from "../modules/index";
-import {
-  type Answers,
-  answersSchema,
-  type TemplateModule,
-} from "../modules/schemas";
+import { type Answers, answersSchema, type TemplateModule } from "../modules/schemas";
 
-export async function promptInit(
-  moduleList: TemplateModule[] = defaultModules,
-): Promise<Answers> {
+export async function promptInit(moduleList: TemplateModule[] = defaultModules): Promise<Answers> {
   const selectedModules = await checkbox({
     message: "適用するテンプレートを選択してください",
     choices: moduleList.map((m) => ({

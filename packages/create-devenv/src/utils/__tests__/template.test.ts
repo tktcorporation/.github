@@ -44,12 +44,7 @@ describe("copyFile", () => {
         "/src/file.txt": "source content",
       });
 
-      const result = await copyFile(
-        "/src/file.txt",
-        "/dest/file.txt",
-        "skip",
-        "file.txt",
-      );
+      const result = await copyFile("/src/file.txt", "/dest/file.txt", "skip", "file.txt");
 
       expect(result).toEqual<CopyResult>({
         action: "copied",
@@ -63,17 +58,10 @@ describe("copyFile", () => {
         "/src/file.txt": "source content",
       });
 
-      await copyFile(
-        "/src/file.txt",
-        "/dest/nested/dir/file.txt",
-        "skip",
-        "nested/dir/file.txt",
-      );
+      await copyFile("/src/file.txt", "/dest/nested/dir/file.txt", "skip", "nested/dir/file.txt");
 
       expect(vol.existsSync("/dest/nested/dir")).toBe(true);
-      expect(vol.readFileSync("/dest/nested/dir/file.txt", "utf8")).toBe(
-        "source content",
-      );
+      expect(vol.readFileSync("/dest/nested/dir/file.txt", "utf8")).toBe("source content");
     });
   });
 
@@ -84,12 +72,7 @@ describe("copyFile", () => {
         "/dest/file.txt": "old content",
       });
 
-      const result = await copyFile(
-        "/src/file.txt",
-        "/dest/file.txt",
-        "overwrite",
-        "file.txt",
-      );
+      const result = await copyFile("/src/file.txt", "/dest/file.txt", "overwrite", "file.txt");
 
       expect(result).toEqual<CopyResult>({
         action: "overwritten",
@@ -106,12 +89,7 @@ describe("copyFile", () => {
         "/dest/file.txt": "old content",
       });
 
-      const result = await copyFile(
-        "/src/file.txt",
-        "/dest/file.txt",
-        "skip",
-        "file.txt",
-      );
+      const result = await copyFile("/src/file.txt", "/dest/file.txt", "skip", "file.txt");
 
       expect(result).toEqual<CopyResult>({
         action: "skipped",
@@ -131,12 +109,7 @@ describe("copyFile", () => {
 
       mockConfirm.mockResolvedValueOnce(true);
 
-      const result = await copyFile(
-        "/src/file.txt",
-        "/dest/file.txt",
-        "prompt",
-        "file.txt",
-      );
+      const result = await copyFile("/src/file.txt", "/dest/file.txt", "prompt", "file.txt");
 
       expect(result).toEqual<CopyResult>({
         action: "overwritten",
@@ -157,12 +130,7 @@ describe("copyFile", () => {
 
       mockConfirm.mockResolvedValueOnce(false);
 
-      const result = await copyFile(
-        "/src/file.txt",
-        "/dest/file.txt",
-        "prompt",
-        "file.txt",
-      );
+      const result = await copyFile("/src/file.txt", "/dest/file.txt", "prompt", "file.txt");
 
       expect(result).toEqual<CopyResult>({
         action: "skipped",
@@ -208,9 +176,7 @@ describe("writeFileWithStrategy", () => {
       });
 
       expect(vol.existsSync("/dest/nested/dir")).toBe(true);
-      expect(vol.readFileSync("/dest/nested/dir/file.txt", "utf8")).toBe(
-        "new content",
-      );
+      expect(vol.readFileSync("/dest/nested/dir/file.txt", "utf8")).toBe("new content");
     });
   });
 

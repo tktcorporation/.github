@@ -26,13 +26,7 @@ export interface DiffOptions {
  * ローカルとテンプレート間の差分を検出
  */
 export async function detectDiff(options: DiffOptions): Promise<DiffResult> {
-  const {
-    targetDir,
-    templateDir,
-    moduleIds,
-    config,
-    moduleList = defaultModules,
-  } = options;
+  const { targetDir, templateDir, moduleIds, config, moduleList = defaultModules } = options;
 
   const files: FileDiff[] = [];
   let added = 0;
@@ -55,15 +49,9 @@ export async function detectDiff(options: DiffOptions): Promise<DiffResult> {
     const patterns = getEffectivePatterns(moduleId, mod.patterns, config);
 
     // テンプレート側のファイル一覧を取得し、gitignore でフィルタリング
-    const templateFiles = filterByGitignore(
-      resolvePatterns(templateDir, patterns),
-      gitignore,
-    );
+    const templateFiles = filterByGitignore(resolvePatterns(templateDir, patterns), gitignore);
     // ローカル側のファイル一覧を取得し、gitignore でフィルタリング
-    const localFiles = filterByGitignore(
-      resolvePatterns(targetDir, patterns),
-      gitignore,
-    );
+    const localFiles = filterByGitignore(resolvePatterns(targetDir, patterns), gitignore);
 
     const allFiles = new Set([...templateFiles, ...localFiles]);
 
@@ -177,11 +165,7 @@ export function getPushableFiles(diff: DiffResult): FileDiff[] {
  * 差分があるかどうかを判定
  */
 export function hasDiff(diff: DiffResult): boolean {
-  return (
-    diff.summary.added > 0 ||
-    diff.summary.modified > 0 ||
-    diff.summary.deleted > 0
-  );
+  return diff.summary.added > 0 || diff.summary.modified > 0 || diff.summary.deleted > 0;
 }
 
 /**
@@ -194,13 +178,7 @@ export function generateUnifiedDiff(fileDiff: FileDiff): string {
     case "added":
       return createPatch(path, "", localContent || "", "template", "local");
     case "modified":
-      return createPatch(
-        path,
-        templateContent || "",
-        localContent || "",
-        "template",
-        "local",
-      );
+      return createPatch(path, templateContent || "", localContent || "", "template", "local");
     default:
       return "";
   }

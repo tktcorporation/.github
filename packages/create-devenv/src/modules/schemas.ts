@@ -47,9 +47,7 @@ export const configSchema = z.object({
 export type DevEnvConfig = z.infer<typeof configSchema>;
 
 export const answersSchema = z.object({
-  modules: z
-    .array(z.string())
-    .min(1, "少なくとも1つのモジュールを選択してください"),
+  modules: z.array(z.string()).min(1, "少なくとも1つのモジュールを選択してください"),
   overwriteStrategy: overwriteStrategySchema,
 });
 

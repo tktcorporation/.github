@@ -34,9 +34,7 @@ export const diffCommand = defineCommand({
 
     // .devenv.json の存在確認
     if (!existsSync(configPath)) {
-      consola.error(
-        ".devenv.json が見つかりません。先に init コマンドを実行してください。",
-      );
+      consola.error(".devenv.json が見つかりません。先に init コマンドを実行してください。");
       process.exit(1);
     }
 
@@ -46,10 +44,7 @@ export const diffCommand = defineCommand({
     const parseResult = configSchema.safeParse(configData);
 
     if (!parseResult.success) {
-      consola.error(
-        ".devenv.json の形式が不正です:",
-        parseResult.error.message,
-      );
+      consola.error(".devenv.json の形式が不正です:", parseResult.error.message);
       process.exit(1);
     }
 

@@ -78,12 +78,9 @@ export function addPatternToModulesFile(
   const updatedPatterns = [...existingPatterns, ...newPatterns];
 
   // JSONC を編集（コメントを保持）
-  const edits = modify(
-    rawContent,
-    ["modules", moduleIndex, "patterns"],
-    updatedPatterns,
-    { formattingOptions: { tabSize: 2, insertSpaces: true } },
-  );
+  const edits = modify(rawContent, ["modules", moduleIndex, "patterns"], updatedPatterns, {
+    formattingOptions: { tabSize: 2, insertSpaces: true },
+  });
 
   return applyEdits(rawContent, edits);
 }
@@ -91,10 +88,7 @@ export function addPatternToModulesFile(
 /**
  * modules.jsonc を保存
  */
-export async function saveModulesFile(
-  baseDir: string,
-  content: string,
-): Promise<void> {
+export async function saveModulesFile(baseDir: string, content: string): Promise<void> {
   const filePath = join(baseDir, MODULES_FILE);
   await writeFile(filePath, content);
 }

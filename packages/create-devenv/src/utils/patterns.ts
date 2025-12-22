@@ -58,10 +58,7 @@ export function mergePatterns(...patternArrays: string[][]): string[] {
 /**
  * 除外パターンでフィルタリング
  */
-export function filterByExcludePatterns(
-  files: string[],
-  excludePatterns?: string[],
-): string[] {
+export function filterByExcludePatterns(files: string[], excludePatterns?: string[]): string[] {
   if (!excludePatterns || excludePatterns.length === 0) {
     return files;
   }
