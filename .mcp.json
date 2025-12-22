@@ -2,8 +2,8 @@
   "mcpServers": {
     "chrome-devtools": {
       "type": "stdio",
-      "command": ".devcontainer/run-chrome-devtools-mcp.sh",
-      "args": [],
+      "command": "bash",
+      "args": [".devcontainer/run-chrome-devtools-mcp.sh"],
       "env": {}
     },
     "context7": {
