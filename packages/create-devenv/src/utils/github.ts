@@ -1,5 +1,4 @@
 import { Octokit } from "@octokit/rest";
-import consola from "consola";
 import type { PrResult } from "../modules/schemas";
 
 export interface PushOptions {
@@ -22,8 +21,6 @@ export async function createPullRequest(token: string, options: PushOptions): Pr
   const { data: user } = await octokit.users.getAuthenticated();
   const forkOwner = user.login;
 
-  consola.info(`認証ユーザー: ${forkOwner}`);
-
   // 2. fork を確認・作成
   let forkRepo: string;
   try {
@@ -32,15 +29,12 @@ export async function createPullRequest(token: string, options: PushOptions): Pr
       repo,
     });
     forkRepo = fork.name;
-    consola.info(`既存の fork を使用: ${forkOwner}/${forkRepo}`);
   } catch {
-    consola.info("fork を作成中...");
     const { data: fork } = await octokit.repos.createFork({
       owner,
       repo,
     });
     forkRepo = fork.name;
-    consola.success(`fork を作成しました: ${forkOwner}/${forkRepo}`);
 
     // fork の同期を待つ
     await sleep(3000);
@@ -58,7 +52,6 @@ export async function createPullRequest(token: string, options: PushOptions): Pr
   const branchName = `devenv-sync-${Date.now()}`;
 
   // 5. fork に新しいブランチを作成
-  consola.info(`ブランチを作成中: ${branchName}`);
   await octokit.git.createRef({
     owner: forkOwner,
     repo: forkRepo,
@@ -68,8 +61,6 @@ export async function createPullRequest(token: string, options: PushOptions): Pr
 
   // 6. ファイルを更新
   for (const file of files) {
-    consola.info(`ファイルを更新中: ${file.path}`);
-
     // 既存ファイルの SHA を取得（存在する場合）
     let existingSha: string | undefined;
     try {
@@ -99,7 +90,6 @@ export async function createPullRequest(token: string, options: PushOptions): Pr
   }
 
   // 7. PR を作成
-  consola.info("PR を作成中...");
   const { data: pr } = await octokit.pulls.create({
     owner,
     repo,
@@ -108,8 +98,6 @@ export async function createPullRequest(token: string, options: PushOptions): Pr
     head: `${forkOwner}:${branchName}`,
     base: baseBranch,
   });
-
-  consola.success(`PR を作成しました: ${pr.html_url}`);
 
   return {
     url: pr.html_url,
@@ -124,11 +112,11 @@ export async function createPullRequest(token: string, options: PushOptions): Pr
 function generatePrBody(files: Array<{ path: string; content: string }>): string {
   const fileList = files.map((f) => `- \`${f.path}\``).join("\n");
 
-  return `## 概要
+  return `## Summary
 
-create-devenv の push コマンドによる自動生成 PR です。
+Auto-generated PR by create-devenv push command.
 
-## 変更ファイル
+## Changed files
 
 ${fileList}
 

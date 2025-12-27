@@ -1,12 +1,12 @@
 import { existsSync } from "node:fs";
 import { readFile, rm } from "node:fs/promises";
 import { defineCommand } from "citty";
-import consola from "consola";
 import { downloadTemplate } from "giget";
 import { join, resolve } from "pathe";
 import type { DevEnvConfig } from "../modules/schemas";
 import { configSchema } from "../modules/schemas";
 import { detectDiff, formatDiff, hasDiff } from "../utils/diff";
+import { box, diffHeader, log, showHeader, showNextSteps, step, withSpinner } from "../utils/ui";
 
 const TEMPLATE_SOURCE = "gh:tktcorporation/.github";
 
@@ -29,12 +29,14 @@ export const diffCommand = defineCommand({
     },
   },
   async run({ args }) {
+    showHeader("create-devenv diff");
+
     const targetDir = resolve(args.dir);
     const configPath = join(targetDir, ".devenv.json");
 
     // .devenv.json の存在確認
     if (!existsSync(configPath)) {
-      consola.error(".devenv.json が見つかりません。先に init コマンドを実行してください。");
+      log.error(".devenv.json not found. Run 'init' command first.");
       process.exit(1);
     }
 
@@ -44,47 +46,68 @@ export const diffCommand = defineCommand({
     const parseResult = configSchema.safeParse(configData);
 
     if (!parseResult.success) {
-      consola.error(".devenv.json の形式が不正です:", parseResult.error.message);
+      log.error("Invalid .devenv.json format");
+      log.dim(parseResult.error.message);
       process.exit(1);
     }
 
     const config: DevEnvConfig = parseResult.data;
 
     if (config.modules.length === 0) {
-      consola.warn("インストール済みのモジュールがありません。");
+      log.warn("No modules installed");
       return;
     }
 
-    consola.start("テンプレートをダウンロード中...");
+    const totalSteps = 2;
+
+    // Step 1: テンプレートをダウンロード
+    step({ current: 1, total: totalSteps }, "Fetching template...");
 
     // テンプレートを一時ディレクトリにダウンロード
     const tempDir = join(targetDir, ".devenv-temp");
 
     try {
-      const { dir: templateDir } = await downloadTemplate(TEMPLATE_SOURCE, {
-        dir: tempDir,
-        force: true,
-      });
+      const { dir: templateDir } = await withSpinner("Downloading template from GitHub...", () =>
+        downloadTemplate(TEMPLATE_SOURCE, {
+          dir: tempDir,
+          force: true,
+        }),
+      );
 
-      consola.start("差分を検出中...");
+      // Step 2: 差分を検出
+      step({ current: 2, total: totalSteps }, "Detecting changes...");
 
-      // 差分検出
-      const diff = await detectDiff({
-        targetDir,
-        templateDir,
-        moduleIds: config.modules,
-        config,
-      });
+      const diff = await withSpinner("Analyzing differences...", () =>
+        detectDiff({
+          targetDir,
+          templateDir,
+          moduleIds: config.modules,
+          config,
+        }),
+      );
 
       // 結果表示
-      console.log();
-      console.log(formatDiff(diff, args.verbose));
-      console.log();
+      log.newline();
 
       if (hasDiff(diff)) {
-        consola.info(
-          'ローカルの変更をテンプレートに反映するには "push" コマンドを使用してください。',
-        );
+        diffHeader("Changes detected:");
+        console.log(formatDiff(diff, args.verbose));
+        log.newline();
+
+        showNextSteps([
+          {
+            command: "npx @tktco/create-devenv push",
+            description: "Push your local changes to the template repository",
+          },
+          {
+            command: "npx @tktco/create-devenv diff --verbose",
+            description: "Show detailed diff output",
+          },
+        ]);
+      } else {
+        box("No changes", "success");
+        log.info("Your local files are in sync with the template");
+        log.newline();
       }
     } finally {
       // 一時ディレクトリを削除

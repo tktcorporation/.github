@@ -62,13 +62,6 @@ interface ModulesFile {
   modules: TemplateModule[];
 }
 
-// Command definitions with their metadata extracted from source
-const commands = [
-  { name: "init", command: initCommand },
-  { name: "push", command: pushCommand },
-  { name: "diff", command: diffCommand },
-] as const;
-
 /**
  * Load modules.jsonc
  */
@@ -117,35 +110,55 @@ function generateFeaturesSection(modules: TemplateModule[]): string {
 }
 
 /**
+ * Get description from command meta (handles Resolvable type)
+ */
+function getCommandDescription(meta: unknown): string {
+  if (meta && typeof meta === "object" && "description" in meta) {
+    return (meta as { description?: string }).description || "";
+  }
+  return "";
+}
+
+/**
  * Generate Commands section
  */
 async function generateCommandsSection(): Promise<string> {
   const sections: string[] = [];
-
   sections.push("## Commands\n");
 
-  for (const { name, command } of commands) {
-    // Extract description from command meta (single source of truth)
-    const description =
-      (command as { meta?: { description?: string } }).meta?.description || "";
+  // init command
+  sections.push("### `init`\n");
+  sections.push(`${getCommandDescription(initCommand.meta)}\n`);
+  sections.push("```");
+  sections.push(cleanUsageOutput(await renderUsage(initCommand)));
+  sections.push("```\n");
 
-    sections.push(`### \`${name}\`\n`);
-    sections.push(`${description}\n`);
-    sections.push("```");
+  // push command
+  sections.push("### `push`\n");
+  sections.push(`${getCommandDescription(pushCommand.meta)}\n`);
+  sections.push("```");
+  sections.push(cleanUsageOutput(await renderUsage(pushCommand)));
+  sections.push("```\n");
 
-    const usage = await renderUsage(command);
-    // Remove ANSI escape codes and trailing whitespace (for CI consistency)
-    const cleanedUsage = stripVTControlCharacters(usage)
-      .split("\n")
-      .map((line) => line.trimEnd())
-      .join("\n")
-      .trim();
-    sections.push(cleanedUsage);
-
-    sections.push("```\n");
-  }
+  // diff command
+  sections.push("### `diff`\n");
+  sections.push(`${getCommandDescription(diffCommand.meta)}\n`);
+  sections.push("```");
+  sections.push(cleanUsageOutput(await renderUsage(diffCommand)));
+  sections.push("```\n");
 
   return sections.join("\n");
+}
+
+/**
+ * Clean usage output by removing ANSI codes and trailing whitespace
+ */
+function cleanUsageOutput(usage: string): string {
+  return stripVTControlCharacters(usage)
+    .split("\n")
+    .map((line) => line.trimEnd())
+    .join("\n")
+    .trim();
 }
 
 /**
