@@ -3,8 +3,15 @@
  *
  * gitui, lazygit などを参考にした見やすい diff 表示を提供
  * ts-pattern によるパターンマッチングで堅牢な条件分岐を実現
+ *
+ * Features:
+ * - Word-level diff: 行内の変更箇所をハイライト
+ * - Syntax highlighting: ファイル拡張子に応じたシンタックスハイライト
  */
 
+import { highlight, supportsLanguage } from "cli-highlight";
+import { diffWords } from "diff";
+import { extname } from "pathe";
 import pc from "picocolors";
 import { match, P } from "ts-pattern";
 import type { DiffType, FileDiff } from "../modules/schemas";
@@ -326,6 +333,170 @@ export function showDiffSummaryBox(files: FileDiff[]): void {
 }
 
 // ────────────────────────────────────────────────────────────────
+// Word-level diff
+// ────────────────────────────────────────────────────────────────
+
+/** Word diff の結果 */
+interface WordDiffResult {
+  oldLine: string;
+  newLine: string;
+}
+
+/**
+ * 2つの行の word-level diff を計算
+ * 変更された単語を背景色でハイライト
+ */
+function computeWordDiff(oldText: string, newText: string): WordDiffResult {
+  const changes = diffWords(oldText, newText);
+
+  let oldLine = "";
+  let newLine = "";
+
+  for (const change of changes) {
+    if (change.added) {
+      // 追加された部分: 緑背景
+      newLine += pc.bgGreen(pc.black(change.value));
+    } else if (change.removed) {
+      // 削除された部分: 赤背景
+      oldLine += pc.bgRed(pc.white(change.value));
+    } else {
+      // 変更なし
+      oldLine += change.value;
+      newLine += change.value;
+    }
+  }
+
+  return { oldLine, newLine };
+}
+
+/**
+ * 隣接する deletion/addition ペアを検出して word diff を適用
+ */
+interface ProcessedLine {
+  content: string;
+  lineType: DiffLineType;
+  isWordDiff: boolean;
+}
+
+function applyWordDiffToLines(lines: string[]): ProcessedLine[] {
+  const result: ProcessedLine[] = [];
+  let i = 0;
+
+  while (i < lines.length) {
+    const line = lines[i];
+    const lineType = classifyDiffLine(line);
+
+    // deletion の後に addition が続くパターンを検出
+    if (lineType === "deletion" && i + 1 < lines.length) {
+      const nextLine = lines[i + 1];
+      const nextType = classifyDiffLine(nextLine);
+
+      if (nextType === "addition") {
+        // word diff を適用
+        const oldContent = line.slice(1); // - を除去
+        const newContent = nextLine.slice(1); // + を除去
+        const { oldLine, newLine } = computeWordDiff(oldContent, newContent);
+
+        result.push({
+          content: `-${oldLine}`,
+          lineType: "deletion",
+          isWordDiff: true,
+        });
+        result.push({
+          content: `+${newLine}`,
+          lineType: "addition",
+          isWordDiff: true,
+        });
+        i += 2;
+        continue;
+      }
+    }
+
+    result.push({
+      content: line,
+      lineType,
+      isWordDiff: false,
+    });
+    i++;
+  }
+
+  return result;
+}
+
+// ────────────────────────────────────────────────────────────────
+// Syntax Highlighting
+// ────────────────────────────────────────────────────────────────
+
+/** 拡張子から言語を推測 */
+const EXT_TO_LANG: Record<string, string> = {
+  ".ts": "typescript",
+  ".tsx": "typescript",
+  ".js": "javascript",
+  ".jsx": "javascript",
+  ".json": "json",
+  ".jsonc": "json",
+  ".md": "markdown",
+  ".yaml": "yaml",
+  ".yml": "yaml",
+  ".css": "css",
+  ".scss": "scss",
+  ".html": "html",
+  ".xml": "xml",
+  ".sh": "bash",
+  ".bash": "bash",
+  ".zsh": "bash",
+  ".py": "python",
+  ".rb": "ruby",
+  ".go": "go",
+  ".rs": "rust",
+  ".java": "java",
+  ".c": "c",
+  ".cpp": "cpp",
+  ".h": "c",
+  ".hpp": "cpp",
+  ".sql": "sql",
+  ".graphql": "graphql",
+  ".gql": "graphql",
+  ".vue": "vue",
+  ".svelte": "xml",
+  ".toml": "toml",
+  ".ini": "ini",
+  ".dockerfile": "dockerfile",
+};
+
+/**
+ * ファイルパスから言語を推測
+ */
+function detectLanguage(filePath: string): string | undefined {
+  // 特殊なファイル名
+  const basename = filePath.split("/").pop() || "";
+  if (basename === "Dockerfile") return "dockerfile";
+  if (basename === ".gitignore") return "bash";
+  if (basename === "Makefile") return "makefile";
+
+  const ext = extname(filePath).toLowerCase();
+  const lang = EXT_TO_LANG[ext];
+
+  if (lang && supportsLanguage(lang)) {
+    return lang;
+  }
+  return undefined;
+}
+
+/**
+ * コードにシンタックスハイライトを適用
+ */
+function applySyntaxHighlight(code: string, lang: string | undefined): string {
+  if (!lang) return code;
+
+  try {
+    return highlight(code, { language: lang, ignoreIllegals: true });
+  } catch {
+    return code;
+  }
+}
+
+// ────────────────────────────────────────────────────────────────
 // 単一ファイル diff ボックス表示
 // ────────────────────────────────────────────────────────────────
 
@@ -333,6 +504,16 @@ export interface DiffViewOptions {
   showLineNumbers?: boolean;
   contextLines?: number;
   maxLines?: number;
+  wordDiff?: boolean;
+  syntaxHighlight?: boolean;
+}
+
+/** レンダリングオプション */
+interface RenderLineOptions {
+  showLineNumbers: boolean;
+  width: number;
+  lang?: string;
+  isWordDiff?: boolean;
 }
 
 /**
@@ -342,10 +523,9 @@ function renderDiffLine(
   line: string,
   lineType: DiffLineType,
   lineNum: number,
-  showLineNumbers: boolean,
-  width: number,
+  options: RenderLineOptions,
 ): { output: string; newLineNum: number } {
-  const coloredLine = colorizeDiffLine(line, lineType);
+  const { showLineNumbers, width, lang, isWordDiff } = options;
 
   // 行番号プレフィックスを決定
   const { prefix, nextLineNum } = match(lineType)
@@ -367,17 +547,44 @@ function renderDiffLine(
     }))
     .exhaustive();
 
+  // 行の内容を取得（word diff 済みの場合はそのまま使用）
+  let displayLine: string;
+
+  if (isWordDiff) {
+    // word diff が適用済みの場合、プレフィックス (+/-) の色だけ適用
+    const linePrefix = line[0];
+    const content = line.slice(1);
+    displayLine = match(lineType)
+      .with("addition", () => pc.green(linePrefix) + content)
+      .with("deletion", () => pc.red(linePrefix) + content)
+      .otherwise(() => line);
+  } else if (lang && lineType !== "hunk") {
+    // シンタックスハイライトを適用
+    const linePrefix = line[0];
+    const content = line.slice(1);
+    const highlighted = applySyntaxHighlight(content, lang);
+
+    displayLine = match(lineType)
+      .with("addition", () => pc.green(linePrefix) + highlighted)
+      .with("deletion", () => pc.red(linePrefix) + highlighted)
+      .with("context", () => linePrefix + highlighted)
+      .otherwise(() => line);
+  } else {
+    // 通常の色付け
+    displayLine = colorizeDiffLine(line, lineType);
+  }
+
   // 行が長すぎる場合は切り詰め
   const plainLine = line.replace(ANSI_REGEX, "");
   const maxContentWidth = width - 8 - (showLineNumbers ? 5 : 0);
 
-  const finalLine =
-    plainLine.length > maxContentWidth
-      ? colorizeDiffLine(line.slice(0, maxContentWidth - 3) + "...", lineType)
-      : coloredLine;
+  if (plainLine.length > maxContentWidth) {
+    // 切り詰めが必要な場合は単純な色付けにフォールバック
+    displayLine = colorizeDiffLine(line.slice(0, maxContentWidth - 3) + "...", lineType);
+  }
 
   return {
-    output: padLine(`${prefix}${finalLine}`, width),
+    output: padLine(`${prefix}${displayLine}`, width),
     newLineNum: nextLineNum,
   };
 }
@@ -391,17 +598,24 @@ export function showFileDiffBox(
   total: number,
   options: DiffViewOptions = {},
 ): void {
-  const { showLineNumbers = true, maxLines } = options;
+  const { showLineNumbers = true, maxLines, wordDiff = true, syntaxHighlight = true } = options;
+
   const stats = calculateDiffStats(file);
   const style = getTypeStyle(file.type);
   const width = DEFAULT_BOX_WIDTH;
+
+  // 言語を検出
+  const lang = syntaxHighlight ? detectLanguage(file.path) : undefined;
 
   // ヘッダー
   console.log();
   console.log(horizontalLine(width, BOX.topLeft, BOX.topRight));
 
   const position = pc.dim(`[${index + 1}/${total}]`);
-  console.log(padLine(`${position} ${style.color(style.icon)} ${pc.bold(file.path)}`, width));
+  const langBadge = lang ? pc.dim(` [${lang}]`) : "";
+  console.log(
+    padLine(`${position} ${style.color(style.icon)} ${pc.bold(file.path)}${langBadge}`, width),
+  );
   console.log(padLine(`${style.color(style.label)}  ${formatStatsWithLabel(stats)}`, width));
   console.log(horizontalLine(width, BOX.tee, BOX.tee));
 
@@ -418,21 +632,35 @@ export function showFileDiffBox(
 
   const contentLines = lines.filter((line) => !isHeaderLine(line));
 
-  const displayLines =
+  // maxLines で切り詰め（word diff 適用前）
+  const limitedLines =
     maxLines && contentLines.length > maxLines ? contentLines.slice(0, maxLines) : contentLines;
 
   const truncated = maxLines && contentLines.length > maxLines;
 
+  // Word diff を適用
+  const processedLines = wordDiff
+    ? applyWordDiffToLines(limitedLines)
+    : limitedLines.map((line) => ({
+        content: line,
+        lineType: classifyDiffLine(line),
+        isWordDiff: false,
+      }));
+
   let lineNum = 0;
-  for (const line of displayLines) {
-    const lineType = classifyDiffLine(line);
-    const { output, newLineNum } = renderDiffLine(line, lineType, lineNum, showLineNumbers, width);
+  for (const processed of processedLines) {
+    const { output, newLineNum } = renderDiffLine(processed.content, processed.lineType, lineNum, {
+      showLineNumbers,
+      width,
+      lang: processed.isWordDiff ? undefined : lang, // word diff 時はシンタックスハイライトをスキップ
+      isWordDiff: processed.isWordDiff,
+    });
     console.log(output);
     lineNum = newLineNum;
   }
 
   if (truncated) {
-    const remaining = contentLines.length - displayLines.length;
+    const remaining = contentLines.length - limitedLines.length;
     console.log(padLine(pc.dim(`... ${remaining} more lines`), width));
   }
 
