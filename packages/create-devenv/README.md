@@ -4,9 +4,9 @@ A bi-directional dev environment template that evolves as you use it.
 
 ## Why
 
-Templates go stale the moment you create them.
+The rise of AI-powered tools like Claude Code has changed how we work. Best practices evolve daily—new workflows, new configs, new integrations. And with multiple projects running in parallel, keeping dev environments in sync becomes a real challenge.
 
-Each project improves upon the original—better configs, new workflows, refined settings—but those improvements never flow back. The template stays frozen while the real world moves on.
+Templates go stale the moment you create them. Each project improves upon the original—better configs, new workflows, refined settings—but those improvements never flow back. The template stays frozen while the real world moves on.
 
 This tool solves that with **bi-directional sync**:
 
