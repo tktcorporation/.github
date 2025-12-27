@@ -30,23 +30,23 @@ export const initCommand = defineCommand({
   meta: {
     name: "create-devenv",
     version,
-    description: "開発環境テンプレートを適用",
+    description: "Apply dev environment template to your project",
   },
   args: {
     dir: {
       type: "positional",
-      description: "プロジェクトディレクトリ",
+      description: "Target directory",
       default: ".",
     },
     force: {
       type: "boolean",
-      description: "既存ファイルを強制上書き",
+      description: "Overwrite existing files",
       default: false,
     },
     yes: {
       type: "boolean",
       alias: "y",
-      description: "すべてのモジュールを自動選択（非インタラクティブモード）",
+      description: "Select all modules (non-interactive mode)",
       default: false,
     },
   },

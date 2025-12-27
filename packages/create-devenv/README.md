@@ -16,6 +16,8 @@ This tool solves that with **bi-directional sync**:
 
 Your template stays alive, fed by every project that uses it.
 
+<!-- USAGE:START -->
+
 ## Usage
 
 ```bash
@@ -32,6 +34,8 @@ npx @tktco/create-devenv push -m "Add new workflow"
 npx @tktco/create-devenv diff
 ```
 
+<!-- USAGE:END -->
+
 <!-- FEATURES:START -->
 
 ## Modules
@@ -40,7 +44,7 @@ Pick what you need:
 
 - **Root** - MCP, mise, and other root-level config files
 - **DevContainer** - VS Code DevContainer with Docker-in-Docker
-- **GitHub** - GitHub Actions, labeler workflows
+- **GitHub** - GitHub Actions and labeler workflows
 - **Claude** - Claude Code project settings
 
 <!-- FEATURES:END -->
@@ -51,48 +55,60 @@ Pick what you need:
 
 ### `init`
 
-Apply the dev environment template.
+Apply dev environment template to your project
 
 ```
-USAGE  create-devenv [OPTIONS] [DIR]
+Apply dev environment template to your project (create-devenv vdev)
+
+USAGE `create-devenv [OPTIONS] [DIR]`
 
 ARGUMENTS
-  DIR="."    Target directory
+
+  `DIR="."`    Target directory
 
 OPTIONS
-  --force    Overwrite existing files
-  -y, --yes  Select all modules (non-interactive)
+
+    `--force`    Overwrite existing files
+  `-y, --yes`    Select all modules (non-interactive mode)
 ```
 
 ### `push`
 
-Push local changes to the template repository as a PR.
+Push local changes to the template repository as a PR
 
 ```
-USAGE  push [OPTIONS] [DIR]
+Push local changes to the template repository as a PR (push)
+
+USAGE `push [OPTIONS] [DIR]`
 
 ARGUMENTS
-  DIR="."    Project directory
+
+  `DIR="."`    Project directory
 
 OPTIONS
-  -n, --dryRun          Preview only, don't create PR
-  -m, --message         PR title
-  -f, --force           Skip confirmation prompts
-  --no-i, --no-interactive  Disable interactive file selection
+
+              `-n, --dryRun`    Preview only, don't create PR
+             `-m, --message`    PR title
+               `-f, --force`    Skip confirmation prompts
+  `--no-i, --no-interactive`    Select files while reviewing diffs (enabled by default)
 ```
 
 ### `diff`
 
-Show differences between local and template.
+Show differences between local and template
 
 ```
-USAGE  diff [OPTIONS] [DIR]
+Show differences between local and template (diff)
+
+USAGE `diff [OPTIONS] [DIR]`
 
 ARGUMENTS
-  DIR="."    Project directory
+
+  `DIR="."`    Project directory
 
 OPTIONS
-  -v, --verbose    Show detailed diff
+
+  `-v, --verbose`    Show detailed diff
 ```
 
 <!-- COMMANDS:END -->
@@ -105,14 +121,14 @@ Files generated based on selected modules:
 
 ### Root
 
-MCP, mise, and other root-level configs.
+MCP, mise, and other root-level config files
 
 - `.mcp.json`
 - `.mise.toml`
 
 ### `.devcontainer/`
 
-VS Code DevContainer with Docker-in-Docker.
+VS Code DevContainer with Docker-in-Docker
 
 - `.devcontainer/devcontainer.json`
 - `.devcontainer/.gitignore`
@@ -123,7 +139,7 @@ VS Code DevContainer with Docker-in-Docker.
 
 ### `.github/`
 
-GitHub Actions and labeler workflows.
+GitHub Actions and labeler workflows
 
 - `.github/workflows/issue-link.yml`
 - `.github/workflows/label.yml`
@@ -131,7 +147,7 @@ GitHub Actions and labeler workflows.
 
 ### `.claude/`
 
-Claude Code project settings.
+Claude Code project settings
 
 - `.claude/settings.json`
 

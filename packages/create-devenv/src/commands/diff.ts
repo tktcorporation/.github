@@ -13,18 +13,18 @@ const TEMPLATE_SOURCE = "gh:tktcorporation/.github";
 export const diffCommand = defineCommand({
   meta: {
     name: "diff",
-    description: "ローカルとテンプレートの差分を表示",
+    description: "Show differences between local and template",
   },
   args: {
     dir: {
       type: "positional",
-      description: "プロジェクトディレクトリ",
+      description: "Project directory",
       default: ".",
     },
     verbose: {
       type: "boolean",
       alias: "v",
-      description: "詳細な差分を表示",
+      description: "Show detailed diff",
       default: false,
     },
   },
