@@ -10,7 +10,6 @@ import {
   box,
   diffHeader,
   log,
-  pc,
   showHeader,
   showNextSteps,
   step,
