@@ -1,5 +1,21 @@
 import { z } from "zod";
 
+// ────────────────────────────────────────────────────────────────
+// Branded Types - より厳密な型定義
+// ────────────────────────────────────────────────────────────────
+
+/** 非負整数（行数カウント用） */
+export const nonNegativeIntSchema = z.number().int().nonnegative().brand<"NonNegativeInt">();
+export type NonNegativeInt = z.infer<typeof nonNegativeIntSchema>;
+
+/** ファイルパス */
+export const filePathSchema = z.string().min(1).brand<"FilePath">();
+export type FilePath = z.infer<typeof filePathSchema>;
+
+// ────────────────────────────────────────────────────────────────
+// Core Schemas
+// ────────────────────────────────────────────────────────────────
+
 // 上書き戦略
 export const overwriteStrategySchema = z.enum(["overwrite", "skip", "prompt"]);
 export type OverwriteStrategy = z.infer<typeof overwriteStrategySchema>;
