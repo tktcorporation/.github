@@ -270,9 +270,7 @@ describe("fileDiffSchema", () => {
 describe("diffResultSchema", () => {
   it("有効な差分結果を受け入れる", () => {
     const result = {
-      files: [
-        { path: "file.txt", type: "modified" },
-      ],
+      files: [{ path: "file.txt", type: "modified" }],
       summary: {
         added: 1,
         modified: 2,

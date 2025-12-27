@@ -250,9 +250,7 @@ describe("showDiffSummaryBox", () => {
   });
 
   it("コンソールに出力する", () => {
-    const files: FileDiff[] = [
-      { path: "a.txt", type: "added", localContent: "content" },
-    ];
+    const files: FileDiff[] = [{ path: "a.txt", type: "added", localContent: "content" }];
 
     showDiffSummaryBox(files);
 

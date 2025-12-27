@@ -237,9 +237,7 @@ describe("updateReadmeFile", () => {
 <!-- FEATURES:END -->`;
 
     const modulesJson = JSON.stringify({
-      modules: [
-        { id: ".", name: "Root", description: "ルート設定", patterns: [] },
-      ],
+      modules: [{ id: ".", name: "Root", description: "ルート設定", patterns: [] }],
     });
 
     vol.fromJSON({
