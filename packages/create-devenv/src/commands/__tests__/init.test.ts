@@ -88,22 +88,27 @@ describe("initCommand", () => {
 
   describe("meta", () => {
     it("コマンドメタデータが正しい", () => {
-      expect(initCommand.meta?.name).toBe("create-devenv");
-      expect(initCommand.meta?.description).toBe("Apply dev environment template to your project");
+      expect((initCommand.meta as { name: string }).name).toBe("create-devenv");
+      expect((initCommand.meta as { description: string }).description).toBe(
+        "Apply dev environment template to your project",
+      );
     });
   });
 
   describe("args", () => {
     it("dir 引数のデフォルト値は '.'", () => {
-      expect(initCommand.args?.dir?.default).toBe(".");
+      const args = initCommand.args as { dir: { default: string } };
+      expect(args.dir.default).toBe(".");
     });
 
     it("force 引数のデフォルト値は false", () => {
-      expect(initCommand.args?.force?.default).toBe(false);
+      const args = initCommand.args as { force: { default: boolean } };
+      expect(args.force.default).toBe(false);
     });
 
     it("yes 引数のデフォルト値は false", () => {
-      expect(initCommand.args?.yes?.default).toBe(false);
+      const args = initCommand.args as { yes: { default: boolean } };
+      expect(args.yes.default).toBe(false);
     });
   });
 
@@ -118,7 +123,7 @@ describe("initCommand", () => {
         overwriteStrategy: "prompt",
       });
 
-      await initCommand.run?.({
+      await (initCommand.run as any)({
         args: { dir: "/test", force: false, yes: false },
         rawArgs: [],
         cmd: initCommand,
@@ -134,7 +139,7 @@ describe("initCommand", () => {
 
       mockFetchTemplates.mockResolvedValue([{ action: "copied", path: ".mcp.json" }]);
 
-      await initCommand.run?.({
+      await (initCommand.run as any)({
         args: { dir: "/test", force: false, yes: true },
         rawArgs: [],
         cmd: initCommand,
@@ -156,7 +161,7 @@ describe("initCommand", () => {
 
       mockFetchTemplates.mockResolvedValue([{ action: "copied", path: ".mcp.json" }]);
 
-      await initCommand.run?.({
+      await (initCommand.run as any)({
         args: { dir: "/new-dir", force: false, yes: false },
         rawArgs: [],
         cmd: initCommand,
@@ -177,7 +182,7 @@ describe("initCommand", () => {
 
       mockFetchTemplates.mockResolvedValue([]);
 
-      await initCommand.run?.({
+      await (initCommand.run as any)({
         args: { dir: "/test", force: false, yes: false },
         rawArgs: [],
         cmd: initCommand,
@@ -203,7 +208,7 @@ describe("initCommand", () => {
 
       mockFetchTemplates.mockResolvedValue([]);
 
-      await initCommand.run?.({
+      await (initCommand.run as any)({
         args: { dir: "/test", force: true, yes: false }, // --force
         rawArgs: [],
         cmd: initCommand,
@@ -235,7 +240,7 @@ describe("initCommand", () => {
 
       mockFetchTemplates.mockResolvedValue([]);
 
-      await initCommand.run?.({
+      await (initCommand.run as any)({
         args: { dir: "/test", force: false, yes: false },
         rawArgs: [],
         cmd: initCommand,
@@ -258,7 +263,7 @@ describe("initCommand", () => {
       mockPromptInit.mockRejectedValueOnce(new Error("User cancelled"));
 
       await expect(
-        initCommand.run?.({
+        (initCommand.run as any)({
           args: { dir: "/test", force: false, yes: false },
           rawArgs: [],
           cmd: initCommand,
@@ -278,7 +283,7 @@ describe("initCommand", () => {
         overwriteStrategy: "prompt",
       });
 
-      await initCommand.run?.({
+      await (initCommand.run as any)({
         args: { dir: "init", force: false, yes: false },
         rawArgs: [],
         cmd: initCommand,

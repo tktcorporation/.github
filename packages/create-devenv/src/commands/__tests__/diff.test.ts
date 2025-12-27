@@ -1,6 +1,5 @@
 import { vol } from "memfs";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { DiffResult } from "../../modules/schemas";
 
 // fs モジュールをモック
 vi.mock("node:fs", async () => {
@@ -72,11 +71,9 @@ const validConfig = {
   },
 };
 
-const emptyDiff: DiffResult = {
-  added: [],
-  modified: [],
-  deleted: [],
-  unchanged: [],
+const emptyDiff = {
+  files: [],
+  summary: { added: 0, modified: 0, deleted: 0, unchanged: 0 },
 };
 
 describe("diffCommand", () => {
@@ -94,18 +91,23 @@ describe("diffCommand", () => {
 
   describe("meta", () => {
     it("コマンドメタデータが正しい", () => {
-      expect(diffCommand.meta?.name).toBe("diff");
-      expect(diffCommand.meta?.description).toBe("Show differences between local and template");
+      // citty の型は Resolvable なので直接アクセスできる
+      expect((diffCommand.meta as { name: string }).name).toBe("diff");
+      expect((diffCommand.meta as { description: string }).description).toBe(
+        "Show differences between local and template",
+      );
     });
   });
 
   describe("args", () => {
     it("dir 引数のデフォルト値は '.'", () => {
-      expect(diffCommand.args?.dir?.default).toBe(".");
+      const args = diffCommand.args as { dir: { default: string } };
+      expect(args.dir.default).toBe(".");
     });
 
     it("verbose 引数のデフォルト値は false", () => {
-      expect(diffCommand.args?.verbose?.default).toBe(false);
+      const args = diffCommand.args as { verbose: { default: boolean } };
+      expect(args.verbose.default).toBe(false);
     });
   });
 
@@ -116,7 +118,7 @@ describe("diffCommand", () => {
       });
 
       await expect(
-        diffCommand.run?.({
+        (diffCommand.run as any)({
           args: { dir: "/test", verbose: false },
           rawArgs: [],
           cmd: diffCommand,
@@ -134,7 +136,7 @@ describe("diffCommand", () => {
       });
 
       await expect(
-        diffCommand.run?.({
+        (diffCommand.run as any)({
           args: { dir: "/test", verbose: false },
           rawArgs: [],
           cmd: diffCommand,
@@ -152,7 +154,7 @@ describe("diffCommand", () => {
         }),
       });
 
-      await diffCommand.run?.({
+      await (diffCommand.run as any)({
         args: { dir: "/test", verbose: false },
         rawArgs: [],
         cmd: diffCommand,
@@ -169,7 +171,7 @@ describe("diffCommand", () => {
       mockDetectDiff.mockResolvedValueOnce(emptyDiff);
       mockHasDiff.mockReturnValueOnce(false);
 
-      await diffCommand.run?.({
+      await (diffCommand.run as any)({
         args: { dir: "/test", verbose: false },
         rawArgs: [],
         cmd: diffCommand,
@@ -184,24 +186,21 @@ describe("diffCommand", () => {
         "/test/.devenv.json": JSON.stringify(validConfig),
       });
 
-      const diffWithChanges: DiffResult = {
-        added: [
+      const diffWithChanges = {
+        files: [
           {
             path: "new-file.txt",
-            type: "added",
+            type: "added" as const,
             localContent: "content",
-            templateContent: null,
           },
         ],
-        modified: [],
-        deleted: [],
-        unchanged: [],
+        summary: { added: 1, modified: 0, deleted: 0, unchanged: 0 },
       };
 
       mockDetectDiff.mockResolvedValueOnce(diffWithChanges);
       mockHasDiff.mockReturnValueOnce(true);
 
-      await diffCommand.run?.({
+      await (diffCommand.run as any)({
         args: { dir: "/test", verbose: false },
         rawArgs: [],
         cmd: diffCommand,
@@ -219,7 +218,7 @@ describe("diffCommand", () => {
       mockDetectDiff.mockResolvedValueOnce(emptyDiff);
       mockHasDiff.mockReturnValueOnce(false);
 
-      await diffCommand.run?.({
+      await (diffCommand.run as any)({
         args: { dir: "/test", verbose: false },
         rawArgs: [],
         cmd: diffCommand,
@@ -238,7 +237,7 @@ describe("diffCommand", () => {
       mockDetectDiff.mockRejectedValueOnce(new Error("Diff error"));
 
       await expect(
-        diffCommand.run?.({
+        (diffCommand.run as any)({
           args: { dir: "/test", verbose: false },
           rawArgs: [],
           cmd: diffCommand,

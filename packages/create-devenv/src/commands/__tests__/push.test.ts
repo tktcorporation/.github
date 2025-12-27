@@ -1,6 +1,5 @@
 import { vol } from "memfs";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { DiffResult } from "../../modules/schemas";
 
 // fs モジュールをモック
 vi.mock("node:fs", async () => {
@@ -128,11 +127,9 @@ const validConfig = {
   },
 };
 
-const emptyDiff: DiffResult = {
-  added: [],
-  modified: [],
-  deleted: [],
-  unchanged: [],
+const emptyDiff = {
+  files: [],
+  summary: { added: 0, modified: 0, deleted: 0, unchanged: 0 },
 };
 
 describe("pushCommand", () => {
@@ -152,8 +149,8 @@ describe("pushCommand", () => {
 
   describe("meta", () => {
     it("コマンドメタデータが正しい", () => {
-      expect(pushCommand.meta?.name).toBe("push");
-      expect(pushCommand.meta?.description).toBe(
+      expect((pushCommand.meta as { name: string }).name).toBe("push");
+      expect((pushCommand.meta as { description: string }).description).toBe(
         "Push local changes to the template repository as a PR",
       );
     });
@@ -161,19 +158,23 @@ describe("pushCommand", () => {
 
   describe("args", () => {
     it("dir 引数のデフォルト値は '.'", () => {
-      expect(pushCommand.args?.dir?.default).toBe(".");
+      const args = pushCommand.args as { dir: { default: string } };
+      expect(args.dir.default).toBe(".");
     });
 
     it("dryRun 引数のデフォルト値は false", () => {
-      expect(pushCommand.args?.dryRun?.default).toBe(false);
+      const args = pushCommand.args as { dryRun: { default: boolean } };
+      expect(args.dryRun.default).toBe(false);
     });
 
     it("force 引数のデフォルト値は false", () => {
-      expect(pushCommand.args?.force?.default).toBe(false);
+      const args = pushCommand.args as { force: { default: boolean } };
+      expect(args.force.default).toBe(false);
     });
 
     it("interactive 引数のデフォルト値は true", () => {
-      expect(pushCommand.args?.interactive?.default).toBe(true);
+      const args = pushCommand.args as { interactive: { default: boolean } };
+      expect(args.interactive.default).toBe(true);
     });
   });
 
@@ -184,7 +185,7 @@ describe("pushCommand", () => {
       });
 
       await expect(
-        pushCommand.run?.({
+        (pushCommand.run as any)({
           args: { dir: "/test", dryRun: false, force: false, interactive: true },
           rawArgs: [],
           cmd: pushCommand,
@@ -202,7 +203,7 @@ describe("pushCommand", () => {
       });
 
       await expect(
-        pushCommand.run?.({
+        (pushCommand.run as any)({
           args: { dir: "/test", dryRun: false, force: false, interactive: true },
           rawArgs: [],
           cmd: pushCommand,
@@ -220,7 +221,7 @@ describe("pushCommand", () => {
         }),
       });
 
-      await pushCommand.run?.({
+      await (pushCommand.run as any)({
         args: { dir: "/test", dryRun: false, force: false, interactive: true },
         rawArgs: [],
         cmd: pushCommand,
@@ -236,7 +237,7 @@ describe("pushCommand", () => {
 
       mockGetPushableFiles.mockReturnValue([]);
 
-      await pushCommand.run?.({
+      await (pushCommand.run as any)({
         args: { dir: "/test", dryRun: false, force: false, interactive: true },
         rawArgs: [],
         cmd: pushCommand,
@@ -253,13 +254,12 @@ describe("pushCommand", () => {
       mockGetPushableFiles.mockReturnValue([
         {
           path: "file.txt",
-          type: "added",
+          type: "added" as const,
           localContent: "content",
-          templateContent: null,
         },
       ]);
 
-      await pushCommand.run?.({
+      await (pushCommand.run as any)({
         args: { dir: "/test", dryRun: true, force: false, interactive: true },
         rawArgs: [],
         cmd: pushCommand,
@@ -278,15 +278,14 @@ describe("pushCommand", () => {
       mockGetPushableFiles.mockReturnValue([
         {
           path: "file.txt",
-          type: "added",
+          type: "added" as const,
           localContent: "content",
-          templateContent: null,
         },
       ]);
 
       mockPromptSelectFilesWithDiff.mockResolvedValueOnce([]);
 
-      await pushCommand.run?.({
+      await (pushCommand.run as any)({
         args: { dir: "/test", dryRun: false, force: false, interactive: true },
         rawArgs: [],
         cmd: pushCommand,
@@ -304,15 +303,14 @@ describe("pushCommand", () => {
       mockGetPushableFiles.mockReturnValue([
         {
           path: "file.txt",
-          type: "added",
+          type: "added" as const,
           localContent: "content",
-          templateContent: null,
         },
       ]);
 
       mockPromptPushConfirm.mockResolvedValueOnce(false);
 
-      await pushCommand.run?.({
+      await (pushCommand.run as any)({
         args: { dir: "/test", dryRun: false, force: false, interactive: false },
         rawArgs: [],
         cmd: pushCommand,
@@ -331,7 +329,6 @@ describe("pushCommand", () => {
         path: "file.txt",
         type: "added" as const,
         localContent: "content",
-        templateContent: null,
       };
 
       mockGetPushableFiles.mockReturnValue([pushableFile]);
@@ -342,9 +339,10 @@ describe("pushCommand", () => {
       mockCreatePullRequest.mockResolvedValueOnce({
         url: "https://github.com/owner/repo/pull/1",
         branch: "update-template-123",
+        number: 1,
       });
 
-      await pushCommand.run?.({
+      await (pushCommand.run as any)({
         args: { dir: "/test", dryRun: false, force: false, interactive: true },
         rawArgs: [],
         cmd: pushCommand,
@@ -371,7 +369,6 @@ describe("pushCommand", () => {
         path: "file.txt",
         type: "added" as const,
         localContent: "content",
-        templateContent: null,
       };
 
       mockGetPushableFiles.mockReturnValue([pushableFile]);
@@ -383,9 +380,10 @@ describe("pushCommand", () => {
       mockCreatePullRequest.mockResolvedValueOnce({
         url: "https://github.com/owner/repo/pull/1",
         branch: "update-template-123",
+        number: 1,
       });
 
-      await pushCommand.run?.({
+      await (pushCommand.run as any)({
         args: { dir: "/test", dryRun: false, force: false, interactive: true },
         rawArgs: [],
         cmd: pushCommand,
@@ -404,7 +402,6 @@ describe("pushCommand", () => {
         path: "file.txt",
         type: "added" as const,
         localContent: "content",
-        templateContent: null,
       };
 
       mockGetPushableFiles.mockReturnValue([pushableFile]);
@@ -414,9 +411,10 @@ describe("pushCommand", () => {
       mockCreatePullRequest.mockResolvedValueOnce({
         url: "https://github.com/owner/repo/pull/1",
         branch: "update-template-123",
+        number: 1,
       });
 
-      await pushCommand.run?.({
+      await (pushCommand.run as any)({
         args: {
           dir: "/test",
           dryRun: false,
@@ -447,7 +445,6 @@ describe("pushCommand", () => {
         path: "file.txt",
         type: "added" as const,
         localContent: "content",
-        templateContent: null,
       };
 
       mockGetPushableFiles.mockReturnValue([pushableFile]);
@@ -457,9 +454,10 @@ describe("pushCommand", () => {
       mockCreatePullRequest.mockResolvedValueOnce({
         url: "https://github.com/owner/repo/pull/1",
         branch: "update-template-123",
+        number: 1,
       });
 
-      await pushCommand.run?.({
+      await (pushCommand.run as any)({
         args: { dir: "/test", dryRun: false, force: true, interactive: true },
         rawArgs: [],
         cmd: pushCommand,

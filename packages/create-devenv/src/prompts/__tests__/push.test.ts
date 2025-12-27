@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { DiffResult, FileDiff } from "../../modules/schemas";
+import type { FileDiff } from "../../modules/schemas";
 import type { UntrackedFilesByFolder } from "../../utils/untracked";
 
 // console.log をモック
@@ -53,11 +53,9 @@ describe("promptPushConfirm", () => {
   it("true を返す場合", async () => {
     mockConfirm.mockResolvedValueOnce(true);
 
-    const diff: DiffResult = {
-      added: [],
-      modified: [],
-      deleted: [],
-      unchanged: [],
+    const diff = {
+      files: [],
+      summary: { added: 0, modified: 0, deleted: 0, unchanged: 0 },
     };
 
     const result = await promptPushConfirm(diff);
@@ -72,11 +70,9 @@ describe("promptPushConfirm", () => {
   it("false を返す場合", async () => {
     mockConfirm.mockResolvedValueOnce(false);
 
-    const diff: DiffResult = {
-      added: [],
-      modified: [],
-      deleted: [],
-      unchanged: [],
+    const diff = {
+      files: [],
+      summary: { added: 0, modified: 0, deleted: 0, unchanged: 0 },
     };
 
     const result = await promptPushConfirm(diff);
@@ -264,7 +260,6 @@ describe("promptSelectFilesWithDiff", () => {
         path: "file1.txt",
         type: "added",
         localContent: "content1",
-        templateContent: null,
       },
       {
         path: "file2.txt",
@@ -292,7 +287,6 @@ describe("promptSelectFilesWithDiff", () => {
         path: "file1.txt",
         type: "added",
         localContent: "content1",
-        templateContent: null,
       },
     ];
 
@@ -310,7 +304,6 @@ describe("promptSelectFilesWithDiff", () => {
         path: "file1.txt",
         type: "added",
         localContent: "content1",
-        templateContent: null,
       },
       {
         path: "file2.txt",
@@ -345,7 +338,7 @@ describe("promptAddUntrackedFiles", () => {
     const untrackedByFolder: UntrackedFilesByFolder[] = [
       {
         folder: ".github",
-        files: [{ path: ".github/new-file.yml", moduleId: ".github" }],
+        files: [{ path: ".github/new-file.yml", folder: ".github", moduleId: ".github" }],
       },
     ];
 
@@ -360,7 +353,7 @@ describe("promptAddUntrackedFiles", () => {
     const untrackedByFolder: UntrackedFilesByFolder[] = [
       {
         folder: ".github",
-        files: [{ path: ".github/new-file.yml", moduleId: ".github" }],
+        files: [{ path: ".github/new-file.yml", folder: ".github", moduleId: ".github" }],
       },
     ];
 
@@ -378,8 +371,8 @@ describe("promptAddUntrackedFiles", () => {
       {
         folder: ".github",
         files: [
-          { path: ".github/file1.yml", moduleId: ".github" },
-          { path: ".github/file2.yml", moduleId: ".github" },
+          { path: ".github/file1.yml", folder: ".github", moduleId: ".github" },
+          { path: ".github/file2.yml", folder: ".github", moduleId: ".github" },
         ],
       },
     ];
@@ -402,11 +395,13 @@ describe("promptAddUntrackedFiles", () => {
     const untrackedByFolder: UntrackedFilesByFolder[] = [
       {
         folder: ".github",
-        files: [{ path: ".github/file1.yml", moduleId: ".github" }],
+        files: [{ path: ".github/file1.yml", folder: ".github", moduleId: ".github" }],
       },
       {
         folder: ".devcontainer",
-        files: [{ path: ".devcontainer/file.json", moduleId: ".devcontainer" }],
+        files: [
+          { path: ".devcontainer/file.json", folder: ".devcontainer", moduleId: ".devcontainer" },
+        ],
       },
     ];
 
