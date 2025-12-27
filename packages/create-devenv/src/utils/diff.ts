@@ -1,6 +1,5 @@
 import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
-import consola from "consola";
 import { createPatch } from "diff";
 import { join } from "pathe";
 import { defaultModules, getModuleById } from "../modules";
@@ -13,6 +12,7 @@ import type {
 } from "../modules/schemas";
 import { filterByGitignore, loadMergedGitignore } from "./gitignore";
 import { getEffectivePatterns, resolvePatterns } from "./patterns";
+import { log, pc } from "./ui";
 
 export interface DiffOptions {
   targetDir: string;
@@ -41,7 +41,7 @@ export async function detectDiff(options: DiffOptions): Promise<DiffResult> {
   for (const moduleId of moduleIds) {
     const mod = getModuleById(moduleId, moduleList);
     if (!mod) {
-      consola.warn(`モジュール "${moduleId}" が見つかりません`);
+      log.warn(`Module "${pc.cyan(moduleId)}" not found`);
       continue;
     }
 
@@ -113,43 +113,59 @@ export async function detectDiff(options: DiffOptions): Promise<DiffResult> {
 export function formatDiff(diff: DiffResult, verbose = false): string {
   const lines: string[] = [];
 
-  // サマリー
-  lines.push("=== 差分サマリー ===");
-  lines.push(`  追加: ${diff.summary.added} ファイル`);
-  lines.push(`  変更: ${diff.summary.modified} ファイル`);
-  lines.push(`  削除: ${diff.summary.deleted} ファイル`);
-  lines.push(`  同一: ${diff.summary.unchanged} ファイル`);
-  lines.push("");
+  // サマリー表示
+  const summaryParts: string[] = [];
+  if (diff.summary.added > 0) {
+    summaryParts.push(pc.green(`+${diff.summary.added} added`));
+  }
+  if (diff.summary.modified > 0) {
+    summaryParts.push(pc.yellow(`~${diff.summary.modified} modified`));
+  }
+  if (diff.summary.deleted > 0) {
+    summaryParts.push(pc.red(`-${diff.summary.deleted} deleted`));
+  }
+  if (diff.summary.unchanged > 0) {
+    summaryParts.push(pc.dim(`${diff.summary.unchanged} unchanged`));
+  }
+
+  if (summaryParts.length > 0) {
+    lines.push(`  ${summaryParts.join(pc.dim(" │ "))}`);
+    lines.push("");
+  }
 
   // 詳細
   const changedFiles = diff.files.filter((f) => f.type !== "unchanged");
   if (changedFiles.length > 0) {
-    lines.push("=== 変更ファイル ===");
     for (const file of changedFiles) {
-      const icon = getStatusIcon(file.type);
-      lines.push(`  ${icon} ${file.path}`);
+      const { icon, color } = getStatusStyle(file.type);
+      lines.push(`  ${icon} ${color(file.path)}`);
 
       if (verbose && file.type === "modified") {
-        lines.push("    (内容が異なります)");
+        lines.push(pc.dim("    └─ Content differs from template"));
       }
     }
   } else {
-    lines.push("変更はありません");
+    lines.push(pc.dim("  No changes detected"));
   }
 
   return lines.join("\n");
 }
 
-function getStatusIcon(type: DiffType): string {
+interface StatusStyle {
+  icon: string;
+  color: (s: string) => string;
+}
+
+function getStatusStyle(type: DiffType): StatusStyle {
   switch (type) {
     case "added":
-      return "+";
+      return { icon: pc.green("+"), color: pc.green };
     case "modified":
-      return "~";
+      return { icon: pc.yellow("~"), color: pc.yellow };
     case "deleted":
-      return "-";
+      return { icon: pc.red("-"), color: pc.red };
     case "unchanged":
-      return " ";
+      return { icon: pc.dim(" "), color: pc.dim };
   }
 }
 
@@ -186,17 +202,18 @@ export function generateUnifiedDiff(fileDiff: FileDiff): string {
 
 /**
  * unified diff にカラーを適用
+ * (テスト互換性のため、直接 ANSI エスケープシーケンスを使用)
  */
 export function colorizeUnifiedDiff(diff: string): string {
   return diff
     .split("\n")
     .map((line) => {
       if (line.startsWith("+++") || line.startsWith("---")) {
-        return `\x1b[1m${line}\x1b[0m`; // ボールド
+        return `\x1b[1m${line}\x1b[0m`; // Bold
       }
-      if (line.startsWith("+")) return `\x1b[32m${line}\x1b[0m`; // 緑
-      if (line.startsWith("-")) return `\x1b[31m${line}\x1b[0m`; // 赤
-      if (line.startsWith("@@")) return `\x1b[36m${line}\x1b[0m`; // シアン
+      if (line.startsWith("+")) return `\x1b[32m${line}\x1b[0m`; // Green
+      if (line.startsWith("-")) return `\x1b[31m${line}\x1b[0m`; // Red
+      if (line.startsWith("@@")) return `\x1b[36m${line}\x1b[0m`; // Cyan
       return line;
     })
     .join("\n");

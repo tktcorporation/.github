@@ -1,6 +1,5 @@
 import { copyFileSync, existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { confirm } from "@inquirer/prompts";
-import { consola } from "consola";
 import { downloadTemplate } from "giget";
 import { dirname, join } from "pathe";
 import { match } from "ts-pattern";
@@ -13,6 +12,7 @@ import type {
 } from "../modules/schemas";
 import { filterByGitignore, loadMergedGitignore } from "./gitignore";
 import { getEffectivePatterns, resolvePatterns } from "./patterns";
+import { log, logFileResult, pc } from "./ui";
 
 export const TEMPLATE_SOURCE = "gh:tktcorporation/.github";
 
@@ -27,14 +27,10 @@ export async function downloadTemplateToTemp(
 ): Promise<{ templateDir: string; cleanup: () => void }> {
   const tempDir = join(targetDir, ".devenv-temp");
 
-  consola.start("テンプレートを取得中...");
-
   const { dir: templateDir } = await downloadTemplate(TEMPLATE_SOURCE, {
     dir: tempDir,
     force: true,
   });
-
-  consola.success("テンプレートを取得しました");
 
   const cleanup = () => {
     if (existsSync(tempDir)) {
@@ -125,15 +121,11 @@ export async function fetchTemplates(options: DownloadOptions): Promise<FileOper
 
   try {
     if (shouldDownload) {
-      consola.start("テンプレートを取得中...");
-
       const result = await downloadTemplate(TEMPLATE_SOURCE, {
         dir: tempDir,
         force: true,
       });
       templateDir = result.dir;
-
-      consola.success("テンプレートを取得しました");
     } else {
       templateDir = preDownloadedDir;
     }
@@ -158,7 +150,7 @@ export async function fetchTemplates(options: DownloadOptions): Promise<FileOper
       const files = filterByGitignore(resolvedFiles, gitignore);
 
       if (files.length === 0) {
-        consola.warn(`モジュール "${moduleId}" にマッチするファイルがありません`);
+        log.warn(`No files matched for module "${pc.cyan(moduleId)}"`);
         continue;
       }
 
@@ -228,10 +220,5 @@ export async function copyFile(
 }
 
 export function logResult(result: FileOperationResult): void {
-  match(result.action)
-    .with("copied", () => consola.success(`コピー: ${result.path}`))
-    .with("created", () => consola.success(`作成: ${result.path}`))
-    .with("overwritten", () => consola.success(`上書き: ${result.path}`))
-    .with("skipped", () => consola.info(`スキップ: ${result.path}`))
-    .exhaustive();
+  logFileResult(result);
 }

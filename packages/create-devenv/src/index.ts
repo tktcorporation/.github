@@ -5,12 +5,13 @@ import { version } from "../package.json";
 import { diffCommand } from "./commands/diff";
 import { initCommand } from "./commands/init";
 import { pushCommand } from "./commands/push";
+import { log, pc, showHeader } from "./utils/ui";
 
 const main = defineCommand({
   meta: {
     name: "create-devenv",
     version,
-    description: "開発環境テンプレート管理ツール",
+    description: "Dev environment template manager",
   },
   subCommands: {
     init: initCommand,
@@ -31,23 +32,25 @@ const commandMap: Record<"init" | "push" | "diff", CommandType> = {
  * コマンド選択プロンプト
  */
 async function promptCommand(): Promise<void> {
+  showHeader("create-devenv", version);
+
+  log.info("Select a command to run:");
+  log.newline();
+
   const command = await select({
-    message: "実行するコマンドを選択してください",
+    message: "Command",
     choices: [
       {
-        name: "init - 開発環境テンプレートを適用",
+        name: `${pc.cyan("init")}   ${pc.dim("→")} Apply template to your project`,
         value: "init" as const,
-        description: "テンプレートをダウンロードしてプロジェクトに適用",
       },
       {
-        name: "push - ローカル変更を PR として送信",
+        name: `${pc.cyan("push")}   ${pc.dim("→")} Push local changes as a PR`,
         value: "push" as const,
-        description: "ローカルの変更をテンプレートリポジトリに PR として送信",
       },
       {
-        name: "diff - ローカルとテンプレートの差分を表示",
+        name: `${pc.cyan("diff")}   ${pc.dim("→")} Show differences from template`,
         value: "diff" as const,
-        description: "現在のファイルとテンプレートの差分を確認",
       },
     ],
   });

@@ -1,7 +1,6 @@
 import { existsSync } from "node:fs";
 import { readFile, rm } from "node:fs/promises";
 import { defineCommand } from "citty";
-import consola from "consola";
 import { downloadTemplate } from "giget";
 import { parse } from "jsonc-parser";
 import { join, resolve } from "pathe";
@@ -26,6 +25,16 @@ import { createPullRequest, getGitHubToken } from "../utils/github";
 import { detectAndUpdateReadme } from "../utils/readme";
 import { TEMPLATE_SOURCE } from "../utils/template";
 import { detectUntrackedFiles } from "../utils/untracked";
+import {
+  box,
+  diffHeader,
+  log,
+  pc,
+  showHeader,
+  showNextSteps,
+  step,
+  withSpinner,
+} from "../utils/ui";
 
 const MODULES_FILE_PATH = ".devenv/modules.jsonc";
 const README_PATH = "README.md";
@@ -66,12 +75,14 @@ export const pushCommand = defineCommand({
     },
   },
   async run({ args }) {
+    showHeader("create-devenv push");
+
     const targetDir = resolve(args.dir);
     const configPath = join(targetDir, ".devenv.json");
 
     // .devenv.json の存在確認
     if (!existsSync(configPath)) {
-      consola.error(".devenv.json が見つかりません。先に init コマンドを実行してください。");
+      log.error(".devenv.json not found. Run 'init' command first.");
       process.exit(1);
     }
 
@@ -81,27 +92,36 @@ export const pushCommand = defineCommand({
     const parseResult = configSchema.safeParse(configData);
 
     if (!parseResult.success) {
-      consola.error(".devenv.json の形式が不正です:", parseResult.error.message);
+      log.error("Invalid .devenv.json format");
+      log.dim(parseResult.error.message);
       process.exit(1);
     }
 
     const config: DevEnvConfig = parseResult.data;
 
     if (config.modules.length === 0) {
-      consola.warn("インストール済みのモジュールがありません。");
+      log.warn("No modules installed");
       return;
     }
 
-    consola.start("テンプレートをダウンロード中...");
+    const totalSteps = args.dryRun ? 2 : 4;
+    let currentStep = 1;
+
+    // Step 1: テンプレートをダウンロード
+    step({ current: currentStep++, total: totalSteps }, "Fetching template...");
 
     // テンプレートを一時ディレクトリにダウンロード
     const tempDir = join(targetDir, ".devenv-temp");
 
     try {
-      const { dir: templateDir } = await downloadTemplate(TEMPLATE_SOURCE, {
-        dir: tempDir,
-        force: true,
-      });
+      const { dir: templateDir } = await withSpinner(
+        "Downloading template from GitHub...",
+        () =>
+          downloadTemplate(TEMPLATE_SOURCE, {
+            dir: tempDir,
+            force: true,
+          }),
+      );
 
       // modules.jsonc を読み込み
       let moduleList: TemplateModule[];
@@ -127,6 +147,10 @@ export const pushCommand = defineCommand({
         });
 
         if (untrackedByFolder.length > 0) {
+          log.newline();
+          log.info(pc.bold("Untracked files detected:"));
+          log.newline();
+
           const selectedFiles = await promptAddUntrackedFiles(untrackedByFolder);
 
           if (selectedFiles.length > 0) {
@@ -138,66 +162,73 @@ export const pushCommand = defineCommand({
             updatedModulesContent = currentContent;
 
             // 更新されたモジュールリストを再パースして反映
-            // これにより、新しく追加したパターンが差分検出で使用される
             const parsedUpdated = parse(updatedModulesContent) as {
               modules: TemplateModule[];
             };
             moduleList = parsedUpdated.modules;
 
             const totalAdded = selectedFiles.reduce((sum, s) => sum + s.files.length, 0);
-            consola.info(
-              `${totalAdded} 件のパターンを modules.jsonc に追加します（PR に含まれます）`,
-            );
+            log.success(`${totalAdded} patterns will be added to modules.jsonc`);
           }
         }
       }
 
-      consola.start("差分を検出中...");
+      // Step 2: 差分を検出
+      step({ current: currentStep++, total: totalSteps }, "Detecting changes...");
 
-      // 差分検出
-      const diff = await detectDiff({
-        targetDir,
-        templateDir,
-        moduleIds: config.modules,
-        config,
-        moduleList,
-      });
+      const diff = await withSpinner("Analyzing differences...", () =>
+        detectDiff({
+          targetDir,
+          templateDir,
+          moduleIds: config.modules,
+          config,
+          moduleList,
+        }),
+      );
 
       // push 対象ファイルを取得
       let pushableFiles = getPushableFiles(diff);
 
       if (pushableFiles.length === 0 && !updatedModulesContent) {
-        consola.info("push するファイルがありません。");
-        console.log();
+        log.newline();
+        log.info("No changes to push");
+        diffHeader("Current status:");
         console.log(formatDiff(diff, false));
         return;
       }
 
       // ドライランモード
       if (args.dryRun) {
-        consola.info("[ドライラン] 以下のファイルが PR として送信されます:");
-        console.log();
+        log.newline();
+        box("Dry run mode", "info");
+
+        diffHeader("Files that would be included in PR:");
         console.log(formatDiff(diff, true));
+
         if (updatedModulesContent) {
-          console.log(`  [+] ${MODULES_FILE_PATH} (パターン追加)`);
+          console.log(`  ${pc.green("+")} ${MODULES_FILE_PATH} ${pc.dim("(pattern additions)")}`);
         }
-        console.log();
-        consola.info("[ドライラン] 実際の PR は作成されませんでした。");
+
+        log.newline();
+        log.info("No PR was created (dry run)");
         return;
       }
 
-      // ファイル選択（デフォルト動作）
+      // Step 3: ファイル選択
+      step({ current: currentStep++, total: totalSteps }, "Selecting files...");
+      log.newline();
+
       if (args.interactive && !args.force) {
         pushableFiles = await promptSelectFilesWithDiff(pushableFiles);
         if (pushableFiles.length === 0 && !updatedModulesContent) {
-          consola.info("ファイルが選択されませんでした。キャンセルします。");
+          log.info("No files selected. Cancelled.");
           return;
         }
       } else if (!args.force) {
         // --no-interactive 時は従来の確認プロンプト
         const confirmed = await promptPushConfirm(diff);
         if (!confirmed) {
-          consola.info("キャンセルしました。");
+          log.info("Cancelled");
           return;
         }
       }
@@ -205,10 +236,12 @@ export const pushCommand = defineCommand({
       // GitHub トークン取得
       let token = getGitHubToken();
       if (!token) {
+        log.newline();
         token = await promptGitHubToken();
       }
 
       // PR タイトル取得
+      log.newline();
       const title = args.message || (await promptPrTitle());
 
       // PR 本文取得
@@ -239,24 +272,32 @@ export const pushCommand = defineCommand({
         });
       }
 
-      consola.start("PR を作成中...");
+      // Step 4: PR を作成
+      step({ current: currentStep++, total: totalSteps }, "Creating pull request...");
 
-      // PR 作成
-      const result = await createPullRequest(token, {
-        owner: config.source.owner,
-        repo: config.source.repo,
-        files,
-        title,
-        body,
-        baseBranch: config.source.ref || "main",
-      });
+      const result = await withSpinner("Creating PR on GitHub...", () =>
+        createPullRequest(token, {
+          owner: config.source.owner,
+          repo: config.source.repo,
+          files,
+          title,
+          body,
+          baseBranch: config.source.ref || "main",
+        }),
+      );
 
-      console.log();
-      consola.success(`PR を作成しました!`);
-      console.log();
-      console.log(`  URL: ${result.url}`);
-      console.log(`  Branch: ${result.branch}`);
-      console.log();
+      // 成功メッセージ
+      box("Pull request created!", "success");
+
+      console.log(`  ${pc.bold("URL:")}    ${pc.cyan(result.url)}`);
+      console.log(`  ${pc.bold("Branch:")} ${result.branch}`);
+      log.newline();
+
+      showNextSteps([
+        {
+          description: `Review and merge the PR at ${result.url}`,
+        },
+      ]);
     } finally {
       // 一時ディレクトリを削除
       if (existsSync(tempDir)) {
