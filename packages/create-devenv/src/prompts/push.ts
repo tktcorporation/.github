@@ -1,6 +1,13 @@
+import * as readline from "node:readline";
 import { checkbox, confirm, input, password, Separator } from "@inquirer/prompts";
 import type { DiffResult, FileDiff } from "../modules/schemas";
-import { colorizeUnifiedDiff, formatDiff, generateUnifiedDiff } from "../utils/diff";
+import { formatDiff } from "../utils/diff";
+import {
+  addStatsToFiles,
+  formatStats,
+  showDiffSummaryBox,
+  showFileDiffBox,
+} from "../utils/diff-viewer";
 import type { UntrackedFile, UntrackedFilesByFolder } from "../utils/untracked";
 
 export interface SelectedUntrackedFiles {
@@ -86,26 +93,103 @@ export async function promptGitHubToken(): Promise<string> {
 }
 
 /**
+ * インタラクティブ diff ビューア
+ * n/p キーでファイル間をナビゲート、Enter または q で終了
+ */
+async function interactiveDiffViewer(files: FileDiff[]): Promise<void> {
+  if (files.length === 0) return;
+
+  let currentIndex = 0;
+
+  const showCurrentDiff = (): void => {
+    // 画面クリア（スクロールバッファは保持）
+    console.clear();
+    showFileDiffBox(files[currentIndex], currentIndex, files.length, {
+      showLineNumbers: true,
+      maxLines: 30,
+    });
+  };
+
+  return new Promise((resolve) => {
+    // raw モードでキー入力を受け付け
+    if (!process.stdin.isTTY) {
+      // TTY でない場合は全ファイルを順次表示
+      for (let i = 0; i < files.length; i++) {
+        showFileDiffBox(files[i], i, files.length, { showLineNumbers: true });
+      }
+      resolve();
+      return;
+    }
+
+    readline.emitKeypressEvents(process.stdin);
+    process.stdin.setRawMode(true);
+
+    showCurrentDiff();
+
+    const handleKeypress = (_str: string, key: readline.Key): void => {
+      if (key.name === "n" || key.name === "right" || key.name === "down" || key.name === "j") {
+        // 次のファイル
+        if (currentIndex < files.length - 1) {
+          currentIndex++;
+          showCurrentDiff();
+        }
+      } else if (key.name === "p" || key.name === "left" || key.name === "up" || key.name === "k") {
+        // 前のファイル
+        if (currentIndex > 0) {
+          currentIndex--;
+          showCurrentDiff();
+        }
+      } else if (key.name === "return" || key.name === "q" || key.name === "escape") {
+        // 終了
+        cleanup();
+        console.clear();
+        resolve();
+      } else if (key.ctrl && key.name === "c") {
+        // Ctrl+C で終了
+        cleanup();
+        process.exit(0);
+      }
+    };
+
+    const cleanup = (): void => {
+      process.stdin.setRawMode(false);
+      process.stdin.removeListener("keypress", handleKeypress);
+    };
+
+    process.stdin.on("keypress", handleKeypress);
+  });
+}
+
+/**
  * diff を表示しながらファイルを選択するプロンプト
+ * Option 2: サマリー → オプションで詳細確認 → ファイル選択
  */
 export async function promptSelectFilesWithDiff(pushableFiles: FileDiff[]): Promise<FileDiff[]> {
   if (pushableFiles.length === 0) {
     return [];
   }
 
-  // 各ファイルの unified diff を表示
-  console.log("\n=== 変更内容（unified diff）===\n");
-  for (const file of pushableFiles) {
-    const icon = file.type === "added" ? "[+]" : "[~]";
-    console.log(`--- ${icon} ${file.path} ---`);
-    console.log(colorizeUnifiedDiff(generateUnifiedDiff(file)));
-    console.log();
+  // Step 1: サマリーボックスを表示
+  showDiffSummaryBox(pushableFiles);
+
+  // Step 2: 詳細確認するか確認
+  const viewDetails = await confirm({
+    message: "詳細な diff を確認しますか？",
+    default: false,
+  });
+
+  if (viewDetails) {
+    // Step 3: インタラクティブ diff ビューア
+    await interactiveDiffViewer(pushableFiles);
+    // 再度サマリーを表示
+    showDiffSummaryBox(pushableFiles);
   }
 
-  // チェックボックスでファイル選択
-  const choices = pushableFiles.map((file) => ({
-    name: `[${file.type === "added" ? "+" : "~"}] ${file.path}`,
-    value: file,
+  // Step 4: チェックボックスでファイル選択
+  const filesWithStats = addStatsToFiles(pushableFiles);
+  const choices = filesWithStats.map((file) => ({
+    name: `${file.type === "added" ? "✚" : "⬡"} ${file.path} (${formatStats(file.stats)})`,
+    value: file as FileDiff,
     checked: true,
   }));
 
