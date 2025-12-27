@@ -6,15 +6,7 @@ import { join, resolve } from "pathe";
 import type { DevEnvConfig } from "../modules/schemas";
 import { configSchema } from "../modules/schemas";
 import { detectDiff, formatDiff, hasDiff } from "../utils/diff";
-import {
-  box,
-  diffHeader,
-  log,
-  showHeader,
-  showNextSteps,
-  step,
-  withSpinner,
-} from "../utils/ui";
+import { box, diffHeader, log, showHeader, showNextSteps, step, withSpinner } from "../utils/ui";
 
 const TEMPLATE_SOURCE = "gh:tktcorporation/.github";
 
@@ -75,13 +67,11 @@ export const diffCommand = defineCommand({
     const tempDir = join(targetDir, ".devenv-temp");
 
     try {
-      const { dir: templateDir } = await withSpinner(
-        "Downloading template from GitHub...",
-        () =>
-          downloadTemplate(TEMPLATE_SOURCE, {
-            dir: tempDir,
-            force: true,
-          }),
+      const { dir: templateDir } = await withSpinner("Downloading template from GitHub...", () =>
+        downloadTemplate(TEMPLATE_SOURCE, {
+          dir: tempDir,
+          force: true,
+        }),
       );
 
       // Step 2: 差分を検出

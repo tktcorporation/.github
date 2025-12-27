@@ -126,14 +126,14 @@ async function generateCommandsSection(): Promise<string> {
 
   for (const { name, command } of commands) {
     // Extract description from command meta (single source of truth)
-    const description =
-      (command as { meta?: { description?: string } }).meta?.description || "";
+    const description = (command as { meta?: { description?: string } }).meta?.description || "";
 
     sections.push(`### \`${name}\`\n`);
     sections.push(`${description}\n`);
     sections.push("```");
 
-    const usage = await renderUsage(command);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const usage = await renderUsage(command as any);
     // Remove ANSI escape codes and trailing whitespace (for CI consistency)
     const cleanedUsage = stripVTControlCharacters(usage)
       .split("\n")

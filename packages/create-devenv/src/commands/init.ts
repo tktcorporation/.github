@@ -14,11 +14,7 @@ import type {
   TemplateModule,
 } from "../modules/schemas";
 import { promptInit } from "../prompts/init";
-import {
-  downloadTemplateToTemp,
-  fetchTemplates,
-  writeFileWithStrategy,
-} from "../utils/template";
+import { downloadTemplateToTemp, fetchTemplates, writeFileWithStrategy } from "../utils/template";
 import {
   box,
   calculateSummary,
@@ -82,9 +78,8 @@ export const initCommand = defineCommand({
     // Step 1: テンプレートをダウンロード
     step({ current: 1, total: totalSteps }, "Fetching template...");
 
-    const { templateDir, cleanup } = await withSpinner(
-      "Downloading template from GitHub...",
-      () => downloadTemplateToTemp(targetDir),
+    const { templateDir, cleanup } = await withSpinner("Downloading template from GitHub...", () =>
+      downloadTemplateToTemp(targetDir),
     );
 
     try {

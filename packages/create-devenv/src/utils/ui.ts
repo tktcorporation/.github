@@ -87,10 +87,7 @@ export function spinner(text: string): Spinner {
 /**
  * スピナー付きで非同期タスクを実行
  */
-export async function withSpinner<T>(
-  text: string,
-  task: () => Promise<T>,
-): Promise<T> {
+export async function withSpinner<T>(text: string, task: () => Promise<T>): Promise<T> {
   const s = spinner(text);
   s.start();
   try {
@@ -334,10 +331,7 @@ export function diffHeader(title: string): void {
 /**
  * diff ファイルを表示
  */
-export function diffFile(
-  path: string,
-  type: "added" | "modified" | "deleted",
-): void {
+export function diffFile(path: string, type: "added" | "modified" | "deleted"): void {
   const icons = {
     added: pc.green("+ "),
     modified: pc.yellow("~ "),

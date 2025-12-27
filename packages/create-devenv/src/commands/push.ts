@@ -114,13 +114,11 @@ export const pushCommand = defineCommand({
     const tempDir = join(targetDir, ".devenv-temp");
 
     try {
-      const { dir: templateDir } = await withSpinner(
-        "Downloading template from GitHub...",
-        () =>
-          downloadTemplate(TEMPLATE_SOURCE, {
-            dir: tempDir,
-            force: true,
-          }),
+      const { dir: templateDir } = await withSpinner("Downloading template from GitHub...", () =>
+        downloadTemplate(TEMPLATE_SOURCE, {
+          dir: tempDir,
+          force: true,
+        }),
       );
 
       // modules.jsonc を読み込み
