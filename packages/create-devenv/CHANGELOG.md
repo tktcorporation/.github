@@ -1,5 +1,38 @@
 # @tktco/create-devenv
 
+## 0.7.0
+
+### Minor Changes
+
+- [#45](https://github.com/tktcorporation/.github/pull/45) [`4557ba0`](https://github.com/tktcorporation/.github/commit/4557ba09b019d2f8f0dbaad3f274d6c4e56c9731) Thanks [@tktcorporation](https://github.com/tktcorporation)! - feat(create-devenv): improve diff display with summary box and interactive viewer
+
+  - Add new diff-viewer.ts with modern box-styled summary display
+  - Show file changes grouped by type (added/modified/deleted) with line stats
+  - Add interactive diff viewer with n/p navigation between files
+  - Improve file selection UI with stats display
+
+- [#45](https://github.com/tktcorporation/.github/pull/45) [`09b8e2e`](https://github.com/tktcorporation/.github/commit/09b8e2ebc31d44e1a771ef034fc8c5ed7a1e8edc) Thanks [@tktcorporation](https://github.com/tktcorporation)! - feat(create-devenv): add word-level diff and syntax highlighting
+
+  - Word-level diff: highlight changed words with background colors
+  - Syntax highlighting: automatic language detection based on file extension
+  - Supports 30+ languages including TypeScript, JavaScript, JSON, YAML, etc.
+
+### Patch Changes
+
+- [#47](https://github.com/tktcorporation/.github/pull/47) [`052075d`](https://github.com/tktcorporation/.github/commit/052075dd830d4ccc8eae4b949a73db164e903df7) Thanks [@tktcorporation](https://github.com/tktcorporation)! - テストを大幅に拡充
+
+  - config.ts: 設定ファイルの読み書きテスト
+  - patterns.ts: パターンマッチングとマージのテスト
+  - modules/schemas.ts: Zod スキーマバリデーションテスト
+  - modules/loader.ts: modules.jsonc ローダーテスト
+  - modules/index.ts: モジュールヘルパー関数テスト
+  - untracked.ts: 未追跡ファイル検出テスト
+  - readme.ts: README 生成テスト
+  - diff-viewer.ts: 差分表示テスト
+  - github.ts: GitHub API 連携テスト
+
+  テスト数: 40 → 209 (+169 テスト)
+
 ## 0.6.0
 
 ### Minor Changes
