@@ -2,10 +2,12 @@
  * Diff Viewer - モダンな diff 表示コンポーネント
  *
  * gitui, lazygit などを参考にした見やすい diff 表示を提供
+ * ts-pattern によるパターンマッチングで堅牢な条件分岐を実現
  */
 
 import pc from "picocolors";
-import type { FileDiff } from "../modules/schemas";
+import { match, P } from "ts-pattern";
+import type { DiffType, FileDiff } from "../modules/schemas";
 import { generateUnifiedDiff } from "./diff";
 
 // ────────────────────────────────────────────────────────────────
@@ -13,18 +15,28 @@ import { generateUnifiedDiff } from "./diff";
 // ────────────────────────────────────────────────────────────────
 
 export interface DiffStats {
-  additions: number;
-  deletions: number;
+  readonly additions: number;
+  readonly deletions: number;
 }
 
 export interface FileWithStats extends FileDiff {
-  stats: DiffStats;
+  readonly stats: DiffStats;
 }
 
 interface GroupedFiles {
-  added: FileWithStats[];
-  modified: FileWithStats[];
-  deleted: FileWithStats[];
+  readonly added: FileWithStats[];
+  readonly modified: FileWithStats[];
+  readonly deleted: FileWithStats[];
+}
+
+/** Diff 行のタイプ */
+type DiffLineType = "hunk" | "addition" | "deletion" | "context";
+
+/** スタイル設定 */
+interface TypeStyle {
+  readonly icon: string;
+  readonly color: (s: string) => string;
+  readonly label: string;
 }
 
 // ────────────────────────────────────────────────────────────────
@@ -39,61 +51,118 @@ const BOX = {
   horizontal: "─",
   vertical: "│",
   tee: "├",
-  cross: "┼",
-  horizontalDown: "┬",
-  horizontalUp: "┴",
 } as const;
 
-const ICONS = {
-  added: "✚",
-  modified: "⬡",
-  deleted: "✖",
-  file: "◦",
-  tree: {
-    branch: "├─",
-    last: "└─",
-    vertical: "│ ",
-  },
+const TREE = {
+  branch: "├─",
+  last: "└─",
 } as const;
 
 const DEFAULT_BOX_WIDTH = 60;
+
+// ANSI エスケープコードを除去する正規表現
+const ANSI_REGEX = /\x1b\[[0-9;]*m/g;
+
+// ────────────────────────────────────────────────────────────────
+// パターンマッチング用ヘルパー
+// ────────────────────────────────────────────────────────────────
+
+/**
+ * DiffType に対応するスタイルを取得
+ */
+const getTypeStyle = (type: DiffType): TypeStyle =>
+  match(type)
+    .with("added", () => ({
+      icon: "✚",
+      color: pc.green,
+      label: "added",
+    }))
+    .with("modified", () => ({
+      icon: "⬡",
+      color: pc.yellow,
+      label: "modified",
+    }))
+    .with("deleted", () => ({
+      icon: "✖",
+      color: pc.red,
+      label: "deleted",
+    }))
+    .with("unchanged", () => ({
+      icon: " ",
+      color: pc.dim,
+      label: "unchanged",
+    }))
+    .exhaustive();
+
+/**
+ * Diff 行のタイプを判定
+ */
+const classifyDiffLine = (line: string): DiffLineType =>
+  match(line)
+    .when(
+      (l) => l.startsWith("@@"),
+      () => "hunk" as const,
+    )
+    .when(
+      (l) => l.startsWith("+") && !l.startsWith("+++"),
+      () => "addition" as const,
+    )
+    .when(
+      (l) => l.startsWith("-") && !l.startsWith("---"),
+      () => "deletion" as const,
+    )
+    .otherwise(() => "context" as const);
+
+/**
+ * Diff 行に色を適用
+ */
+const colorizeDiffLine = (line: string, lineType: DiffLineType): string =>
+  match(lineType)
+    .with("hunk", () => pc.cyan(line))
+    .with("addition", () => pc.green(line))
+    .with("deletion", () => pc.red(line))
+    .with("context", () => line)
+    .exhaustive();
 
 // ────────────────────────────────────────────────────────────────
 // 統計計算
 // ────────────────────────────────────────────────────────────────
 
 /**
+ * ファイルの行数を安全に計算
+ */
+const countLines = (content: string | undefined): number =>
+  content ? content.split("\n").length : 0;
+
+/**
  * unified diff から追加・削除行数を計算
  */
 export function calculateDiffStats(fileDiff: FileDiff): DiffStats {
-  if (fileDiff.type === "unchanged") {
-    return { additions: 0, deletions: 0 };
-  }
+  return match(fileDiff)
+    .with({ type: "unchanged" }, () => ({ additions: 0, deletions: 0 }))
+    .with({ type: "deleted" }, (f) => ({
+      additions: 0,
+      deletions: countLines(f.templateContent),
+    }))
+    .with({ type: "added" }, (f) => ({
+      additions: countLines(f.localContent),
+      deletions: 0,
+    }))
+    .with({ type: "modified" }, (f) => {
+      const diff = generateUnifiedDiff(f);
+      let additions = 0;
+      let deletions = 0;
 
-  if (fileDiff.type === "deleted") {
-    const lines = (fileDiff.templateContent || "").split("\n").length;
-    return { additions: 0, deletions: lines };
-  }
+      for (const line of diff.split("\n")) {
+        match(classifyDiffLine(line))
+          .with("addition", () => additions++)
+          .with("deletion", () => deletions++)
+          .otherwise(() => {});
+      }
 
-  if (fileDiff.type === "added") {
-    const lines = (fileDiff.localContent || "").split("\n").length;
-    return { additions: lines, deletions: 0 };
-  }
-
-  // modified: unified diff をパースして計算
-  const diff = generateUnifiedDiff(fileDiff);
-  let additions = 0;
-  let deletions = 0;
-
-  for (const line of diff.split("\n")) {
-    if (line.startsWith("+") && !line.startsWith("+++")) {
-      additions++;
-    } else if (line.startsWith("-") && !line.startsWith("---")) {
-      deletions++;
-    }
-  }
-
-  return { additions, deletions };
+      return { additions, deletions };
+    })
+    .exhaustive();
 }
 
 /**
@@ -139,16 +208,20 @@ export function calculateTotalStats(files: FileWithStats[]): DiffStats {
  */
 export function formatStats(stats: DiffStats): string {
   const parts: string[] = [];
-  if (stats.additions > 0) {
-    parts.push(pc.green(`+${stats.additions}`));
-  }
-  if (stats.deletions > 0) {
-    parts.push(pc.red(`-${stats.deletions}`));
-  }
-  if (parts.length === 0) {
-    return pc.dim("(no changes)");
-  }
-  return parts.join(" ");
+
+  match(stats)
+    .with({ additions: P.when((n) => n > 0) }, (s) => {
+      parts.push(pc.green(`+${s.additions}`));
+    })
+    .otherwise(() => {});
+
+  match(stats)
+    .with({ deletions: P.when((n) => n > 0) }, (s) => {
+      parts.push(pc.red(`-${s.deletions}`));
+    })
+    .otherwise(() => {});
+
+  return parts.length === 0 ? pc.dim("(no changes)") : parts.join(" ");
 }
 
 /**
@@ -156,16 +229,15 @@ export function formatStats(stats: DiffStats): string {
  */
 export function formatStatsWithLabel(stats: DiffStats): string {
   const parts: string[] = [];
+
   if (stats.additions > 0) {
     parts.push(pc.green(`+${stats.additions}`));
   }
   if (stats.deletions > 0) {
     parts.push(pc.red(`-${stats.deletions}`));
   }
-  if (parts.length === 0) {
-    return "";
-  }
-  return `${parts.join(" ")} lines`;
+
+  return parts.length === 0 ? "" : `${parts.join(" ")} lines`;
 }
 
 /**
@@ -179,10 +251,43 @@ function horizontalLine(width: number, left: string, right: string): string {
  * テキストをボックス幅に合わせてパディング
  */
 function padLine(text: string, width: number): string {
-  // ANSI コードを除去した実際の文字幅を計算
-  const plainText = text.replace(/\x1b\[[0-9;]*m/g, "");
+  const plainText = text.replace(ANSI_REGEX, "");
   const padding = Math.max(0, width - 4 - plainText.length);
   return `${pc.dim(BOX.vertical)}  ${text}${" ".repeat(padding)}${pc.dim(BOX.vertical)}`;
+}
+
+/**
+ * 単数/複数形を返す
+ */
+const pluralize = (count: number, singular: string, plural: string): string =>
+  count === 1 ? singular : plural;
+
+// ────────────────────────────────────────────────────────────────
+// ファイルグループ表示
+// ────────────────────────────────────────────────────────────────
+
+/**
+ * ファイルグループをレンダリング
+ */
+function renderFileGroup(files: FileWithStats[], type: DiffType, width: number): void {
+  if (files.length === 0) return;
+
+  const style = getTypeStyle(type);
+  const groupStats = calculateTotalStats(files);
+  const fileWord = pluralize(files.length, "file", "files");
+  const statsStr = formatStatsWithLabel(groupStats);
+
+  const header = `${style.color(style.icon)} ${style.color(style.label)} (${files.length} ${fileWord})`;
+  console.log(padLine(`${header}${statsStr ? "  " + pc.dim(statsStr) : ""}`, width));
+
+  files.forEach((file, i) => {
+    const isLast = i === files.length - 1;
+    const prefix = isLast ? TREE.last : TREE.branch;
+    const stats = formatStats(file.stats);
+    console.log(padLine(`  ${pc.dim(prefix)} ${file.path}  ${stats}`, width));
+  });
+
+  console.log(padLine("", width));
 }
 
 // ────────────────────────────────────────────────────────────────
@@ -206,60 +311,15 @@ export function showDiffSummaryBox(files: FileDiff[]): void {
   console.log(horizontalLine(width, BOX.tee, BOX.tee));
   console.log(padLine("", width));
 
-  // Added files
-  if (grouped.added.length > 0) {
-    const addedStats = calculateTotalStats(grouped.added);
-    const header = `${pc.green(ICONS.added)} ${pc.green("added")} (${grouped.added.length} ${grouped.added.length === 1 ? "file" : "files"})`;
-    const statsStr = formatStatsWithLabel(addedStats);
-    console.log(padLine(`${header}${statsStr ? "  " + pc.dim(statsStr) : ""}`, width));
-
-    for (let i = 0; i < grouped.added.length; i++) {
-      const file = grouped.added[i];
-      const isLast = i === grouped.added.length - 1;
-      const prefix = isLast ? ICONS.tree.last : ICONS.tree.branch;
-      const stats = formatStats(file.stats);
-      console.log(padLine(`  ${pc.dim(prefix)} ${file.path}  ${stats}`, width));
-    }
-    console.log(padLine("", width));
-  }
-
-  // Modified files
-  if (grouped.modified.length > 0) {
-    const modifiedStats = calculateTotalStats(grouped.modified);
-    const header = `${pc.yellow(ICONS.modified)} ${pc.yellow("modified")} (${grouped.modified.length} ${grouped.modified.length === 1 ? "file" : "files"})`;
-    const statsStr = formatStatsWithLabel(modifiedStats);
-    console.log(padLine(`${header}${statsStr ? "  " + pc.dim(statsStr) : ""}`, width));
-
-    for (let i = 0; i < grouped.modified.length; i++) {
-      const file = grouped.modified[i];
-      const isLast = i === grouped.modified.length - 1;
-      const prefix = isLast ? ICONS.tree.last : ICONS.tree.branch;
-      const stats = formatStats(file.stats);
-      console.log(padLine(`  ${pc.dim(prefix)} ${file.path}  ${stats}`, width));
-    }
-    console.log(padLine("", width));
-  }
-
-  // Deleted files
-  if (grouped.deleted.length > 0) {
-    const deletedStats = calculateTotalStats(grouped.deleted);
-    const header = `${pc.red(ICONS.deleted)} ${pc.red("deleted")} (${grouped.deleted.length} ${grouped.deleted.length === 1 ? "file" : "files"})`;
-    const statsStr = formatStatsWithLabel(deletedStats);
-    console.log(padLine(`${header}${statsStr ? "  " + pc.dim(statsStr) : ""}`, width));
-
-    for (let i = 0; i < grouped.deleted.length; i++) {
-      const file = grouped.deleted[i];
-      const isLast = i === grouped.deleted.length - 1;
-      const prefix = isLast ? ICONS.tree.last : ICONS.tree.branch;
-      const stats = formatStats(file.stats);
-      console.log(padLine(`  ${pc.dim(prefix)} ${file.path}  ${stats}`, width));
-    }
-    console.log(padLine("", width));
-  }
+  // 各タイプをレンダリング
+  renderFileGroup(grouped.added, "added", width);
+  renderFileGroup(grouped.modified, "modified", width);
+  renderFileGroup(grouped.deleted, "deleted", width);
 
   // Total
   console.log(horizontalLine(width, BOX.tee, BOX.tee));
-  const totalLine = `Total: ${changedFiles.length} ${changedFiles.length === 1 ? "file" : "files"}  (${formatStatsWithLabel(totalStats)})`;
+  const fileWord = pluralize(changedFiles.length, "file", "files");
+  const totalLine = `Total: ${changedFiles.length} ${fileWord}  (${formatStatsWithLabel(totalStats)})`;
   console.log(padLine(totalLine, width));
   console.log(horizontalLine(width, BOX.bottomLeft, BOX.bottomRight));
   console.log();
@@ -276,6 +336,53 @@ export interface DiffViewOptions {
 }
 
 /**
+ * Diff 行をフォーマットしてレンダリング
+ */
+function renderDiffLine(
+  line: string,
+  lineType: DiffLineType,
+  lineNum: number,
+  showLineNumbers: boolean,
+  width: number,
+): { output: string; newLineNum: number } {
+  const coloredLine = colorizeDiffLine(line, lineType);
+
+  // 行番号プレフィックスを決定
+  const { prefix, nextLineNum } = match(lineType)
+    .with("hunk", () => ({
+      prefix: "",
+      nextLineNum: lineNum,
+    }))
+    .with("addition", () => ({
+      prefix: showLineNumbers ? pc.dim(`${String(lineNum + 1).padStart(4)} `) : "",
+      nextLineNum: lineNum + 1,
+    }))
+    .with("deletion", () => ({
+      prefix: showLineNumbers ? pc.dim("     ") : "",
+      nextLineNum: lineNum,
+    }))
+    .with("context", () => ({
+      prefix: showLineNumbers ? pc.dim(`${String(lineNum + 1).padStart(4)} `) : "",
+      nextLineNum: lineNum + 1,
+    }))
+    .exhaustive();
+
+  // 行が長すぎる場合は切り詰め
+  const plainLine = line.replace(ANSI_REGEX, "");
+  const maxContentWidth = width - 8 - (showLineNumbers ? 5 : 0);
+
+  const finalLine =
+    plainLine.length > maxContentWidth
+      ? colorizeDiffLine(line.slice(0, maxContentWidth - 3) + "...", lineType)
+      : coloredLine;
+
+  return {
+    output: padLine(`${prefix}${finalLine}`, width),
+    newLineNum: nextLineNum,
+  };
+}
+
+/**
  * 単一ファイルの diff をボックス表示
  */
 export function showFileDiffBox(
@@ -286,77 +393,42 @@ export function showFileDiffBox(
 ): void {
   const { showLineNumbers = true, maxLines } = options;
   const stats = calculateDiffStats(file);
+  const style = getTypeStyle(file.type);
   const width = DEFAULT_BOX_WIDTH;
 
   // ヘッダー
   console.log();
   console.log(horizontalLine(width, BOX.topLeft, BOX.topRight));
 
-  // ファイル名とタイプ
-  const typeIcon = file.type === "added" ? pc.green(ICONS.added) : pc.yellow(ICONS.modified);
-  const typeLabel = file.type === "added" ? pc.green("added") : pc.yellow("modified");
   const position = pc.dim(`[${index + 1}/${total}]`);
-
-  console.log(padLine(`${position} ${typeIcon} ${pc.bold(file.path)}`, width));
-  console.log(padLine(`${typeLabel}  ${formatStatsWithLabel(stats)}`, width));
+  console.log(padLine(`${position} ${style.color(style.icon)} ${pc.bold(file.path)}`, width));
+  console.log(padLine(`${style.color(style.label)}  ${formatStatsWithLabel(stats)}`, width));
   console.log(horizontalLine(width, BOX.tee, BOX.tee));
 
   // Diff 内容
   const diffContent = generateUnifiedDiff(file);
   const lines = diffContent.split("\n");
 
-  // ヘッダー行（---/+++）をスキップして内容のみ表示
-  const contentLines = lines.filter(
-    (line) =>
-      !line.startsWith("Index:") &&
-      !line.startsWith("===") &&
-      !line.startsWith("---") &&
-      !line.startsWith("+++"),
-  );
+  // ヘッダー行をフィルタ
+  const isHeaderLine = (line: string): boolean =>
+    line.startsWith("Index:") ||
+    line.startsWith("===") ||
+    line.startsWith("---") ||
+    line.startsWith("+++");
 
-  let displayLines = contentLines;
-  let truncated = false;
+  const contentLines = lines.filter((line) => !isHeaderLine(line));
 
-  if (maxLines && contentLines.length > maxLines) {
-    displayLines = contentLines.slice(0, maxLines);
-    truncated = true;
-  }
+  const displayLines =
+    maxLines && contentLines.length > maxLines ? contentLines.slice(0, maxLines) : contentLines;
+
+  const truncated = maxLines && contentLines.length > maxLines;
 
   let lineNum = 0;
   for (const line of displayLines) {
-    let coloredLine: string;
-    let linePrefix = "";
-
-    if (line.startsWith("@@")) {
-      coloredLine = pc.cyan(line);
-      linePrefix = "";
-    } else if (line.startsWith("+")) {
-      coloredLine = pc.green(line);
-      lineNum++;
-      linePrefix = showLineNumbers ? pc.dim(`${String(lineNum).padStart(4)} `) : "";
-    } else if (line.startsWith("-")) {
-      coloredLine = pc.red(line);
-      linePrefix = showLineNumbers ? pc.dim("     ") : "";
-    } else {
-      coloredLine = line;
-      lineNum++;
-      linePrefix = showLineNumbers ? pc.dim(`${String(lineNum).padStart(4)} `) : "";
-    }
-
-    // 行が長すぎる場合は切り詰め
-    const plainLine = line.replace(/\x1b\[[0-9;]*m/g, "");
-    const maxContentWidth = width - 8 - (showLineNumbers ? 5 : 0);
-
-    if (plainLine.length > maxContentWidth) {
-      const truncatedContent = line.slice(0, maxContentWidth - 3) + "...";
-      coloredLine = line.startsWith("+")
-        ? pc.green(truncatedContent)
-        : line.startsWith("-")
-          ? pc.red(truncatedContent)
-          : truncatedContent;
-    }
-
-    console.log(padLine(`${linePrefix}${coloredLine}`, width));
+    const lineType = classifyDiffLine(line);
+    const { output, newLineNum } = renderDiffLine(line, lineType, lineNum, showLineNumbers, width);
+    console.log(output);
+    lineNum = newLineNum;
   }
 
   if (truncated) {
@@ -376,6 +448,6 @@ export function showFileDiffBox(
  */
 export function getFileLabel(file: FileDiff): string {
   const stats = calculateDiffStats(file);
-  const icon = file.type === "added" ? pc.green(ICONS.added) : pc.yellow(ICONS.modified);
-  return `${icon} ${file.path} (${formatStats(stats)})`;
+  const style = getTypeStyle(file.type);
+  return `${style.color(style.icon)} ${file.path} (${formatStats(stats)})`;
 }

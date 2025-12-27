@@ -1,13 +1,9 @@
 import * as readline from "node:readline";
 import { checkbox, confirm, input, password, Separator } from "@inquirer/prompts";
+import { match, P } from "ts-pattern";
 import type { DiffResult, FileDiff } from "../modules/schemas";
 import { formatDiff } from "../utils/diff";
-import {
-  addStatsToFiles,
-  formatStats,
-  showDiffSummaryBox,
-  showFileDiffBox,
-} from "../utils/diff-viewer";
+import { getFileLabel, showDiffSummaryBox, showFileDiffBox } from "../utils/diff-viewer";
 import type { UntrackedFile, UntrackedFilesByFolder } from "../utils/untracked";
 
 export interface SelectedUntrackedFiles {
@@ -92,6 +88,26 @@ export async function promptGitHubToken(): Promise<string> {
   });
 }
 
+// ────────────────────────────────────────────────────────────────
+// キーアクション定義
+// ────────────────────────────────────────────────────────────────
+
+/** キー操作によるアクション */
+type KeyAction = "next" | "prev" | "exit" | "forceExit" | "none";
+
+/** キー入力をアクションに変換 */
+const classifyKeyAction = (key: readline.Key): KeyAction =>
+  match(key)
+    .with({ ctrl: true, name: "c" }, () => "forceExit" as const)
+    .with({ name: P.union("n", "right", "down", "j") }, () => "next" as const)
+    .with({ name: P.union("p", "left", "up", "k") }, () => "prev" as const)
+    .with({ name: P.union("return", "q", "escape") }, () => "exit" as const)
+    .otherwise(() => "none" as const);
+
+// ────────────────────────────────────────────────────────────────
+// インタラクティブ diff ビューア
+// ────────────────────────────────────────────────────────────────
+
 /**
  * インタラクティブ diff ビューア
  * n/p キーでファイル間をナビゲート、Enter または q で終了
@@ -102,7 +118,6 @@ async function interactiveDiffViewer(files: FileDiff[]): Promise<void> {
   let currentIndex = 0;
 
   const showCurrentDiff = (): void => {
-    // 画面クリア（スクロールバッファは保持）
     console.clear();
     showFileDiffBox(files[currentIndex], currentIndex, files.length, {
       showLineNumbers: true,
@@ -111,49 +126,53 @@ async function interactiveDiffViewer(files: FileDiff[]): Promise<void> {
   };
 
   return new Promise((resolve) => {
-    // raw モードでキー入力を受け付け
+    // TTY でない場合は全ファイルを順次表示
     if (!process.stdin.isTTY) {
-      // TTY でない場合は全ファイルを順次表示
-      for (let i = 0; i < files.length; i++) {
-        showFileDiffBox(files[i], i, files.length, { showLineNumbers: true });
-      }
+      files.forEach((file, i) => {
+        showFileDiffBox(file, i, files.length, { showLineNumbers: true });
+      });
       resolve();
       return;
     }
 
     readline.emitKeypressEvents(process.stdin);
     process.stdin.setRawMode(true);
-
     showCurrentDiff();
-
-    const handleKeypress = (_str: string, key: readline.Key): void => {
-      if (key.name === "n" || key.name === "right" || key.name === "down" || key.name === "j") {
-        // 次のファイル
-        if (currentIndex < files.length - 1) {
-          currentIndex++;
-          showCurrentDiff();
-        }
-      } else if (key.name === "p" || key.name === "left" || key.name === "up" || key.name === "k") {
-        // 前のファイル
-        if (currentIndex > 0) {
-          currentIndex--;
-          showCurrentDiff();
-        }
-      } else if (key.name === "return" || key.name === "q" || key.name === "escape") {
-        // 終了
-        cleanup();
-        console.clear();
-        resolve();
-      } else if (key.ctrl && key.name === "c") {
-        // Ctrl+C で終了
-        cleanup();
-        process.exit(0);
-      }
-    };
 
     const cleanup = (): void => {
       process.stdin.setRawMode(false);
       process.stdin.removeListener("keypress", handleKeypress);
+    };
+
+    const handleKeypress = (_str: string, key: readline.Key): void => {
+      const action = classifyKeyAction(key);
+
+      match(action)
+        .with("next", () => {
+          if (currentIndex < files.length - 1) {
+            currentIndex++;
+            showCurrentDiff();
+          }
+        })
+        .with("prev", () => {
+          if (currentIndex > 0) {
+            currentIndex--;
+            showCurrentDiff();
+          }
+        })
+        .with("exit", () => {
+          cleanup();
+          console.clear();
+          resolve();
+        })
+        .with("forceExit", () => {
+          cleanup();
+          process.exit(0);
+        })
+        .with("none", () => {
+          // 未知のキーは無視
+        })
+        .exhaustive();
     };
 
     process.stdin.on("keypress", handleKeypress);
@@ -186,10 +205,9 @@ export async function promptSelectFilesWithDiff(pushableFiles: FileDiff[]): Prom
   }
 
   // Step 4: チェックボックスでファイル選択
-  const filesWithStats = addStatsToFiles(pushableFiles);
-  const choices = filesWithStats.map((file) => ({
-    name: `${file.type === "added" ? "✚" : "⬡"} ${file.path} (${formatStats(file.stats)})`,
-    value: file as FileDiff,
+  const choices = pushableFiles.map((file) => ({
+    name: getFileLabel(file),
+    value: file,
     checked: true,
   }));
 
