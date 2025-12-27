@@ -1,121 +1,145 @@
 # @tktco/create-devenv
 
-開発環境テンプレートをインタラクティブにセットアップする CLI ツール。
+A bi-directional dev environment template that evolves as you use it.
+
+## Why
+
+The rise of AI-powered tools like Claude Code has changed how we work. Best practices evolve daily—new workflows, new configs, new integrations. And with multiple projects running in parallel, keeping dev environments in sync becomes a real challenge.
+
+Templates go stale the moment you create them. Each project improves upon the original—better configs, new workflows, refined settings—but those improvements never flow back. The template stays frozen while the real world moves on.
+
+This tool solves that with **bi-directional sync**:
+
+- **`init`** — Pull the latest template into your project
+- **`push`** — Push your improvements back to the template
+- **`diff`** — See what's changed between your project and the template
+
+Your template stays alive, fed by every project that uses it.
+
+<!-- USAGE:START -->
+
+## Usage
+
+```bash
+# Apply template to current directory
+npx @tktco/create-devenv
+
+# Apply to a specific directory
+npx @tktco/create-devenv ./my-project
+
+# Push your improvements back
+npx @tktco/create-devenv push -m "Add new workflow"
+
+# Check what's different
+npx @tktco/create-devenv diff
+```
+
+<!-- USAGE:END -->
 
 <!-- FEATURES:START -->
 
-## 機能
+## Modules
 
-- **ルート設定** - MCP、mise などのルート設定ファイル
-- **DevContainer** - VS Code DevContainer、Docker-in-Docker
-- **GitHub** - GitHub Actions、labeler ワークフロー
-- **Claude** - Claude Code のプロジェクト共通設定
+Pick what you need:
+
+- **Root** - MCP, mise, and other root-level config files
+- **DevContainer** - VS Code DevContainer with Docker-in-Docker
+- **GitHub** - GitHub Actions and labeler workflows
+- **Claude** - Claude Code project settings
 
 <!-- FEATURES:END -->
 
-## インストール
-
-```bash
-npx @tktco/create-devenv
-```
-
-または、プロジェクトディレクトリを指定：
-
-```bash
-npx @tktco/create-devenv ./my-project
-```
-
 <!-- COMMANDS:START -->
 
-## コマンド
+## Commands
 
 ### `init`
 
-開発環境テンプレートを適用
+Apply dev environment template to your project
 
 ```
-開発環境テンプレートを適用 (create-devenv vdev)
+Apply dev environment template to your project (create-devenv vdev)
 
 USAGE `create-devenv [OPTIONS] [DIR]`
 
 ARGUMENTS
 
-  `DIR="."`    プロジェクトディレクトリ
+  `DIR="."`    Target directory
 
 OPTIONS
 
-    `--force`    既存ファイルを強制上書き
-  `-y, --yes`    すべてのモジュールを自動選択（非インタラクティブモード）
+    `--force`    Overwrite existing files
+  `-y, --yes`    Select all modules (non-interactive mode)
 ```
 
 ### `push`
 
-ローカル変更をテンプレートリポジトリに PR として送信
+Push local changes to the template repository as a PR
 
 ```
-ローカル変更をテンプレートリポジトリに PR として送信 (push)
+Push local changes to the template repository as a PR (push)
 
 USAGE `push [OPTIONS] [DIR]`
 
 ARGUMENTS
 
-  `DIR="."`    プロジェクトディレクトリ
+  `DIR="."`    Project directory
 
 OPTIONS
 
-              `-n, --dryRun`    実際の PR を作成せず、プレビューのみ表示
-             `-m, --message`    PR のタイトル
-               `-f, --force`    確認プロンプトをスキップ
-  `--no-i, --no-interactive`    差分を確認しながらファイルを選択（デフォルト有効）
+              `-n, --dryRun`    Preview only, don't create PR
+             `-m, --message`    PR title
+               `-f, --force`    Skip confirmation prompts
+  `--no-i, --no-interactive`    Select files while reviewing diffs (enabled by default)
 ```
 
 ### `diff`
 
-ローカルとテンプレートの差分を表示
+Show differences between local and template
 
 ```
-ローカルとテンプレートの差分を表示 (diff)
+Show differences between local and template (diff)
 
 USAGE `diff [OPTIONS] [DIR]`
 
 ARGUMENTS
 
-  `DIR="."`    プロジェクトディレクトリ
+  `DIR="."`    Project directory
 
 OPTIONS
 
-  `-v, --verbose`    詳細な差分を表示
+  `-v, --verbose`    Show detailed diff
 ```
 
 <!-- COMMANDS:END -->
 
 <!-- FILES:START -->
 
-## 生成されるファイル
+## What You Get
 
-選択したモジュールに応じて以下のファイルが生成されます：
+Files generated based on selected modules:
 
-### ルート
+### Root
 
-MCP、mise などのルート設定ファイル
+MCP, mise, and other root-level config files
 
 - `.mcp.json`
 - `.mise.toml`
 
 ### `.devcontainer/`
 
-VS Code DevContainer、Docker-in-Docker
+VS Code DevContainer with Docker-in-Docker
 
 - `.devcontainer/devcontainer.json`
 - `.devcontainer/.gitignore`
-- `.devcontainer/setup-*.sh` (パターン)
-- `.devcontainer/test-*.sh` (パターン)
+- `.devcontainer/setup-*.sh`
+- `.devcontainer/test-*.sh`
 - `.devcontainer/.env.devcontainer.example`
 - `.devcontainer/run-chrome-devtools-mcp.sh`
 
 ### `.github/`
 
-GitHub Actions、labeler ワークフロー
+GitHub Actions and labeler workflows
 
 - `.github/workflows/issue-link.yml`
 - `.github/workflows/label.yml`
@@ -123,20 +147,20 @@ GitHub Actions、labeler ワークフロー
 
 ### `.claude/`
 
-Claude Code のプロジェクト共通設定
+Claude Code project settings
 
 - `.claude/settings.json`
 
-### 設定ファイル
+### Config
 
-- `.devenv.json` - このツールの設定（適用したモジュール情報）
+- `.devenv.json` - Tracks which modules are applied
 
 <!-- FILES:END -->
 
-## 開発・コントリビュート
+## Contributing
 
-[CONTRIBUTING.md](./CONTRIBUTING.md) を参照してください。
+See [CONTRIBUTING.md](./CONTRIBUTING.md).
 
-## ライセンス
+## License
 
 MIT

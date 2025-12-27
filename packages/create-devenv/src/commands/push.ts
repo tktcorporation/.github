@@ -33,35 +33,35 @@ const README_PATH = "README.md";
 export const pushCommand = defineCommand({
   meta: {
     name: "push",
-    description: "ローカル変更をテンプレートリポジトリに PR として送信",
+    description: "Push local changes to the template repository as a PR",
   },
   args: {
     dir: {
       type: "positional",
-      description: "プロジェクトディレクトリ",
+      description: "Project directory",
       default: ".",
     },
     dryRun: {
       type: "boolean",
       alias: "n",
-      description: "実際の PR を作成せず、プレビューのみ表示",
+      description: "Preview only, don't create PR",
       default: false,
     },
     message: {
       type: "string",
       alias: "m",
-      description: "PR のタイトル",
+      description: "PR title",
     },
     force: {
       type: "boolean",
       alias: "f",
-      description: "確認プロンプトをスキップ",
+      description: "Skip confirmation prompts",
       default: false,
     },
     interactive: {
       type: "boolean",
       alias: "i",
-      description: "差分を確認しながらファイルを選択（デフォルト有効）",
+      description: "Select files while reviewing diffs (enabled by default)",
       default: true,
     },
   },
