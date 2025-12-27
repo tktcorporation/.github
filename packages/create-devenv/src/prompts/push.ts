@@ -115,6 +115,14 @@ const classifyKeyAction = (key: readline.Key): KeyAction =>
 async function interactiveDiffViewer(files: FileDiff[]): Promise<void> {
   if (files.length === 0) return;
 
+  // TTY でない場合は全ファイルを順次表示
+  if (!process.stdin.isTTY) {
+    files.forEach((file, i) => {
+      showFileDiffBox(file, i, files.length, { showLineNumbers: true });
+    });
+    return;
+  }
+
   let currentIndex = 0;
 
   const showCurrentDiff = (): void => {
@@ -126,22 +134,19 @@ async function interactiveDiffViewer(files: FileDiff[]): Promise<void> {
   };
 
   return new Promise((resolve) => {
-    // TTY でない場合は全ファイルを順次表示
-    if (!process.stdin.isTTY) {
-      files.forEach((file, i) => {
-        showFileDiffBox(file, i, files.length, { showLineNumbers: true });
-      });
-      resolve();
-      return;
-    }
+    // @inquirer/prompts が残した状態をリセット
+    // 既存の keypress リスナーを削除して競合を防ぐ
+    process.stdin.removeAllListeners("keypress");
 
-    readline.emitKeypressEvents(process.stdin);
-    process.stdin.setRawMode(true);
-    showCurrentDiff();
+    let cleanedUp = false;
 
     const cleanup = (): void => {
-      process.stdin.setRawMode(false);
+      if (cleanedUp) return;
+      cleanedUp = true;
       process.stdin.removeListener("keypress", handleKeypress);
+      process.stdin.setRawMode(false);
+      // 次の @inquirer/prompts が使えるよう stdin を resume 状態に戻す
+      process.stdin.resume();
     };
 
     const handleKeypress = (_str: string, key: readline.Key): void => {
@@ -175,7 +180,13 @@ async function interactiveDiffViewer(files: FileDiff[]): Promise<void> {
         .exhaustive();
     };
 
+    // stdin をセットアップ
+    readline.emitKeypressEvents(process.stdin);
+    process.stdin.setRawMode(true);
+    process.stdin.resume();
     process.stdin.on("keypress", handleKeypress);
+
+    showCurrentDiff();
   });
 }
 
