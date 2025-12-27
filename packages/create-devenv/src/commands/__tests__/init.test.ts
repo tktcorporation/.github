@@ -1,6 +1,5 @@
 import { vol } from "memfs";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { TemplateModule } from "../../modules/schemas";
 
 // fs モジュールをモック
 vi.mock("node:fs", async () => {
@@ -69,21 +68,6 @@ const mockFetchTemplates = vi.mocked(fetchTemplates);
 const mockWriteFileWithStrategy = vi.mocked(writeFileWithStrategy);
 const mockPromptInit = vi.mocked(promptInit);
 const mockLog = vi.mocked(log);
-
-const testModules: TemplateModule[] = [
-  {
-    id: "root",
-    name: "Root Config",
-    description: "Root configuration files",
-    patterns: [".mcp.json"],
-  },
-  {
-    id: "devcontainer",
-    name: "Dev Container",
-    description: "Docker dev environment",
-    patterns: [".devcontainer/**"],
-  },
-];
 
 describe("initCommand", () => {
   beforeEach(() => {
