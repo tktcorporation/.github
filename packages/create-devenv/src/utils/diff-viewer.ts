@@ -679,3 +679,101 @@ export function getFileLabel(file: FileDiff): string {
   const style = getTypeStyle(file.type);
   return `${style.color(style.icon)} ${file.path} (${formatStats(stats)})`;
 }
+
+// ────────────────────────────────────────────────────────────────
+// Hunk 表示コンポーネント
+// ────────────────────────────────────────────────────────────────
+
+import type { HunkInfo, FileHunks } from "./hunk";
+
+/**
+ * 単一のhunkを表示用にフォーマット
+ */
+export function formatHunkForDisplay(
+  hunk: HunkInfo,
+  filePath: string,
+  totalHunks: number,
+): string {
+  const lines: string[] = [];
+  const width = DEFAULT_BOX_WIDTH;
+
+  // ヘッダー
+  lines.push(horizontalLine(width, BOX.topLeft, BOX.topRight));
+  const position = pc.dim(`[${hunk.index + 1}/${totalHunks}]`);
+  const stats = `${pc.green(`+${hunk.additions}`)} ${pc.red(`-${hunk.deletions}`)}`;
+  lines.push(padLine(`${position} ${pc.bold(filePath)}  ${stats}`, width));
+  lines.push(padLine(pc.cyan(hunk.header), width));
+  lines.push(horizontalLine(width, BOX.tee, BOX.tee));
+
+  // hunkの内容（ヘッダー行を除く）
+  const contentLines = hunk.displayText.split("\n").slice(1); // ヘッダーをスキップ
+  for (const line of contentLines) {
+    const lineType = classifyDiffLine(line);
+    const colorized = colorizeDiffLine(line, lineType);
+    lines.push(padLine(colorized, width));
+  }
+
+  lines.push(horizontalLine(width, BOX.bottomLeft, BOX.bottomRight));
+
+  return lines.join("\n");
+}
+
+/**
+ * Hunk選択用のラベル生成
+ */
+export function getHunkLabel(hunk: HunkInfo, filePath: string): string {
+  const stats = `${pc.green(`+${hunk.additions}`)} ${pc.red(`-${hunk.deletions}`)}`;
+  const preview = getHunkPreview(hunk, 50);
+  return `${pc.dim(`[${hunk.index + 1}]`)} ${pc.cyan(hunk.header)} ${stats} ${pc.dim(preview)}`;
+}
+
+/**
+ * Hunkのプレビューテキストを取得（最初の変更行）
+ */
+function getHunkPreview(hunk: HunkInfo, maxLength: number): string {
+  const lines = hunk.displayText.split("\n");
+
+  // 最初の追加または削除行を探す
+  for (const line of lines) {
+    if (line.startsWith("+") && !line.startsWith("+++")) {
+      const content = line.slice(1).trim();
+      if (content.length > maxLength) {
+        return `"${content.slice(0, maxLength - 3)}..."`;
+      }
+      return content ? `"${content}"` : "";
+    }
+    if (line.startsWith("-") && !line.startsWith("---")) {
+      const content = line.slice(1).trim();
+      if (content.length > maxLength) {
+        return `"${content.slice(0, maxLength - 3)}..."`;
+      }
+      return content ? `"${content}"` : "";
+    }
+  }
+
+  return "";
+}
+
+/**
+ * ファイルのhunk一覧をサマリー表示
+ */
+export function showFileHunksSummary(fileHunks: FileHunks): void {
+  const width = DEFAULT_BOX_WIDTH;
+
+  console.log();
+  console.log(horizontalLine(width, BOX.topLeft, BOX.topRight));
+
+  const style = getTypeStyle(fileHunks.type);
+  console.log(padLine(`${style.color(style.icon)} ${pc.bold(fileHunks.path)}`, width));
+  console.log(padLine(`${fileHunks.hunks.length} chunks available for selection`, width));
+  console.log(horizontalLine(width, BOX.tee, BOX.tee));
+
+  for (const hunk of fileHunks.hunks) {
+    const stats = `${pc.green(`+${hunk.additions}`)} ${pc.red(`-${hunk.deletions}`)}`;
+    const prefix = hunk.index === fileHunks.hunks.length - 1 ? TREE.last : TREE.branch;
+    console.log(padLine(`  ${pc.dim(prefix)} ${pc.cyan(hunk.header)} ${stats}`, width));
+  }
+
+  console.log(horizontalLine(width, BOX.bottomLeft, BOX.bottomRight));
+  console.log();
+}

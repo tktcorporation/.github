@@ -19,6 +19,8 @@ import {
   promptPrTitle,
   promptPushConfirm,
   promptSelectFilesWithDiff,
+  promptSelectHunksForMerge,
+  type MergeResult,
 } from "../prompts/push";
 import { detectDiff, formatDiff, getPushableFiles } from "../utils/diff";
 import { createPullRequest, getGitHubToken } from "../utils/github";
@@ -72,6 +74,12 @@ export const pushCommand = defineCommand({
       alias: "i",
       description: "Select files while reviewing diffs (enabled by default)",
       default: true,
+    },
+    merge: {
+      type: "boolean",
+      alias: "M",
+      description: "Merge mode: select individual chunks instead of whole files",
+      default: false,
     },
   },
   async run({ args }) {
@@ -216,12 +224,47 @@ export const pushCommand = defineCommand({
       step({ current: currentStep++, total: totalSteps }, "Selecting files...");
       log.newline();
 
-      if (args.interactive && !args.force) {
+      // マージモードかどうかでファイル選択方法を分岐
+      let files: { path: string; content: string }[];
+
+      if (args.merge && !args.force) {
+        // マージモード: hunk単位で選択
+        const mergeResults = await promptSelectHunksForMerge(pushableFiles);
+        if (mergeResults.length === 0 && !updatedModulesContent) {
+          log.info("No chunks selected. Cancelled.");
+          return;
+        }
+
+        // マージ結果のサマリーを表示
+        if (mergeResults.length > 0) {
+          log.newline();
+          log.info(pc.bold("Selected changes:"));
+          for (const result of mergeResults) {
+            const icon = result.type === "added" ? pc.green("✚") : pc.yellow("⬡");
+            const stats =
+              result.type === "modified"
+                ? pc.dim(`(${result.selectedCount}/${result.totalCount} chunks)`)
+                : "";
+            log.dim(`  ${icon} ${result.path} ${stats}`);
+          }
+          log.newline();
+        }
+
+        files = mergeResults.map((r) => ({
+          path: r.path,
+          content: r.content,
+        }));
+      } else if (args.interactive && !args.force) {
+        // 通常モード: ファイル単位で選択
         pushableFiles = await promptSelectFilesWithDiff(pushableFiles);
         if (pushableFiles.length === 0 && !updatedModulesContent) {
           log.info("No files selected. Cancelled.");
           return;
         }
+        files = pushableFiles.map((f) => ({
+          path: f.path,
+          content: f.localContent || "",
+        }));
       } else if (!args.force) {
         // --no-interactive 時は従来の確認プロンプト
         const confirmed = await promptPushConfirm(diff);
@@ -229,6 +272,16 @@ export const pushCommand = defineCommand({
           log.info("Cancelled");
           return;
         }
+        files = pushableFiles.map((f) => ({
+          path: f.path,
+          content: f.localContent || "",
+        }));
+      } else {
+        // --force: 確認なしで全ファイル
+        files = pushableFiles.map((f) => ({
+          path: f.path,
+          content: f.localContent || "",
+        }));
       }
 
       // GitHub トークン取得
@@ -247,12 +300,6 @@ export const pushCommand = defineCommand({
 
       // README を更新（対象の場合のみ）
       const readmeResult = await detectAndUpdateReadme(targetDir, templateDir);
-
-      // ファイル内容を準備
-      const files = pushableFiles.map((f) => ({
-        path: f.path,
-        content: f.localContent || "",
-      }));
 
       // modules.jsonc の変更があれば追加
       if (updatedModulesContent) {

@@ -3,7 +3,22 @@ import { checkbox, confirm, input, password, Separator } from "@inquirer/prompts
 import { match, P } from "ts-pattern";
 import type { DiffResult, FileDiff } from "../modules/schemas";
 import { formatDiff } from "../utils/diff";
-import { getFileLabel, showDiffSummaryBox, showFileDiffBox } from "../utils/diff-viewer";
+import {
+  formatHunkForDisplay,
+  getFileLabel,
+  getHunkLabel,
+  showDiffSummaryBox,
+  showFileDiffBox,
+  showFileHunksSummary,
+} from "../utils/diff-viewer";
+import {
+  applySelectedHunks,
+  canSplitIntoHunks,
+  parseAllFileHunks,
+  parseFileHunks,
+  type FileHunks,
+  type HunkInfo,
+} from "../utils/hunk";
 import type { UntrackedFile, UntrackedFilesByFolder } from "../utils/untracked";
 
 export interface SelectedUntrackedFiles {
@@ -307,4 +322,217 @@ export async function promptAddUntrackedFiles(
   }
 
   return result;
+}
+
+// ────────────────────────────────────────────────────────────────
+// Hunk 単位の選択プロンプト（マージモード用）
+// ────────────────────────────────────────────────────────────────
+
+/** マージ結果 */
+export interface MergeResult {
+  /** ファイルパス */
+  path: string;
+  /** マージ後のコンテンツ */
+  content: string;
+  /** 元のファイルタイプ */
+  type: FileDiff["type"];
+  /** 選択されたhunk数 / 全hunk数 */
+  selectedCount: number;
+  totalCount: number;
+}
+
+/**
+ * Hunk単位でファイルをマージ選択するプロンプト
+ * - modifiedファイル: hunk単位で選択可能
+ * - addedファイル: ファイル単位で選択（hunk分割なし）
+ */
+export async function promptSelectHunksForMerge(
+  pushableFiles: FileDiff[],
+): Promise<MergeResult[]> {
+  if (pushableFiles.length === 0) {
+    return [];
+  }
+
+  // ファイルをパースしてhunk情報を取得
+  const allFileHunks = parseAllFileHunks(pushableFiles);
+
+  // modifiedファイル（hunk分割可能）と addedファイル（hunk分割不可）を分離
+  const modifiedFiles = allFileHunks.filter(
+    (fh) => fh.type === "modified" && fh.hunks.length > 0,
+  );
+  const addedFiles = allFileHunks.filter((fh) => fh.type === "added");
+
+  // サマリー表示
+  console.log();
+  console.log("┌────────────────────────────────────────────────────────┐");
+  console.log("│  📦 Merge Mode - Select chunks to include              │");
+  console.log("├────────────────────────────────────────────────────────┤");
+
+  const totalHunks = modifiedFiles.reduce((sum, fh) => sum + fh.hunks.length, 0);
+  console.log(`│  Modified files: ${modifiedFiles.length} (${totalHunks} chunks)`.padEnd(57) + "│");
+  console.log(`│  Added files: ${addedFiles.length} (included as-is)`.padEnd(57) + "│");
+  console.log("└────────────────────────────────────────────────────────┘");
+  console.log();
+
+  const results: MergeResult[] = [];
+
+  // Step 1: modifiedファイルのhunk選択
+  for (const fileHunks of modifiedFiles) {
+    const selectedHunks = await promptSelectHunksForFile(fileHunks);
+
+    if (selectedHunks.length > 0) {
+      const selectedIndices = selectedHunks.map((h) => h.index);
+      const mergedContent = applySelectedHunks(fileHunks, selectedIndices);
+
+      results.push({
+        path: fileHunks.path,
+        content: mergedContent,
+        type: fileHunks.type,
+        selectedCount: selectedHunks.length,
+        totalCount: fileHunks.hunks.length,
+      });
+    }
+  }
+
+  // Step 2: addedファイルの選択（ファイル単位）
+  if (addedFiles.length > 0) {
+    const selectedAdded = await promptSelectAddedFiles(addedFiles);
+
+    for (const fileHunks of selectedAdded) {
+      results.push({
+        path: fileHunks.path,
+        content: fileHunks.localContent || "",
+        type: fileHunks.type,
+        selectedCount: 1,
+        totalCount: 1,
+      });
+    }
+  }
+
+  return results;
+}
+
+/**
+ * 単一ファイルのhunk選択プロンプト
+ */
+async function promptSelectHunksForFile(fileHunks: FileHunks): Promise<HunkInfo[]> {
+  // まずサマリーを表示
+  showFileHunksSummary(fileHunks);
+
+  // 詳細を確認するか
+  const viewDetails = await confirm({
+    message: `${fileHunks.path} の詳細な diff を確認しますか？`,
+    default: false,
+  });
+
+  if (viewDetails) {
+    await interactiveHunkViewer(fileHunks);
+  }
+
+  // checkbox でhunk選択
+  const choices = fileHunks.hunks.map((hunk) => ({
+    name: getHunkLabel(hunk, fileHunks.path),
+    value: hunk,
+    checked: true, // デフォルトで全選択
+  }));
+
+  return checkbox<HunkInfo>({
+    message: `${fileHunks.path} から含める chunks を選択`,
+    choices,
+  });
+}
+
+/**
+ * Addedファイルの選択プロンプト
+ */
+async function promptSelectAddedFiles(addedFiles: FileHunks[]): Promise<FileHunks[]> {
+  if (addedFiles.length === 0) {
+    return [];
+  }
+
+  console.log();
+  console.log("── 新規ファイル ──");
+  console.log();
+
+  const choices = addedFiles.map((fh) => ({
+    name: `✚ ${fh.path}`,
+    value: fh,
+    checked: true,
+  }));
+
+  return checkbox<FileHunks>({
+    message: "含める新規ファイルを選択",
+    choices,
+  });
+}
+
+/**
+ * インタラクティブhunkビューア
+ */
+async function interactiveHunkViewer(fileHunks: FileHunks): Promise<void> {
+  if (fileHunks.hunks.length === 0) return;
+
+  let currentIndex = 0;
+
+  const showCurrentHunk = (): void => {
+    console.clear();
+    const hunk = fileHunks.hunks[currentIndex];
+    console.log(formatHunkForDisplay(hunk, fileHunks.path, fileHunks.hunks.length));
+    console.log();
+    console.log("  [n] Next  [p] Prev  [Enter/q] Done");
+    console.log();
+  };
+
+  return new Promise((resolve) => {
+    if (!process.stdin.isTTY) {
+      // TTYでない場合は全hunkを表示
+      for (const hunk of fileHunks.hunks) {
+        console.log(formatHunkForDisplay(hunk, fileHunks.path, fileHunks.hunks.length));
+      }
+      resolve();
+      return;
+    }
+
+    readline.emitKeypressEvents(process.stdin);
+    process.stdin.setRawMode(true);
+    showCurrentHunk();
+
+    const cleanup = (): void => {
+      process.stdin.setRawMode(false);
+      process.stdin.removeListener("keypress", handleKeypress);
+    };
+
+    const handleKeypress = (_str: string, key: readline.Key): void => {
+      const action = classifyKeyAction(key);
+
+      match(action)
+        .with("next", () => {
+          if (currentIndex < fileHunks.hunks.length - 1) {
+            currentIndex++;
+            showCurrentHunk();
+          }
+        })
+        .with("prev", () => {
+          if (currentIndex > 0) {
+            currentIndex--;
+            showCurrentHunk();
+          }
+        })
+        .with("exit", () => {
+          cleanup();
+          console.clear();
+          resolve();
+        })
+        .with("forceExit", () => {
+          cleanup();
+          process.exit(0);
+        })
+        .with("none", () => {
+          // 無視
+        })
+        .exhaustive();
+    };
+
+    process.stdin.on("keypress", handleKeypress);
+  });
 }
