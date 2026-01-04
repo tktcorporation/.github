@@ -27,3 +27,35 @@ export async function loadMergedGitignore(dirs: string[]): Promise<Ignore> {
 export function filterByGitignore(files: string[], ig: Ignore): string[] {
   return ig.filter(files);
 }
+
+/**
+ * ファイルが gitignore に該当するかどうかを判定
+ */
+export function isIgnored(file: string, ig: Ignore): boolean {
+  return ig.ignores(file);
+}
+
+/**
+ * ファイルリストを ignored と non-ignored に分離
+ */
+export interface SeparatedFiles {
+  /** gitignore に該当しないファイル */
+  tracked: string[];
+  /** gitignore に該当するファイル */
+  ignored: string[];
+}
+
+export function separateByGitignore(files: string[], ig: Ignore): SeparatedFiles {
+  const tracked: string[] = [];
+  const ignored: string[] = [];
+
+  for (const file of files) {
+    if (ig.ignores(file)) {
+      ignored.push(file);
+    } else {
+      tracked.push(file);
+    }
+  }
+
+  return { tracked, ignored };
+}

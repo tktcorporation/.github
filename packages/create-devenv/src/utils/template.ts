@@ -10,7 +10,7 @@ import type {
   OverwriteStrategy,
   TemplateModule,
 } from "../modules/schemas";
-import { filterByGitignore, loadMergedGitignore } from "./gitignore";
+import { loadMergedGitignore, separateByGitignore } from "./gitignore";
 import { getEffectivePatterns, resolvePatterns } from "./patterns";
 import { log, logFileResult, pc } from "./ui";
 
@@ -131,7 +131,6 @@ export async function fetchTemplates(options: DownloadOptions): Promise<FileOper
     }
 
     // ローカルとテンプレート両方の .gitignore をマージして読み込み
-    // クレデンシャル等の機密情報の誤流出を防止
     const gitignore = await loadMergedGitignore([targetDir, templateDir]);
 
     // 選択されたモジュールのファイルをパターンベースでコピー
@@ -145,23 +144,47 @@ export async function fetchTemplates(options: DownloadOptions): Promise<FileOper
       // 有効なパターンを取得
       const patterns = getEffectivePatterns(moduleId, moduleDef.patterns, config);
 
-      // パターンにマッチするファイル一覧を取得し、gitignore でフィルタリング
+      // パターンにマッチするファイル一覧を取得し、gitignore で分離
       const resolvedFiles = resolvePatterns(templateDir, patterns);
-      const files = filterByGitignore(resolvedFiles, gitignore);
+      const { tracked, ignored } = separateByGitignore(resolvedFiles, gitignore);
 
-      if (files.length === 0) {
+      if (tracked.length === 0 && ignored.length === 0) {
         log.warn(`No files matched for module "${pc.cyan(moduleId)}"`);
         continue;
       }
 
-      // 各ファイルをコピー
-      for (const relativePath of files) {
+      // tracked ファイルは通常通りコピー
+      for (const relativePath of tracked) {
         const srcPath = join(templateDir, relativePath);
         const destPath = join(targetDir, relativePath);
 
         const result = await copyFile(srcPath, destPath, overwriteStrategy, relativePath);
         logResult(result);
         allResults.push(result);
+      }
+
+      // ignored ファイルは特別処理:
+      // - ローカルに存在しない場合 → コピー
+      // - ローカルに存在する場合 → スキップ（上書き防止）
+      for (const relativePath of ignored) {
+        const srcPath = join(templateDir, relativePath);
+        const destPath = join(targetDir, relativePath);
+        const destExists = existsSync(destPath);
+
+        if (destExists) {
+          // ローカルに既存 → スキップして警告
+          const result: FileOperationResult = {
+            action: "skipped_ignored",
+            path: relativePath,
+          };
+          logResult(result);
+          allResults.push(result);
+        } else {
+          // ローカルにない → 通常通りコピー
+          const result = await copyFile(srcPath, destPath, overwriteStrategy, relativePath);
+          logResult(result);
+          allResults.push(result);
+        }
       }
     }
   } finally {

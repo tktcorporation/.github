@@ -178,7 +178,7 @@ export const log = {
 // ────────────────────────────────────────────────────────────────
 
 export interface FileResult {
-  action: "copied" | "created" | "overwritten" | "skipped";
+  action: "copied" | "created" | "overwritten" | "skipped" | "skipped_ignored";
   path: string;
 }
 
@@ -187,6 +187,7 @@ const actionIcons: Record<FileResult["action"], string> = {
   created: pc.green("+"),
   overwritten: pc.yellow("~"),
   skipped: pc.dim("-"),
+  skipped_ignored: pc.yellow("⚠"),
 };
 
 const actionLabels: Record<FileResult["action"], string> = {
@@ -194,6 +195,7 @@ const actionLabels: Record<FileResult["action"], string> = {
   created: pc.green("added"),
   overwritten: pc.yellow("updated"),
   skipped: pc.dim("skipped"),
+  skipped_ignored: pc.yellow("skipped (gitignore)"),
 };
 
 /**
@@ -202,7 +204,8 @@ const actionLabels: Record<FileResult["action"], string> = {
 export function logFileResult(result: FileResult): void {
   const icon = actionIcons[result.action];
   const label = actionLabels[result.action];
-  const path = result.action === "skipped" ? pc.dim(result.path) : result.path;
+  const isSkipped = result.action === "skipped" || result.action === "skipped_ignored";
+  const path = isSkipped ? pc.dim(result.path) : result.path;
   console.log(`  ${icon} ${path} ${pc.dim(`(${label})`)}`);
 }
 
@@ -214,6 +217,7 @@ export interface Summary {
   added: number;
   updated: number;
   skipped: number;
+  skippedIgnored: number;
 }
 
 /**
@@ -226,12 +230,14 @@ export function calculateSummary(results: FileResult[]): Summary {
         acc.added++;
       } else if (r.action === "overwritten") {
         acc.updated++;
+      } else if (r.action === "skipped_ignored") {
+        acc.skippedIgnored++;
       } else {
         acc.skipped++;
       }
       return acc;
     },
-    { added: 0, updated: 0, skipped: 0 },
+    { added: 0, updated: 0, skipped: 0, skippedIgnored: 0 },
   );
 }
 
@@ -249,6 +255,9 @@ export function showSummary(summary: Summary): void {
   }
   if (summary.skipped > 0) {
     parts.push(pc.dim(`${summary.skipped} skipped`));
+  }
+  if (summary.skippedIgnored > 0) {
+    parts.push(pc.yellow(`${summary.skippedIgnored} skipped (gitignore)`));
   }
 
   if (parts.length > 0) {

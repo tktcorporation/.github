@@ -32,6 +32,7 @@ describe("ui utilities", () => {
         added: 0,
         updated: 0,
         skipped: 0,
+        skippedIgnored: 0,
       });
     });
 
@@ -46,6 +47,7 @@ describe("ui utilities", () => {
         added: 2,
         updated: 0,
         skipped: 0,
+        skippedIgnored: 0,
       });
     });
 
@@ -60,6 +62,7 @@ describe("ui utilities", () => {
         added: 2,
         updated: 0,
         skipped: 0,
+        skippedIgnored: 0,
       });
     });
 
@@ -74,6 +77,7 @@ describe("ui utilities", () => {
         added: 0,
         updated: 2,
         skipped: 0,
+        skippedIgnored: 0,
       });
     });
 
@@ -88,6 +92,22 @@ describe("ui utilities", () => {
         added: 0,
         updated: 0,
         skipped: 2,
+        skippedIgnored: 0,
+      });
+    });
+
+    it("skipped_ignored アクションは skippedIgnored としてカウント", () => {
+      const results: FileResult[] = [
+        { action: "skipped_ignored", path: "file1.txt" },
+        { action: "skipped_ignored", path: "file2.txt" },
+      ];
+      const summary = calculateSummary(results);
+
+      expect(summary).toEqual<Summary>({
+        added: 0,
+        updated: 0,
+        skipped: 0,
+        skippedIgnored: 2,
       });
     });
 
@@ -98,6 +118,7 @@ describe("ui utilities", () => {
         { action: "overwritten", path: "updated.txt" },
         { action: "skipped", path: "skip1.txt" },
         { action: "skipped", path: "skip2.txt" },
+        { action: "skipped_ignored", path: "ignored.txt" },
       ];
       const summary = calculateSummary(results);
 
@@ -105,6 +126,7 @@ describe("ui utilities", () => {
         added: 2,
         updated: 1,
         skipped: 2,
+        skippedIgnored: 1,
       });
     });
   });
@@ -225,11 +247,19 @@ describe("ui utilities", () => {
       expect(mockConsoleLog.mock.calls[0][0]).toContain("file.txt");
       expect(mockConsoleLog.mock.calls[0][0]).toContain("skipped");
     });
+
+    it("skipped_ignored アクションを表示", () => {
+      logFileResult({ action: "skipped_ignored", path: "file.txt" });
+      expect(mockConsoleLog).toHaveBeenCalledTimes(1);
+      expect(mockConsoleLog.mock.calls[0][0]).toContain("file.txt");
+      expect(mockConsoleLog.mock.calls[0][0]).toContain("skipped");
+      expect(mockConsoleLog.mock.calls[0][0]).toContain("gitignore");
+    });
   });
 
   describe("showSummary", () => {
     it("added のみの場合", () => {
-      showSummary({ added: 3, updated: 0, skipped: 0 });
+      showSummary({ added: 3, updated: 0, skipped: 0, skippedIgnored: 0 });
       expect(mockConsoleLog).toHaveBeenCalled();
       const output = mockConsoleLog.mock.calls.map((c) => c[0]).join(" ");
       expect(output).toContain("3 added");
@@ -237,31 +267,39 @@ describe("ui utilities", () => {
     });
 
     it("updated のみの場合", () => {
-      showSummary({ added: 0, updated: 2, skipped: 0 });
+      showSummary({ added: 0, updated: 2, skipped: 0, skippedIgnored: 0 });
       expect(mockConsoleLog).toHaveBeenCalled();
       const output = mockConsoleLog.mock.calls.map((c) => c[0]).join(" ");
       expect(output).toContain("2 updated");
     });
 
     it("skipped のみの場合", () => {
-      showSummary({ added: 0, updated: 0, skipped: 5 });
+      showSummary({ added: 0, updated: 0, skipped: 5, skippedIgnored: 0 });
       expect(mockConsoleLog).toHaveBeenCalled();
       const output = mockConsoleLog.mock.calls.map((c) => c[0]).join(" ");
       expect(output).toContain("5 skipped");
     });
 
+    it("skippedIgnored のみの場合", () => {
+      showSummary({ added: 0, updated: 0, skipped: 0, skippedIgnored: 2 });
+      expect(mockConsoleLog).toHaveBeenCalled();
+      const output = mockConsoleLog.mock.calls.map((c) => c[0]).join(" ");
+      expect(output).toContain("2 skipped (gitignore)");
+    });
+
     it("すべて0の場合は何も表示しない", () => {
-      showSummary({ added: 0, updated: 0, skipped: 0 });
+      showSummary({ added: 0, updated: 0, skipped: 0, skippedIgnored: 0 });
       expect(mockConsoleLog).not.toHaveBeenCalled();
     });
 
     it("混合の場合", () => {
-      showSummary({ added: 1, updated: 2, skipped: 3 });
+      showSummary({ added: 1, updated: 2, skipped: 3, skippedIgnored: 1 });
       expect(mockConsoleLog).toHaveBeenCalled();
       const output = mockConsoleLog.mock.calls.map((c) => c[0]).join(" ");
       expect(output).toContain("1 added");
       expect(output).toContain("2 updated");
       expect(output).toContain("3 skipped");
+      expect(output).toContain("1 skipped (gitignore)");
     });
   });
 
