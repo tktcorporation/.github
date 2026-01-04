@@ -1,4 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import type * as readline from "node:readline";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { FileDiff } from "../../modules/schemas";
 import type { UntrackedFilesByFolder } from "../../utils/untracked";
 
@@ -30,6 +31,11 @@ vi.mock("../../utils/diff", () => ({
   formatDiff: vi.fn(() => "mocked diff output"),
 }));
 
+// readline をモック
+vi.mock("node:readline", () => ({
+  emitKeypressEvents: vi.fn(),
+}));
+
 // モック後にインポート
 const {
   promptPushConfirm,
@@ -40,10 +46,14 @@ const {
   promptAddUntrackedFiles,
 } = await import("../push");
 const { checkbox, confirm, input, password } = await import("@inquirer/prompts");
+const { showFileDiffBox } = await import("../../utils/diff-viewer");
+const readlineMock = await import("node:readline");
 const mockCheckbox = vi.mocked(checkbox);
 const mockConfirm = vi.mocked(confirm);
 const mockInput = vi.mocked(input);
 const mockPassword = vi.mocked(password);
+const mockShowFileDiffBox = vi.mocked(showFileDiffBox);
+const mockEmitKeypressEvents = vi.mocked(readlineMock.emitKeypressEvents);
 
 describe("promptPushConfirm", () => {
   beforeEach(() => {
@@ -422,5 +432,410 @@ describe("promptAddUntrackedFiles", () => {
       moduleId: ".devcontainer",
       files: [".devcontainer/file.json"],
     });
+  });
+});
+
+describe("interactiveDiffViewer (via promptSelectFilesWithDiff)", () => {
+  // stdin をモックするためのヘルパー
+  type KeypressHandler = (str: string, key: readline.Key) => void;
+  let keypressHandlers: KeypressHandler[] = [];
+  let originalStdin: typeof process.stdin;
+  let mockStdin: {
+    isTTY: boolean;
+    removeAllListeners: ReturnType<typeof vi.fn>;
+    removeListener: ReturnType<typeof vi.fn>;
+    setRawMode: ReturnType<typeof vi.fn>;
+    resume: ReturnType<typeof vi.fn>;
+    on: ReturnType<typeof vi.fn>;
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    keypressHandlers = [];
+
+    // stdin のモックを作成
+    mockStdin = {
+      isTTY: true,
+      removeAllListeners: vi.fn().mockReturnThis(),
+      removeListener: vi.fn().mockReturnThis(),
+      setRawMode: vi.fn().mockReturnThis(),
+      resume: vi.fn().mockReturnThis(),
+      on: vi.fn((event: string, handler: KeypressHandler) => {
+        if (event === "keypress") {
+          keypressHandlers.push(handler);
+        }
+        return mockStdin;
+      }),
+    };
+
+    // process.stdin を差し替え
+    originalStdin = process.stdin;
+    Object.defineProperty(process, "stdin", {
+      value: mockStdin,
+      writable: true,
+      configurable: true,
+    });
+  });
+
+  afterEach(() => {
+    // process.stdin を復元
+    Object.defineProperty(process, "stdin", {
+      value: originalStdin,
+      writable: true,
+      configurable: true,
+    });
+  });
+
+  // キー入力をシミュレート
+  const simulateKeypress = (key: Partial<readline.Key>) => {
+    for (const handler of keypressHandlers) {
+      handler("", key as readline.Key);
+    }
+  };
+
+  it("TTY でない場合は全ファイルを順次表示して終了", async () => {
+    mockStdin.isTTY = false;
+
+    const files: FileDiff[] = [
+      { path: "file1.txt", type: "added", localContent: "content1" },
+      { path: "file2.txt", type: "modified", localContent: "new", templateContent: "old" },
+    ];
+
+    mockConfirm.mockResolvedValueOnce(true); // 詳細確認する
+    mockCheckbox.mockResolvedValueOnce(files);
+
+    await promptSelectFilesWithDiff(files);
+
+    // 全ファイルが showFileDiffBox で表示される
+    expect(mockShowFileDiffBox).toHaveBeenCalledTimes(2);
+    expect(mockShowFileDiffBox).toHaveBeenNthCalledWith(1, files[0], 0, 2, {
+      showLineNumbers: true,
+    });
+    expect(mockShowFileDiffBox).toHaveBeenNthCalledWith(2, files[1], 1, 2, {
+      showLineNumbers: true,
+    });
+
+    // readline.emitKeypressEvents は呼ばれない
+    expect(mockEmitKeypressEvents).not.toHaveBeenCalled();
+  });
+
+  it("TTY の場合は stdin のリスナーをリセットしてセットアップ", async () => {
+    const files: FileDiff[] = [{ path: "file1.txt", type: "added", localContent: "content1" }];
+
+    mockConfirm.mockResolvedValueOnce(true); // 詳細確認する
+    mockCheckbox.mockResolvedValueOnce(files);
+
+    // 非同期で q キーを押してビューワーを終了
+    setTimeout(() => {
+      simulateKeypress({ name: "q" });
+    }, 10);
+
+    await promptSelectFilesWithDiff(files);
+
+    // 既存の keypress リスナーが削除される
+    expect(mockStdin.removeAllListeners).toHaveBeenCalledWith("keypress");
+
+    // readline.emitKeypressEvents が呼ばれる
+    expect(mockEmitKeypressEvents).toHaveBeenCalledWith(mockStdin);
+
+    // stdin がセットアップされる
+    expect(mockStdin.setRawMode).toHaveBeenCalledWith(true);
+    expect(mockStdin.resume).toHaveBeenCalled();
+    expect(mockStdin.on).toHaveBeenCalledWith("keypress", expect.any(Function));
+  });
+
+  it("n キーで次のファイルに移動", async () => {
+    const files: FileDiff[] = [
+      { path: "file1.txt", type: "added", localContent: "content1" },
+      { path: "file2.txt", type: "modified", localContent: "new", templateContent: "old" },
+    ];
+
+    mockConfirm.mockResolvedValueOnce(true);
+    mockCheckbox.mockResolvedValueOnce(files);
+
+    setTimeout(() => {
+      // 最初のファイルが表示された後、n を押して次へ
+      simulateKeypress({ name: "n" });
+      // その後 q で終了
+      setTimeout(() => {
+        simulateKeypress({ name: "q" });
+      }, 10);
+    }, 10);
+
+    await promptSelectFilesWithDiff(files);
+
+    // 最初のファイル + n で次のファイル = 2回表示
+    expect(mockShowFileDiffBox).toHaveBeenCalledWith(
+      files[0],
+      0,
+      2,
+      expect.objectContaining({ showLineNumbers: true }),
+    );
+    expect(mockShowFileDiffBox).toHaveBeenCalledWith(
+      files[1],
+      1,
+      2,
+      expect.objectContaining({ showLineNumbers: true }),
+    );
+  });
+
+  it("p キーで前のファイルに移動", async () => {
+    const files: FileDiff[] = [
+      { path: "file1.txt", type: "added", localContent: "content1" },
+      { path: "file2.txt", type: "modified", localContent: "new", templateContent: "old" },
+    ];
+
+    mockConfirm.mockResolvedValueOnce(true);
+    mockCheckbox.mockResolvedValueOnce(files);
+
+    setTimeout(() => {
+      simulateKeypress({ name: "n" }); // 次へ
+      setTimeout(() => {
+        simulateKeypress({ name: "p" }); // 前へ
+        setTimeout(() => {
+          simulateKeypress({ name: "q" }); // 終了
+        }, 10);
+      }, 10);
+    }, 10);
+
+    await promptSelectFilesWithDiff(files);
+
+    // file1 → file2 → file1 の順で表示される
+    const calls = mockShowFileDiffBox.mock.calls;
+    expect(calls.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it("Enter キーで終了", async () => {
+    const files: FileDiff[] = [{ path: "file1.txt", type: "added", localContent: "content1" }];
+
+    mockConfirm.mockResolvedValueOnce(true);
+    mockCheckbox.mockResolvedValueOnce(files);
+
+    setTimeout(() => {
+      simulateKeypress({ name: "return" });
+    }, 10);
+
+    await promptSelectFilesWithDiff(files);
+
+    // cleanup が呼ばれる（setRawMode(false) と resume）
+    expect(mockStdin.setRawMode).toHaveBeenCalledWith(false);
+  });
+
+  it("最初のファイルで p を押しても移動しない", async () => {
+    const files: FileDiff[] = [
+      { path: "file1.txt", type: "added", localContent: "content1" },
+      { path: "file2.txt", type: "modified", localContent: "new", templateContent: "old" },
+    ];
+
+    mockConfirm.mockResolvedValueOnce(true);
+    mockCheckbox.mockResolvedValueOnce(files);
+
+    setTimeout(() => {
+      simulateKeypress({ name: "p" }); // 最初なので移動しない
+      setTimeout(() => {
+        simulateKeypress({ name: "q" });
+      }, 10);
+    }, 10);
+
+    await promptSelectFilesWithDiff(files);
+
+    // file1 が1回だけ表示される（p を押しても移動しない）
+    const file1Calls = mockShowFileDiffBox.mock.calls.filter(
+      (call) => call[0].path === "file1.txt",
+    );
+    expect(file1Calls.length).toBe(1);
+  });
+
+  it("最後のファイルで n を押しても移動しない", async () => {
+    const files: FileDiff[] = [{ path: "file1.txt", type: "added", localContent: "content1" }];
+
+    mockConfirm.mockResolvedValueOnce(true);
+    mockCheckbox.mockResolvedValueOnce(files);
+
+    setTimeout(() => {
+      simulateKeypress({ name: "n" }); // 最後なので移動しない
+      setTimeout(() => {
+        simulateKeypress({ name: "q" });
+      }, 10);
+    }, 10);
+
+    await promptSelectFilesWithDiff(files);
+
+    // file1 が1回だけ表示される
+    expect(mockShowFileDiffBox).toHaveBeenCalledTimes(1);
+  });
+
+  it("cleanup 後は次の @inquirer/prompts が使えるよう stdin が復元される", async () => {
+    const files: FileDiff[] = [{ path: "file1.txt", type: "added", localContent: "content1" }];
+
+    mockConfirm.mockResolvedValueOnce(true);
+    mockCheckbox.mockResolvedValueOnce(files);
+
+    setTimeout(() => {
+      simulateKeypress({ name: "q" });
+    }, 10);
+
+    await promptSelectFilesWithDiff(files);
+
+    // cleanup で stdin.resume() が呼ばれる
+    // setRawMode(true) → setRawMode(false) の順で呼ばれる
+    const setRawModeCalls = mockStdin.setRawMode.mock.calls;
+    expect(setRawModeCalls).toContainEqual([true]);
+    expect(setRawModeCalls).toContainEqual([false]);
+  });
+
+  it("Ctrl+C で process.exit(0) が呼ばれる", async () => {
+    const files: FileDiff[] = [{ path: "file1.txt", type: "added", localContent: "content1" }];
+
+    mockConfirm.mockResolvedValueOnce(true);
+    mockCheckbox.mockResolvedValueOnce(files);
+
+    // process.exit をモック（何もしない実装）
+    let exitCalled = false;
+    let exitCode: number | undefined;
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation((code) => {
+      exitCalled = true;
+      exitCode = code as number;
+      // Promise を手動で resolve するために q を押す
+      simulateKeypress({ name: "q" });
+      return undefined as never;
+    });
+
+    setTimeout(() => {
+      simulateKeypress({ ctrl: true, name: "c" });
+    }, 10);
+
+    await promptSelectFilesWithDiff(files);
+
+    expect(exitCalled).toBe(true);
+    expect(exitCode).toBe(0);
+
+    // cleanup が呼ばれたことを確認
+    expect(mockStdin.setRawMode).toHaveBeenCalledWith(false);
+
+    exitSpy.mockRestore();
+  });
+
+  it("cleanup が複数回呼ばれても setRawMode(false) は1回だけ", async () => {
+    const files: FileDiff[] = [{ path: "file1.txt", type: "added", localContent: "content1" }];
+
+    mockConfirm.mockResolvedValueOnce(true);
+    mockCheckbox.mockResolvedValueOnce(files);
+
+    setTimeout(() => {
+      // q を2回素早く押す
+      simulateKeypress({ name: "q" });
+      simulateKeypress({ name: "q" });
+    }, 10);
+
+    await promptSelectFilesWithDiff(files);
+
+    // setRawMode(false) は1回だけ呼ばれる（cleanedUp フラグによる保護）
+    const falseCallCount = mockStdin.setRawMode.mock.calls.filter(
+      (call) => call[0] === false,
+    ).length;
+    expect(falseCallCount).toBe(1);
+  });
+
+  it.each([
+    { key: "j", direction: "next" },
+    { key: "down", direction: "next" },
+    { key: "right", direction: "next" },
+    { key: "k", direction: "prev" },
+    { key: "up", direction: "prev" },
+    { key: "left", direction: "prev" },
+  ])("$key キーで $direction に移動", async ({ key, direction }) => {
+    const files: FileDiff[] = [
+      { path: "file1.txt", type: "added", localContent: "content1" },
+      { path: "file2.txt", type: "modified", localContent: "new", templateContent: "old" },
+    ];
+
+    mockConfirm.mockResolvedValueOnce(true);
+    mockCheckbox.mockResolvedValueOnce(files);
+
+    setTimeout(() => {
+      if (direction === "next") {
+        // 最初のファイルから次へ移動
+        simulateKeypress({ name: key });
+      } else {
+        // まず次へ移動してから前へ戻る
+        simulateKeypress({ name: "n" });
+        setTimeout(() => {
+          simulateKeypress({ name: key });
+        }, 5);
+      }
+      setTimeout(() => {
+        simulateKeypress({ name: "q" });
+      }, 15);
+    }, 10);
+
+    await promptSelectFilesWithDiff(files);
+
+    // 両方のファイルが表示されたことを確認
+    expect(mockShowFileDiffBox).toHaveBeenCalledWith(
+      files[0],
+      0,
+      2,
+      expect.objectContaining({ showLineNumbers: true }),
+    );
+    expect(mockShowFileDiffBox).toHaveBeenCalledWith(
+      files[1],
+      1,
+      2,
+      expect.objectContaining({ showLineNumbers: true }),
+    );
+  });
+
+  it("escape キーで終了", async () => {
+    const files: FileDiff[] = [{ path: "file1.txt", type: "added", localContent: "content1" }];
+
+    mockConfirm.mockResolvedValueOnce(true);
+    mockCheckbox.mockResolvedValueOnce(files);
+
+    setTimeout(() => {
+      simulateKeypress({ name: "escape" });
+    }, 10);
+
+    await promptSelectFilesWithDiff(files);
+
+    // cleanup が呼ばれる
+    expect(mockStdin.setRawMode).toHaveBeenCalledWith(false);
+  });
+
+  it("stdin セットアップ失敗時はフォールバック表示とエラーログ出力", async () => {
+    // setRawMode が例外をスローするようにモック
+    mockStdin.setRawMode.mockImplementation(() => {
+      throw new Error("setRawMode not supported");
+    });
+
+    const files: FileDiff[] = [
+      { path: "file1.txt", type: "added", localContent: "content1" },
+      { path: "file2.txt", type: "modified", localContent: "new", templateContent: "old" },
+    ];
+
+    mockConfirm.mockResolvedValueOnce(true);
+    mockCheckbox.mockResolvedValueOnce(files);
+
+    // console.error をスパイ
+    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    await promptSelectFilesWithDiff(files);
+
+    // フォールバックとして全ファイルが showFileDiffBox で表示される
+    expect(mockShowFileDiffBox).toHaveBeenCalledTimes(2);
+    expect(mockShowFileDiffBox).toHaveBeenNthCalledWith(1, files[0], 0, 2, {
+      showLineNumbers: true,
+    });
+    expect(mockShowFileDiffBox).toHaveBeenNthCalledWith(2, files[1], 1, 2, {
+      showLineNumbers: true,
+    });
+
+    // エラーメッセージが出力される
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      "インタラクティブ diff ビューアのセットアップに失敗しました。非インタラクティブモードで表示します。",
+      expect.any(Error),
+    );
+
+    consoleErrorSpy.mockRestore();
   });
 });

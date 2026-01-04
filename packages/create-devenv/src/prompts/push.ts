@@ -115,6 +115,14 @@ const classifyKeyAction = (key: readline.Key): KeyAction =>
 async function interactiveDiffViewer(files: FileDiff[]): Promise<void> {
   if (files.length === 0) return;
 
+  // TTY でない場合は全ファイルを順次表示
+  if (!process.stdin.isTTY) {
+    files.forEach((file, i) => {
+      showFileDiffBox(file, i, files.length, { showLineNumbers: true });
+    });
+    return;
+  }
+
   let currentIndex = 0;
 
   const showCurrentDiff = (): void => {
@@ -126,56 +134,91 @@ async function interactiveDiffViewer(files: FileDiff[]): Promise<void> {
   };
 
   return new Promise((resolve) => {
-    // TTY でない場合は全ファイルを順次表示
-    if (!process.stdin.isTTY) {
+    try {
+      // @inquirer/prompts が登録した keypress リスナーが残っている可能性があるため、
+      // 新しいリスナーを登録する前にすべて削除して競合を防ぐ
+      process.stdin.removeAllListeners("keypress");
+
+      let cleanedUp = false;
+
+      const cleanup = (): void => {
+        if (cleanedUp) return;
+        cleanedUp = true;
+        try {
+          process.stdin.removeListener("keypress", handleKeypress);
+        } catch {
+          // リスナー削除の失敗は無視
+        }
+        try {
+          process.stdin.setRawMode(false);
+        } catch {
+          console.error(
+            "ターミナルの raw モード解除に失敗しました。ターミナルが正常に動作しない場合は `reset` コマンドを実行してください。",
+          );
+        }
+        try {
+          // 次の @inquirer/prompts が使えるよう stdin を resume 状態に戻す
+          process.stdin.resume();
+        } catch {
+          console.error(
+            "標準入力の再開に失敗しました。後続のプロンプトが正常に動作しない可能性があります。",
+          );
+        }
+      };
+
+      const handleKeypress = (_str: string, key: readline.Key): void => {
+        const action = classifyKeyAction(key);
+
+        match(action)
+          .with("next", () => {
+            if (currentIndex < files.length - 1) {
+              currentIndex++;
+              showCurrentDiff();
+            }
+          })
+          .with("prev", () => {
+            if (currentIndex > 0) {
+              currentIndex--;
+              showCurrentDiff();
+            }
+          })
+          .with("exit", () => {
+            cleanup();
+            console.clear();
+            resolve();
+          })
+          .with("forceExit", () => {
+            try {
+              cleanup();
+            } catch {
+              // cleanup エラーは無視
+            }
+            process.exit(0);
+          })
+          .with("none", () => {
+            // 未知のキーは無視
+          })
+          .exhaustive();
+      };
+
+      // stdin をセットアップ
+      readline.emitKeypressEvents(process.stdin);
+      process.stdin.setRawMode(true);
+      process.stdin.resume();
+      process.stdin.on("keypress", handleKeypress);
+
+      showCurrentDiff();
+    } catch (error) {
+      // セットアップ失敗時はフォールバック（非インタラクティブ表示）
+      console.error(
+        "インタラクティブ diff ビューアのセットアップに失敗しました。非インタラクティブモードで表示します。",
+        error,
+      );
       files.forEach((file, i) => {
         showFileDiffBox(file, i, files.length, { showLineNumbers: true });
       });
       resolve();
-      return;
     }
-
-    readline.emitKeypressEvents(process.stdin);
-    process.stdin.setRawMode(true);
-    showCurrentDiff();
-
-    const cleanup = (): void => {
-      process.stdin.setRawMode(false);
-      process.stdin.removeListener("keypress", handleKeypress);
-    };
-
-    const handleKeypress = (_str: string, key: readline.Key): void => {
-      const action = classifyKeyAction(key);
-
-      match(action)
-        .with("next", () => {
-          if (currentIndex < files.length - 1) {
-            currentIndex++;
-            showCurrentDiff();
-          }
-        })
-        .with("prev", () => {
-          if (currentIndex > 0) {
-            currentIndex--;
-            showCurrentDiff();
-          }
-        })
-        .with("exit", () => {
-          cleanup();
-          console.clear();
-          resolve();
-        })
-        .with("forceExit", () => {
-          cleanup();
-          process.exit(0);
-        })
-        .with("none", () => {
-          // 未知のキーは無視
-        })
-        .exhaustive();
-    };
-
-    process.stdin.on("keypress", handleKeypress);
   });
 }
 
