@@ -508,17 +508,19 @@ describe("interactiveDiffViewer (via promptSelectFilesWithDiff)", () => {
 
     // 全ファイルが showFileDiffBox で表示される
     expect(mockShowFileDiffBox).toHaveBeenCalledTimes(2);
-    expect(mockShowFileDiffBox).toHaveBeenNthCalledWith(1, files[0], 0, 2, { showLineNumbers: true });
-    expect(mockShowFileDiffBox).toHaveBeenNthCalledWith(2, files[1], 1, 2, { showLineNumbers: true });
+    expect(mockShowFileDiffBox).toHaveBeenNthCalledWith(1, files[0], 0, 2, {
+      showLineNumbers: true,
+    });
+    expect(mockShowFileDiffBox).toHaveBeenNthCalledWith(2, files[1], 1, 2, {
+      showLineNumbers: true,
+    });
 
     // readline.emitKeypressEvents は呼ばれない
     expect(mockEmitKeypressEvents).not.toHaveBeenCalled();
   });
 
   it("TTY の場合は stdin のリスナーをリセットしてセットアップ", async () => {
-    const files: FileDiff[] = [
-      { path: "file1.txt", type: "added", localContent: "content1" },
-    ];
+    const files: FileDiff[] = [{ path: "file1.txt", type: "added", localContent: "content1" }];
 
     mockConfirm.mockResolvedValueOnce(true); // 詳細確認する
     mockCheckbox.mockResolvedValueOnce(files);
@@ -604,9 +606,7 @@ describe("interactiveDiffViewer (via promptSelectFilesWithDiff)", () => {
   });
 
   it("Enter キーで終了", async () => {
-    const files: FileDiff[] = [
-      { path: "file1.txt", type: "added", localContent: "content1" },
-    ];
+    const files: FileDiff[] = [{ path: "file1.txt", type: "added", localContent: "content1" }];
 
     mockConfirm.mockResolvedValueOnce(true);
     mockCheckbox.mockResolvedValueOnce(files);
@@ -647,9 +647,7 @@ describe("interactiveDiffViewer (via promptSelectFilesWithDiff)", () => {
   });
 
   it("最後のファイルで n を押しても移動しない", async () => {
-    const files: FileDiff[] = [
-      { path: "file1.txt", type: "added", localContent: "content1" },
-    ];
+    const files: FileDiff[] = [{ path: "file1.txt", type: "added", localContent: "content1" }];
 
     mockConfirm.mockResolvedValueOnce(true);
     mockCheckbox.mockResolvedValueOnce(files);
@@ -668,9 +666,7 @@ describe("interactiveDiffViewer (via promptSelectFilesWithDiff)", () => {
   });
 
   it("cleanup 後は次の @inquirer/prompts が使えるよう stdin が復元される", async () => {
-    const files: FileDiff[] = [
-      { path: "file1.txt", type: "added", localContent: "content1" },
-    ];
+    const files: FileDiff[] = [{ path: "file1.txt", type: "added", localContent: "content1" }];
 
     mockConfirm.mockResolvedValueOnce(true);
     mockCheckbox.mockResolvedValueOnce(files);
