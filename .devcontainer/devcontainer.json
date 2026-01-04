@@ -47,6 +47,9 @@
       "bash",
       "-lc",
       ".devcontainer/setup-chrome-devtools-mcp.sh"
+    ],
+    "mise-upgrade": [
+      "mise", "upgrade"
     ]
   }
 }
