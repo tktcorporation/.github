@@ -1,5 +1,23 @@
 # @tktco/create-devenv
 
+## 0.7.1
+
+### Patch Changes
+
+- [#51](https://github.com/tktcorporation/.github/pull/51) [`71d6e04`](https://github.com/tktcorporation/.github/commit/71d6e04edd297f79e56d1a6df40262da2e22d2a4) Thanks [@tktcorporation](https://github.com/tktcorporation)! - feat(init): gitignore 対象ファイルの同期時の挙動を改善
+
+  - init 時に gitignore 対象のファイルがローカルに既存在する場合、上書きせずスキップして警告を表示
+  - gitignore 対象のファイルがローカルに存在しない場合は、通常通りコピー
+  - push 時は gitignore 対象ファイルを追跡対象から除外（既存の動作を維持）
+
+  これにより、ローカルで編集した gitignore 対象ファイル（環境設定など）がテンプレート同期時に上書きされることを防止します。
+
+- [#50](https://github.com/tktcorporation/.github/pull/50) [`f70e506`](https://github.com/tktcorporation/.github/commit/f70e50601bcedb3a19054463b11b6e77d83df3c8) Thanks [@tktcorporation](https://github.com/tktcorporation)! - fix(create-devenv): fix stdin conflict between @inquirer/prompts and interactive diff viewer
+
+  - Clear existing keypress listeners before setting up interactive viewer to prevent conflicts with @inquirer/prompts
+  - Call stdin.resume() to ensure stdin is in correct state after @inquirer/prompts usage
+  - Properly restore stdin state in cleanup for subsequent prompts
+
 ## 0.7.0
 
 ### Minor Changes
