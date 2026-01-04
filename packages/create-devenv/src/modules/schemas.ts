@@ -26,6 +26,7 @@ export const fileActionSchema = z.enum([
   "created", // 生成されたコンテンツで作成（新規）
   "overwritten", // 上書き
   "skipped", // スキップ
+  "skipped_ignored", // gitignore対象ファイルがローカルに既存のためスキップ
 ]);
 export type FileAction = z.infer<typeof fileActionSchema>;
 
