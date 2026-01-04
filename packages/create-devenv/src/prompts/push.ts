@@ -134,59 +134,83 @@ async function interactiveDiffViewer(files: FileDiff[]): Promise<void> {
   };
 
   return new Promise((resolve) => {
-    // @inquirer/prompts が残した状態をリセット
-    // 既存の keypress リスナーを削除して競合を防ぐ
-    process.stdin.removeAllListeners("keypress");
+    try {
+      // @inquirer/prompts が登録した keypress リスナーが残っている可能性があるため、
+      // 新しいリスナーを登録する前にすべて削除して競合を防ぐ
+      process.stdin.removeAllListeners("keypress");
 
-    let cleanedUp = false;
+      let cleanedUp = false;
 
-    const cleanup = (): void => {
-      if (cleanedUp) return;
-      cleanedUp = true;
-      process.stdin.removeListener("keypress", handleKeypress);
-      process.stdin.setRawMode(false);
-      // 次の @inquirer/prompts が使えるよう stdin を resume 状態に戻す
+      const cleanup = (): void => {
+        if (cleanedUp) return;
+        cleanedUp = true;
+        try {
+          process.stdin.removeListener("keypress", handleKeypress);
+        } catch {
+          // リスナー削除の失敗は無視
+        }
+        try {
+          process.stdin.setRawMode(false);
+        } catch {
+          // setRawMode エラーは無視
+        }
+        try {
+          // 次の @inquirer/prompts が使えるよう stdin を resume 状態に戻す
+          process.stdin.resume();
+        } catch {
+          // resume エラーは無視
+        }
+      };
+
+      const handleKeypress = (_str: string, key: readline.Key): void => {
+        const action = classifyKeyAction(key);
+
+        match(action)
+          .with("next", () => {
+            if (currentIndex < files.length - 1) {
+              currentIndex++;
+              showCurrentDiff();
+            }
+          })
+          .with("prev", () => {
+            if (currentIndex > 0) {
+              currentIndex--;
+              showCurrentDiff();
+            }
+          })
+          .with("exit", () => {
+            cleanup();
+            console.clear();
+            resolve();
+          })
+          .with("forceExit", () => {
+            try {
+              cleanup();
+            } catch {
+              // cleanup エラーは無視
+            }
+            process.exit(0);
+          })
+          .with("none", () => {
+            // 未知のキーは無視
+          })
+          .exhaustive();
+      };
+
+      // stdin をセットアップ
+      readline.emitKeypressEvents(process.stdin);
+      process.stdin.setRawMode(true);
       process.stdin.resume();
-    };
+      process.stdin.on("keypress", handleKeypress);
 
-    const handleKeypress = (_str: string, key: readline.Key): void => {
-      const action = classifyKeyAction(key);
-
-      match(action)
-        .with("next", () => {
-          if (currentIndex < files.length - 1) {
-            currentIndex++;
-            showCurrentDiff();
-          }
-        })
-        .with("prev", () => {
-          if (currentIndex > 0) {
-            currentIndex--;
-            showCurrentDiff();
-          }
-        })
-        .with("exit", () => {
-          cleanup();
-          console.clear();
-          resolve();
-        })
-        .with("forceExit", () => {
-          cleanup();
-          process.exit(0);
-        })
-        .with("none", () => {
-          // 未知のキーは無視
-        })
-        .exhaustive();
-    };
-
-    // stdin をセットアップ
-    readline.emitKeypressEvents(process.stdin);
-    process.stdin.setRawMode(true);
-    process.stdin.resume();
-    process.stdin.on("keypress", handleKeypress);
-
-    showCurrentDiff();
+      showCurrentDiff();
+    } catch {
+      // セットアップ失敗時はフォールバック（非インタラクティブ表示）
+      files.forEach((file, i) => {
+        showFileDiffBox(file, i, files.length, { showLineNumbers: true });
+      });
+      resolve();
+    }
   });
 }
 
