@@ -101,6 +101,25 @@ jobs:
           ls -la /tmp/test-project
           cat /tmp/test-project/.devenv.json
 
+  test:
+    name: Test (vitest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run tests
+        run: pnpm --filter @tktco/create-devenv run test:run
+
   docs:
     name: Check README
     runs-on: ubuntu-latest
