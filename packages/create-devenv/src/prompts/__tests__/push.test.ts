@@ -801,4 +801,41 @@ describe("interactiveDiffViewer (via promptSelectFilesWithDiff)", () => {
     // cleanup が呼ばれる
     expect(mockStdin.setRawMode).toHaveBeenCalledWith(false);
   });
+
+  it("stdin セットアップ失敗時はフォールバック表示とエラーログ出力", async () => {
+    // setRawMode が例外をスローするようにモック
+    mockStdin.setRawMode.mockImplementation(() => {
+      throw new Error("setRawMode not supported");
+    });
+
+    const files: FileDiff[] = [
+      { path: "file1.txt", type: "added", localContent: "content1" },
+      { path: "file2.txt", type: "modified", localContent: "new", templateContent: "old" },
+    ];
+
+    mockConfirm.mockResolvedValueOnce(true);
+    mockCheckbox.mockResolvedValueOnce(files);
+
+    // console.error をスパイ
+    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    await promptSelectFilesWithDiff(files);
+
+    // フォールバックとして全ファイルが showFileDiffBox で表示される
+    expect(mockShowFileDiffBox).toHaveBeenCalledTimes(2);
+    expect(mockShowFileDiffBox).toHaveBeenNthCalledWith(1, files[0], 0, 2, {
+      showLineNumbers: true,
+    });
+    expect(mockShowFileDiffBox).toHaveBeenNthCalledWith(2, files[1], 1, 2, {
+      showLineNumbers: true,
+    });
+
+    // エラーメッセージが出力される
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      "インタラクティブ diff ビューアのセットアップに失敗しました。非インタラクティブモードで表示します。",
+      expect.any(Error),
+    );
+
+    consoleErrorSpy.mockRestore();
+  });
 });

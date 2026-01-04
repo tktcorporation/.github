@@ -152,13 +152,17 @@ async function interactiveDiffViewer(files: FileDiff[]): Promise<void> {
         try {
           process.stdin.setRawMode(false);
         } catch {
-          // setRawMode エラーは無視
+          console.error(
+            "ターミナルの raw モード解除に失敗しました。ターミナルが正常に動作しない場合は `reset` コマンドを実行してください。",
+          );
         }
         try {
           // 次の @inquirer/prompts が使えるよう stdin を resume 状態に戻す
           process.stdin.resume();
         } catch {
-          // resume エラーは無視
+          console.error(
+            "標準入力の再開に失敗しました。後続のプロンプトが正常に動作しない可能性があります。",
+          );
         }
       };
 
@@ -204,8 +208,12 @@ async function interactiveDiffViewer(files: FileDiff[]): Promise<void> {
       process.stdin.on("keypress", handleKeypress);
 
       showCurrentDiff();
-    } catch {
+    } catch (error) {
       // セットアップ失敗時はフォールバック（非インタラクティブ表示）
+      console.error(
+        "インタラクティブ diff ビューアのセットアップに失敗しました。非インタラクティブモードで表示します。",
+        error,
+      );
       files.forEach((file, i) => {
         showFileDiffBox(file, i, files.length, { showLineNumbers: true });
       });
