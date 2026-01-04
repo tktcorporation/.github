@@ -13,6 +13,8 @@ on:
       - "packages/create-devenv/**"
       - ".github/workflows/ci.yml"
       - "pnpm-lock.yaml"
+  workflow_call:
+    # Called from release.yml when changeset PR is created/updated
 
 jobs:
   lint:
