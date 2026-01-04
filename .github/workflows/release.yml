@@ -44,3 +44,14 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_CONFIG_PROVENANCE: true
+
+    outputs:
+      hasChangesets: ${{ steps.changesets.outputs.hasChangesets }}
+      pullRequestNumber: ${{ steps.changesets.outputs.pullRequestNumber }}
+
+  # Run CI on changeset release PR since GITHUB_TOKEN commits don't trigger workflows
+  ci-on-release-pr:
+    name: CI on Release PR
+    needs: release
+    if: needs.release.outputs.hasChangesets == 'true' && needs.release.outputs.pullRequestNumber != ''
+    uses: ./.github/workflows/ci.yml
