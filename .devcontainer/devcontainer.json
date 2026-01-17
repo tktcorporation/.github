@@ -1,5 +1,13 @@
 {
   "image": "mcr.microsoft.com/devcontainers/base:bookworm",
+
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspaces/${localWorkspaceFolderBasename},type=bind,consistency=cached",
+  "workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}",
+
+  "mounts": [
+    "source=${localWorkspaceFolderBasename}-pnpm-store,target=${containerWorkspaceFolder}/.pnpm-store,type=volume"
+  ],
+
   "features": {
     // "ghcr.io/devcontainers/features/docker-in-docker:2": {
     //   "version": "latest",
@@ -20,7 +28,25 @@
         "editorconfig.editorconfig",
         "WakaTime.vscode-wakatime",
         "nemesv.copy-file-name"
-      ]
+      ],
+      "settings": {
+        "files.watcherExclude": {
+          "**/.git/objects/**": true,
+          "**/.git/subtree-cache/**": true,
+          "**/.git/modules/**": true,
+          "**/node_modules/**": true,
+          "**/.pnpm/**": true,
+          "**/.pnpm-store/**": true,
+          "**/.turbo/**": true
+        },
+        "search.exclude": {
+          "**/node_modules": true,
+          "**/.pnpm": true,
+          "**/.pnpm-store": true,
+          "**/.git": true,
+          "**/.turbo": true
+        }
+      }
     }
   },
   "onCreateCommand": {
