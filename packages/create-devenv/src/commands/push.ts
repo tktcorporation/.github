@@ -127,7 +127,32 @@ async function runExecuteMode(
       }),
     );
 
-    // 選択されたファイルの内容を取得
+    // マニフェストと現在の差分の整合性チェック
+    const currentPushableFiles = getPushableFiles(diff);
+    const currentFilePaths = new Set(currentPushableFiles.map((f) => f.path));
+    const manifestFilePaths = new Set(manifest.files.map((f) => f.path));
+
+    // マニフェストにあるが現在存在しないファイル
+    const missingFiles = selectedFilePaths.filter((p) => !currentFilePaths.has(p));
+    // 現在存在するがマニフェストにないファイル（新規追加）
+    const newFiles = currentPushableFiles
+      .filter((f) => !manifestFilePaths.has(f.path))
+      .map((f) => f.path);
+
+    if (missingFiles.length > 0 || newFiles.length > 0) {
+      log.newline();
+      log.warn("Manifest is out of sync with current changes:");
+      if (missingFiles.length > 0) {
+        log.dim(`  Missing files (in manifest but no longer changed): ${missingFiles.join(", ")}`);
+      }
+      if (newFiles.length > 0) {
+        log.dim(`  New files (changed but not in manifest): ${newFiles.join(", ")}`);
+      }
+      log.dim("  Consider running 'create-devenv push --prepare' to regenerate the manifest.");
+      log.newline();
+    }
+
+    // 選択されたファイルの内容を取得（存在するもののみ）
     const pushableFiles = getPushableFiles(diff);
     const selectedFiles = pushableFiles.filter((f) => selectedFilePaths.includes(f.path));
 
@@ -272,6 +297,16 @@ export const pushCommand = defineCommand({
       log.error("Cannot use --prepare and --execute together.");
       log.dim("Use --prepare to generate a manifest, then --execute to create the PR.");
       process.exit(1);
+    }
+
+    // --prepare と --dry-run の組み合わせは警告（prepareはそもそもPRを作らない）
+    if (args.prepare && args.dryRun) {
+      log.warn("--dry-run is ignored with --prepare (--prepare doesn't create a PR).");
+    }
+
+    // --execute と --interactive の組み合わせは警告（executeは非インタラクティブ）
+    if (args.execute && args.interactive) {
+      log.dim("Note: --execute mode is non-interactive. File selection is based on the manifest.");
     }
 
     const targetDir = resolve(args.dir);

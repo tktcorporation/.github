@@ -117,6 +117,9 @@ export const manifestFileSchema = z.object({
   path: z.string(),
   type: diffTypeSchema,
   selected: z.boolean(),
+  /** 差分の行数（AIエージェント向けの参考情報） */
+  lines_added: z.number().optional(),
+  lines_removed: z.number().optional(),
 });
 export type ManifestFile = z.infer<typeof manifestFileSchema>;
 

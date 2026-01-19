@@ -45,6 +45,48 @@ export interface GenerateManifestOptions {
 }
 
 /**
+ * 差分の行数を計算（localContent と templateContent から）
+ */
+function countDiffLines(
+  localContent?: string,
+  templateContent?: string,
+  type?: string,
+): { added: number; removed: number } {
+  // 新規追加ファイル
+  if (type === "added" && localContent) {
+    const lines = localContent.split("\n").length;
+    return { added: lines, removed: 0 };
+  }
+
+  // 削除ファイル
+  if (type === "deleted" && templateContent) {
+    const lines = templateContent.split("\n").length;
+    return { added: 0, removed: lines };
+  }
+
+  // 変更ファイル
+  if (type === "modified" && localContent && templateContent) {
+    const localLines = localContent.split("\n");
+    const templateLines = templateContent.split("\n");
+
+    // 簡易的な差分計算（行数の差）
+    // より正確には diff ライブラリを使うべきだが、参考情報なのでこれで十分
+    const added = Math.max(0, localLines.length - templateLines.length);
+    const removed = Math.max(0, templateLines.length - localLines.length);
+
+    // 両方が0の場合は、内容は変わっているが行数は同じ
+    // その場合は変更行数として1を返す
+    if (added === 0 && removed === 0 && localContent !== templateContent) {
+      return { added: 1, removed: 1 };
+    }
+
+    return { added, removed };
+  }
+
+  return { added: 0, removed: 0 };
+}
+
+/**
  * マニフェストファイルを生成
  */
 export function generateManifest(options: GenerateManifestOptions): PushManifest {
@@ -60,11 +102,16 @@ export function generateManifest(options: GenerateManifestOptions): PushManifest
       title: defaultTitle || "feat: update template configuration",
       body: undefined,
     },
-    files: pushableFiles.map((file) => ({
-      path: file.path,
-      type: file.type,
-      selected: true, // デフォルトで全選択
-    })),
+    files: pushableFiles.map((file) => {
+      const { added, removed } = countDiffLines(file.localContent, file.templateContent, file.type);
+      return {
+        path: file.path,
+        type: file.type,
+        selected: true, // デフォルトで全選択
+        lines_added: added > 0 ? added : undefined,
+        lines_removed: removed > 0 ? removed : undefined,
+      };
+    }),
     untracked_files: untrackedByFolder?.flatMap((folder) =>
       folder.files.map((file) => ({
         path: file.path,
