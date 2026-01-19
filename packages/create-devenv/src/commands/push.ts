@@ -10,7 +10,7 @@ import {
   loadModulesFile,
   modulesFileExists,
 } from "../modules";
-import type { DevEnvConfig, FileDiff, TemplateModule } from "../modules/schemas";
+import type { DevEnvConfig, TemplateModule } from "../modules/schemas";
 import { configSchema } from "../modules/schemas";
 import {
   promptAddUntrackedFiles,
@@ -278,8 +278,7 @@ export const pushCommand = defineCommand({
     prepare: {
       type: "boolean",
       alias: "p",
-      description:
-        "Generate a manifest file for AI-agent friendly workflow (no PR created)",
+      description: "Generate a manifest file for AI-agent friendly workflow (no PR created)",
       default: false,
     },
     execute: {
@@ -480,7 +479,9 @@ export const pushCommand = defineCommand({
         console.log(`  ${pc.bold("Files:")} ${pushableFiles.length} files ready to push`);
         if (untrackedByFolder.length > 0) {
           const untrackedCount = untrackedByFolder.reduce((sum, f) => sum + f.files.length, 0);
-          console.log(`  ${pc.bold("Untracked:")} ${untrackedCount} files detected (not selected by default)`);
+          console.log(
+            `  ${pc.bold("Untracked:")} ${untrackedCount} files detected (not selected by default)`,
+          );
         }
         log.newline();
 

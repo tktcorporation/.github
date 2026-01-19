@@ -192,9 +192,7 @@ export function getSelectedFilePaths(manifest: PushManifest): string[] {
 /**
  * 選択された未追跡ファイルを取得（moduleId別）
  */
-export function getSelectedUntrackedFiles(
-  manifest: PushManifest,
-): Map<string, string[]> {
+export function getSelectedUntrackedFiles(manifest: PushManifest): Map<string, string[]> {
   const result = new Map<string, string[]>();
 
   if (!manifest.untracked_files) {

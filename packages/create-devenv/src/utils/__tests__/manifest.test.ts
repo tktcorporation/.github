@@ -55,9 +55,7 @@ describe("generateManifest", () => {
         files: [],
         summary: { added: 0, modified: 1, deleted: 0, unchanged: 0 },
       },
-      pushableFiles: [
-        { path: ".devcontainer/devcontainer.json", type: "modified" },
-      ],
+      pushableFiles: [{ path: ".devcontainer/devcontainer.json", type: "modified" }],
       untrackedByFolder: [
         {
           folder: ".devcontainer",
@@ -147,9 +145,7 @@ describe("saveManifest / loadManifest", () => {
         files: [],
         summary: { added: 1, modified: 2, deleted: 0, unchanged: 0 },
       },
-      pushableFiles: [
-        { path: ".devcontainer/devcontainer.json", type: "modified" },
-      ],
+      pushableFiles: [{ path: ".devcontainer/devcontainer.json", type: "modified" }],
     });
 
     await saveManifest("/project", manifest);
@@ -221,9 +217,7 @@ describe("getSelectedFilePaths", () => {
       generated_at: new Date().toISOString(),
       github: {},
       pr: { title: "test" },
-      files: [
-        { path: "file1.txt", type: "added" as const, selected: false },
-      ],
+      files: [{ path: "file1.txt", type: "added" as const, selected: false }],
       summary: { added: 1, modified: 0, deleted: 0 },
     };
 
