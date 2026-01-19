@@ -50,6 +50,7 @@
     "picocolors": "^1.1.1",
     "tinyglobby": "^0.2.15",
     "ts-pattern": "^5.9.0",
+    "yaml": "^2.8.2",
     "zod": "^4.1.13"
   },
   "devDependencies": {
