@@ -9,11 +9,11 @@
   ],
 
   "features": {
-    // "ghcr.io/devcontainers/features/docker-in-docker:2": {
-    //   "version": "latest",
-    //   "enableNonRootDocker": "true",
-    //   "moby": "true"
-    // },
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {
+      "version": "latest",
+      "enableNonRootDocker": "true",
+      "moby": "true"
+    },
     "ghcr.io/devcontainers/features/aws-cli:1": {},
     "ghcr.io/devcontainers/features/github-cli:1": {},
     "ghcr.io/devcontainers-extra/features/mise:1": {}
@@ -27,7 +27,8 @@
         "steoates.autoimport",
         "editorconfig.editorconfig",
         "WakaTime.vscode-wakatime",
-        "nemesv.copy-file-name"
+        "nemesv.copy-file-name",
+        "eamodio.gitlens"
       ],
       "settings": {
         "files.watcherExclude": {
