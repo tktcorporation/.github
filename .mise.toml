@@ -12,6 +12,7 @@ pnpm = "10"
 
 # Browser automation
 "npm:playwright" = "latest"
+go = "latest"
 
 
 [settings]
