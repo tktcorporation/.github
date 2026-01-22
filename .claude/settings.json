@@ -1,40 +1,21 @@
 {
   "language": "japanese",
   "permissions": {
-    "allow": [
-      "Bash(git diff:*)",
-      "Bash(git status:*)",
-      "Bash(git log:*)",
-      "Bash(pnpm install:*)",
-      "Bash(pnpm dev:*)",
-      "Bash(pnpm build:*)",
-      "Bash(pnpm lint:*)",
-      "Bash(pnpm test:*)",
-      "Bash(make:*)",
-      "Bash(go build:*)",
-      "Bash(go test:*)",
-      "Bash(docker-compose:*)"
-    ],
+    "allow": [],
     "deny": [
       "Read(./secrets/**)",
-      "Read(./config/credentials.json)",
-      "Read(./repos/**/secrets/**)",
-      "Read(./repos/**/.env)",
-      "Read(./repos/**/.env.*)",
-      "Write(./.env)",
-      "Write(./.env.*)",
       "Write(./secrets/**)",
-      "Write(./config/credentials.json)",
-      "Write(./repos/**/.env)",
-      "Write(./repos/**/.env.*)"
+      "Read(./*/**/.env)",
+      "Read(./*/**/.env.*)",
+      "Write(./*/**/.env)",
+      "Write(./*/**/.env.*)"
     ]
   },
   "enableAllProjectMcpServers": true,
   "enabledMcpjsonServers": [
     "chrome-devtools",
     "ide",
-    "context7",
-    "serena"
+    "context7"
   ],
   "enabledPlugins": {
     "document-skills@anthropic-agent-skills": true,
