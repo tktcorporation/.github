@@ -1,5 +1,16 @@
 # @tktco/create-devenv
 
+## 0.9.0
+
+### Minor Changes
+
+- [#65](https://github.com/tktcorporation/.github/pull/65) [`03464f3`](https://github.com/tktcorporation/.github/commit/03464f39cf516de0e0018c58a5ab37246fa94764) Thanks [@tktcorporation](https://github.com/tktcorporation)! - feat(create-devenv): add ai-docs command for LLM-friendly documentation
+
+  - Add `ai-docs` subcommand that outputs comprehensive documentation for AI coding agents
+  - Create unified documentation source (src/docs/ai-guide.ts) for both CLI and README
+  - Add "For AI Agents" section to README with non-interactive workflow instructions
+  - Integrate ai-docs command into CLI help output
+
 ## 0.8.0
 
 ### Minor Changes
