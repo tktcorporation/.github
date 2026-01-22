@@ -1,5 +1,16 @@
 # @tktco/create-devenv
 
+## 0.8.0
+
+### Minor Changes
+
+- [#61](https://github.com/tktcorporation/.github/pull/61) [`41ea99b`](https://github.com/tktcorporation/.github/commit/41ea99b9c0ed8f9fbe88c976735577cece92636c) Thanks [@tktcorporation](https://github.com/tktcorporation)! - Add AI-agent friendly manifest-based push workflow
+
+  - `--prepare` option: Generates a YAML manifest file (`.devenv-push-manifest.yaml`) for reviewing and editing file selections
+  - `--execute` option: Creates a PR based on the manifest file without interactive prompts
+
+  This enables AI agents (like Claude Code) to handle the push workflow by reading/editing the manifest file, rather than requiring interactive CLI input.
+
 ## 0.7.1
 
 ### Patch Changes
