@@ -113,7 +113,41 @@ OPTIONS
   `-v, --verbose`    Show detailed diff
 ```
 
+### `ai-docs`
+
+Show documentation for AI coding agents
+
+```
+Show documentation for AI coding agents (ai-docs)
+
+USAGE `ai-docs `
+```
+
 <!-- COMMANDS:END -->
+
+<!-- AI_AGENTS:START -->
+
+## For AI Agents
+
+AI coding agents can use the non-interactive workflow:
+
+```bash
+# 1. Generate manifest file
+npx @tktco/create-devenv push --prepare
+
+# 2. Edit .devenv-push-manifest.yaml to select files and set PR details
+
+# 3. Create PR from manifest
+npx @tktco/create-devenv push --execute
+```
+
+For detailed documentation, run:
+
+```bash
+npx @tktco/create-devenv ai-docs
+```
+
+<!-- AI_AGENTS:END -->
 
 <!-- FILES:START -->
 

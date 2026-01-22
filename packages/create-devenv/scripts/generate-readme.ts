@@ -23,9 +23,11 @@ import { resolve } from "node:path";
 import { stripVTControlCharacters } from "node:util";
 import { renderUsage } from "citty";
 import { parse } from "jsonc-parser";
+import { aiDocsCommand } from "../src/commands/ai-docs";
 import { diffCommand } from "../src/commands/diff";
 import { initCommand } from "../src/commands/init";
 import { pushCommand } from "../src/commands/push";
+import { generateReadmeSection as generateAiAgentsSection } from "../src/docs/ai-guide";
 
 const README_PATH = resolve(import.meta.dirname, "../README.md");
 const MODULES_PATH = resolve(import.meta.dirname, "../../../.devenv/modules.jsonc");
@@ -43,6 +45,10 @@ const MARKERS = {
   commands: {
     start: "<!-- COMMANDS:START -->",
     end: "<!-- COMMANDS:END -->",
+  },
+  aiAgents: {
+    start: "<!-- AI_AGENTS:START -->",
+    end: "<!-- AI_AGENTS:END -->",
   },
   files: {
     start: "<!-- FILES:START -->",
@@ -147,6 +153,13 @@ async function generateCommandsSection(): Promise<string> {
   sections.push(cleanUsageOutput(await renderUsage(diffCommand)));
   sections.push("```\n");
 
+  // ai-docs command
+  sections.push("### `ai-docs`\n");
+  sections.push(`${getCommandDescription(aiDocsCommand.meta)}\n`);
+  sections.push("```");
+  sections.push(cleanUsageOutput(await renderUsage(aiDocsCommand)));
+  sections.push("```\n");
+
   return sections.join("\n");
 }
 
@@ -229,6 +242,7 @@ async function main(): Promise<void> {
   const usageSection = generateUsageSection();
   const featuresSection = generateFeaturesSection(modules);
   const commandsSection = await generateCommandsSection();
+  const aiAgentsSection = generateAiAgentsSection();
   const filesSection = generateFilesSection(modules);
 
   // Update README
@@ -238,6 +252,7 @@ async function main(): Promise<void> {
   readme = updateSection(readme, MARKERS.usage.start, MARKERS.usage.end, usageSection);
   readme = updateSection(readme, MARKERS.features.start, MARKERS.features.end, featuresSection);
   readme = updateSection(readme, MARKERS.commands.start, MARKERS.commands.end, commandsSection);
+  readme = updateSection(readme, MARKERS.aiAgents.start, MARKERS.aiAgents.end, aiAgentsSection);
   readme = updateSection(readme, MARKERS.files.start, MARKERS.files.end, filesSection);
 
   const updated = readme !== originalReadme;
