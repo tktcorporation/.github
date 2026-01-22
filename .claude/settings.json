@@ -1,24 +1,21 @@
 {
+  "language": "japanese",
   "permissions": {
     "allow": [],
     "deny": [
-      "Read(./.env)",
-      "Read(./.env.*)",
       "Read(./secrets/**)",
-      "Read(./config/credentials.json)",
-      "Read(./repo/**/secrets/**)",
-      "Read(./repo/**/.env)",
-      "Read(./repo/**/.env.*)",
-      "Write(./.env)",
-      "Write(./.env.*)",
       "Write(./secrets/**)",
-      "Write(./config/credentials.json)"
+      "Read(./*/**/.env)",
+      "Read(./*/**/.env.*)",
+      "Write(./*/**/.env)",
+      "Write(./*/**/.env.*)"
     ]
   },
   "enableAllProjectMcpServers": true,
   "enabledMcpjsonServers": [
     "chrome-devtools",
-    "ide"
+    "ide",
+    "context7"
   ],
   "enabledPlugins": {
     "document-skills@anthropic-agent-skills": true,
@@ -42,7 +39,8 @@
     "code-simplifier@claude-plugins-official": true,
     "ralph-loop@claude-plugins-official": true,
     "superpowers@claude-plugins-official": true,
-    "circleback@claude-plugins-official": true
+    "circleback@claude-plugins-official": true,
+    "gopls-lsp@claude-plugins-official": true
   },
   "extraKnownMarketplaces": {
     "anthropic-agent-skills": {
