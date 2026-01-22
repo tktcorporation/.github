@@ -2,6 +2,7 @@
 import { select } from "@inquirer/prompts";
 import { defineCommand, runMain } from "citty";
 import { version } from "../package.json";
+import { aiDocsCommand } from "./commands/ai-docs";
 import { diffCommand } from "./commands/diff";
 import { initCommand } from "./commands/init";
 import { pushCommand } from "./commands/push";
@@ -17,6 +18,7 @@ const main = defineCommand({
     init: initCommand,
     push: pushCommand,
     diff: diffCommand,
+    "ai-docs": aiDocsCommand,
   },
 });
 
@@ -62,7 +64,8 @@ async function promptCommand(): Promise<void> {
 // サブコマンドなしで実行された場合の処理
 const args = process.argv.slice(2);
 const hasSubCommand =
-  args.length > 0 && ["init", "push", "diff", "--help", "-h", "--version", "-v"].includes(args[0]);
+  args.length > 0 &&
+  ["init", "push", "diff", "ai-docs", "--help", "-h", "--version", "-v"].includes(args[0]);
 
 if (!hasSubCommand && args.length > 0 && !args[0].startsWith("-")) {
   // npx @tktco/create-devenv . のような形式は init コマンドとして実行
