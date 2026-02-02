@@ -1,5 +1,13 @@
 # @tktco/create-devenv
 
+## 0.9.1
+
+### Patch Changes
+
+- [#69](https://github.com/tktcorporation/.github/pull/69) [`6ea205a`](https://github.com/tktcorporation/.github/commit/6ea205a2632b73cd20ba798e7ce7cea08e92fcb9) Thanks [@tktcorporation](https://github.com/tktcorporation)! - Show AI agent hint in default command output
+
+  When running `create-devenv` without arguments, the output now includes a hint for AI agents pointing them to the `ai-docs` command for non-interactive usage documentation.
+
 ## 0.9.0
 
 ### Minor Changes
@@ -15,6 +23,7 @@
 ### Minor Changes
 
 - [#61](https://github.com/tktcorporation/.github/pull/61) [`41ea99b`](https://github.com/tktcorporation/.github/commit/41ea99b9c0ed8f9fbe88c976735577cece92636c) Thanks [@tktcorporation](https://github.com/tktcorporation)! - Add AI-agent friendly manifest-based push workflow
+
   - `--prepare` option: Generates a YAML manifest file (`.devenv-push-manifest.yaml`) for reviewing and editing file selections
   - `--execute` option: Creates a PR based on the manifest file without interactive prompts
 
@@ -25,6 +34,7 @@
 ### Patch Changes
 
 - [#51](https://github.com/tktcorporation/.github/pull/51) [`71d6e04`](https://github.com/tktcorporation/.github/commit/71d6e04edd297f79e56d1a6df40262da2e22d2a4) Thanks [@tktcorporation](https://github.com/tktcorporation)! - feat(init): gitignore 対象ファイルの同期時の挙動を改善
+
   - init 時に gitignore 対象のファイルがローカルに既存在する場合、上書きせずスキップして警告を表示
   - gitignore 対象のファイルがローカルに存在しない場合は、通常通りコピー
   - push 時は gitignore 対象ファイルを追跡対象から除外（既存の動作を維持）
@@ -41,6 +51,7 @@
 ### Minor Changes
 
 - [#45](https://github.com/tktcorporation/.github/pull/45) [`4557ba0`](https://github.com/tktcorporation/.github/commit/4557ba09b019d2f8f0dbaad3f274d6c4e56c9731) Thanks [@tktcorporation](https://github.com/tktcorporation)! - feat(create-devenv): improve diff display with summary box and interactive viewer
+
   - Add new diff-viewer.ts with modern box-styled summary display
   - Show file changes grouped by type (added/modified/deleted) with line stats
   - Add interactive diff viewer with n/p navigation between files
@@ -54,6 +65,7 @@
 ### Patch Changes
 
 - [#47](https://github.com/tktcorporation/.github/pull/47) [`052075d`](https://github.com/tktcorporation/.github/commit/052075dd830d4ccc8eae4b949a73db164e903df7) Thanks [@tktcorporation](https://github.com/tktcorporation)! - テストを大幅に拡充
+
   - config.ts: 設定ファイルの読み書きテスト
   - patterns.ts: パターンマッチングとマージのテスト
   - modules/schemas.ts: Zod スキーマバリデーションテスト
@@ -114,17 +126,20 @@
 - [#23](https://github.com/tktcorporation/.github/pull/23) [`ec36c47`](https://github.com/tktcorporation/.github/commit/ec36c474aac4e01b30ad018507f5fe7f9a305da2) Thanks [@tktcorporation](https://github.com/tktcorporation)! - push コマンドにホワイトリスト外ファイル検知機能を追加し、モジュール定義を外部化
 
   ### ホワイトリスト外ファイル検知
+
   - push 時にホワイトリスト（patterns）に含まれていないファイルを検出
   - モジュールごとにグループ化して選択 UI を表示
   - 選択したファイルを modules.jsonc に自動追加（PR に含まれる）
   - gitignore されているファイルは自動で除外
 
   ### モジュール定義の外部化
+
   - モジュール定義をコードから `.devenv/modules.jsonc` に外部化
   - テンプレートリポジトリの modules.jsonc から動的に読み込み
   - `customPatterns` を廃止し modules.jsonc に統合
 
   ### ディレクトリベースのモジュール設計
+
   - モジュール ID をディレクトリパスベースに変更（例: `.devcontainer`, `.github`, `.`）
   - ファイルパスから即座にモジュール ID を導出可能に
   - モジュール間のファイル重複を構造的に防止
@@ -134,6 +149,7 @@
 ### Minor Changes
 
 - [#14](https://github.com/tktcorporation/.github/pull/14) [`c026ed5`](https://github.com/tktcorporation/.github/commit/c026ed55da57df6599f7c57cdbb5d29c05e3273d) Thanks [@tktcorporation](https://github.com/tktcorporation)! - .gitignore に記載されたファイルを自動的に除外する機能を追加
+
   - init, diff, push の全コマンドで .gitignore にマッチするファイルを除外
   - ローカルディレクトリとテンプレートリポジトリ両方の .gitignore をチェック
   - クレデンシャル等の機密情報の誤流出を防止
@@ -150,10 +166,12 @@
 - [#12](https://github.com/tktcorporation/.github/pull/12) [`798d3fb`](https://github.com/tktcorporation/.github/commit/798d3fb332bdffbc4feac24d9ed89a1b510d7fcf) Thanks [@tktcorporation](https://github.com/tktcorporation)! - 双方向同期機能とホワイトリスト形式を追加
 
   ### 新機能
+
   - `push` コマンド: ローカル変更を GitHub PR として自動送信
   - `diff` コマンド: ローカルとテンプレートの差分をプレビュー
 
   ### 破壊的変更
+
   - モジュール定義を `files` + `excludeFiles` 形式から `patterns` (glob) 形式に移行
   - テンプレート対象ファイルをホワイトリスト形式で明示的に指定するように変更
 
@@ -189,6 +207,7 @@
 ### Patch Changes
 
 - [#4](https://github.com/tktcorporation/.github/pull/4) [`ae7c5e7`](https://github.com/tktcorporation/.github/commit/ae7c5e712b1a16963cd0cd920a92dd589f5e9f84) Thanks [@tktcorporation](https://github.com/tktcorporation)! - fix: overwriteStrategy オプションが正しく機能するように修正
+
   - "prompt" 戦略: ファイルごとにユーザーに上書き確認を表示
   - "skip" 戦略: 既存ファイルをスキップして新規ファイルのみコピー
   - "overwrite" 戦略: 既存ファイルを全て上書き
