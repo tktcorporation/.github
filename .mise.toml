@@ -3,6 +3,7 @@ node = ["22", "24"]
 uv = "latest"
 python = "3.14"
 pnpm = "10"
+rust = "latest"
 
 "npm:@anthropic-ai/claude-code" = "latest"
 "npm:@openai/codex" = "latest"
@@ -12,6 +13,9 @@ pnpm = "10"
 
 # Browser automation
 "npm:playwright" = "latest"
+
+# Rust WASM build tool
+"cargo:trunk" = "latest"
 
 
 [settings]
