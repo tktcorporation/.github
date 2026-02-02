@@ -69,13 +69,7 @@
     "mise-install": "mise install"
   },
   "postStartCommand": {
-    "setup-chrome-devtools-mcp": [
-      "bash",
-      "-lc",
-      ".devcontainer/setup-chrome-devtools-mcp.sh"
-    ],
-    "mise-upgrade": [
-      "mise", "upgrade"
-    ]
+    "setup-chrome-devtools-mcp": ["bash", "-lc", ".devcontainer/setup-chrome-devtools-mcp.sh"],
+    "mise-upgrade": ["mise", "upgrade"]
   }
 }

@@ -7,10 +7,7 @@
       "name": "Root",
       "description": "MCP, mise, and other root-level config files",
       "setupDescription": "Root config files will be applied",
-      "patterns": [
-        ".mcp.json",
-        ".mise.toml"
-      ]
+      "patterns": [".mcp.json", ".mise.toml"],
     },
     {
       "id": ".devcontainer",
@@ -24,8 +21,8 @@
         ".devcontainer/setup-*.sh",
         ".devcontainer/test-*.sh",
         ".devcontainer/.env.devcontainer.example",
-        ".devcontainer/run-chrome-devtools-mcp.sh"
-      ]
+        ".devcontainer/run-chrome-devtools-mcp.sh",
+      ],
     },
     {
       "id": ".github",
@@ -35,9 +32,9 @@
       "patterns": [
         ".github/workflows/issue-link.yml",
         ".github/workflows/label.yml",
-        ".github/labeler.yml"
+        ".github/labeler.yml",
         // Excluded: ci.yml, release.yml (repo-specific CI/CD)
-      ]
+      ],
     },
     {
       "id": ".claude",
@@ -45,9 +42,9 @@
       "description": "Claude Code project settings",
       "setupDescription": "Claude Code project settings will be applied",
       "patterns": [
-        ".claude/settings.json"
+        ".claude/settings.json",
         // Excluded: settings.local.json (personal settings)
-      ]
-    }
-  ]
+      ],
+    },
+  ],
 }
