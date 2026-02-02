@@ -15,10 +15,7 @@
     "ide": {
       "type": "stdio",
       "command": "npx",
-      "args": [
-        "-y",
-        "@anthropic-ai/ide-mcp@latest"
-      ],
+      "args": ["-y", "@anthropic-ai/ide-mcp@latest"],
       "env": {}
     }
   }
