@@ -31,10 +31,28 @@ const commandMap: Record<"init" | "push" | "diff", CommandType> = {
 };
 
 /**
+ * AI エージェント向けのヒントを表示
+ */
+function showAiHint(): void {
+  log.newline();
+  console.log(
+    pc.dim("─".repeat(40)),
+  );
+  console.log(
+    `${pc.dim("🤖 Are you an AI agent?")} Run ${pc.cyan("npx @tktco/create-devenv ai-docs")} for non-interactive usage guide.`,
+  );
+  console.log(
+    pc.dim("─".repeat(40)),
+  );
+  log.newline();
+}
+
+/**
  * コマンド選択プロンプト
  */
 async function promptCommand(): Promise<void> {
   showHeader("create-devenv", version);
+  showAiHint();
 
   log.info("Select a command to run:");
   log.newline();
