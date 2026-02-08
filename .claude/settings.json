@@ -1,5 +1,4 @@
 {
-  "plansDirectory": ".claude/plans",
   "permissions": {
     "allow": [],
     "deny": [
@@ -12,7 +11,11 @@
     ]
   },
   "enableAllProjectMcpServers": true,
-  "enabledMcpjsonServers": ["chrome-devtools", "ide", "context7"],
+  "enabledMcpjsonServers": [
+    "chrome-devtools",
+    "ide",
+    "context7"
+  ],
   "enabledPlugins": {
     "document-skills@anthropic-agent-skills": true,
     "example-skills@anthropic-agent-skills": true,
@@ -39,7 +42,8 @@
     "gopls-lsp@claude-plugins-official": true,
     "claude-md-management@claude-plugins-official": true,
     "claude-code-setup@claude-plugins-official": true,
-    "playground@claude-plugins-official": true
+    "playground@claude-plugins-official": true,
+    "sonatype-guide@claude-plugins-official": true
   },
   "extraKnownMarketplaces": {
     "anthropic-agent-skills": {
@@ -49,5 +53,6 @@
       }
     }
   },
-  "language": "japanese"
+  "language": "japanese",
+  "plansDirectory": ".claude/plans"
 }
