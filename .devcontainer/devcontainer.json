@@ -4,8 +4,10 @@
   "workspaceMount": "source=${localWorkspaceFolder},target=/workspaces/${localWorkspaceFolderBasename},type=bind,consistency=cached",
   "workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}",
 
+  // Volume name must start with [a-zA-Z0-9] to comply with Docker naming rules
+  // Using 'devcontainer-' prefix so ${localWorkspaceFolderBasename} ('.github') doesn't start the name
   "mounts": [
-    "source=${localWorkspaceFolderBasename}-pnpm-store,target=${containerWorkspaceFolder}/.pnpm-store,type=volume"
+    "source=devcontainer-${localWorkspaceFolderBasename}-pnpm-store,target=${containerWorkspaceFolder}/.pnpm-store,type=volume"
   ],
 
   "features": {
