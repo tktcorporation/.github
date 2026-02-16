@@ -17,6 +17,7 @@ vi.mock("../../utils/template", () => ({
   downloadTemplateToTemp: vi.fn(),
   fetchTemplates: vi.fn(),
   writeFileWithStrategy: vi.fn(),
+  copyFile: vi.fn(),
 }));
 
 vi.mock("../../prompts/init", () => ({
@@ -58,7 +59,7 @@ vi.mock("../../modules/index", async (importOriginal) => {
 
 // モック後にインポート
 const { initCommand } = await import("../init");
-const { downloadTemplateToTemp, fetchTemplates, writeFileWithStrategy } =
+const { downloadTemplateToTemp, fetchTemplates, writeFileWithStrategy, copyFile } =
   await import("../../utils/template");
 const { promptInit } = await import("../../prompts/init");
 const { log } = await import("../../utils/ui");
@@ -66,6 +67,7 @@ const { log } = await import("../../utils/ui");
 const mockDownloadTemplateToTemp = vi.mocked(downloadTemplateToTemp);
 const mockFetchTemplates = vi.mocked(fetchTemplates);
 const mockWriteFileWithStrategy = vi.mocked(writeFileWithStrategy);
+const mockCopyFile = vi.mocked(copyFile);
 const mockPromptInit = vi.mocked(promptInit);
 const mockLog = vi.mocked(log);
 
@@ -83,6 +85,10 @@ describe("initCommand", () => {
     mockWriteFileWithStrategy.mockResolvedValue({
       action: "created",
       path: ".devenv.json",
+    });
+    mockCopyFile.mockResolvedValue({
+      action: "skipped",
+      path: ".devenv/modules.jsonc",
     });
   });
 
@@ -247,6 +253,38 @@ describe("initCommand", () => {
       });
 
       expect(mockCleanup).toHaveBeenCalled();
+    });
+
+    it("modules.jsonc をテンプレートからコピーする", async () => {
+      vol.fromJSON({
+        "/test": null,
+        "/tmp/template/.devenv/modules.jsonc": '{"modules":[]}',
+      });
+
+      mockPromptInit.mockResolvedValueOnce({
+        modules: ["root"],
+        overwriteStrategy: "prompt",
+      });
+
+      mockFetchTemplates.mockResolvedValue([]);
+      mockCopyFile.mockResolvedValue({
+        action: "copied",
+        path: ".devenv/modules.jsonc",
+      });
+
+      await (initCommand.run as any)({
+        args: { dir: "/test", force: false, yes: false },
+        rawArgs: [],
+        cmd: initCommand,
+      });
+
+      // copyFile が modules.jsonc に対して呼ばれる
+      expect(mockCopyFile).toHaveBeenCalledWith(
+        "/tmp/template/.devenv/modules.jsonc",
+        expect.stringContaining(".devenv/modules.jsonc"),
+        "prompt",
+        ".devenv/modules.jsonc",
+      );
     });
 
     it("エラー時も cleanup が呼ばれる", async () => {
