@@ -639,6 +639,17 @@ export const pushCommand = defineCommand({
           console.log(
             `  ${pc.bold("Untracked:")} ${untrackedCount} files detected (not selected by default)`,
           );
+          log.newline();
+          log.info(
+            `${pc.bold("Hint:")} To sync untracked files to the template, first add them to tracking:`,
+          );
+          log.dim(
+            `  npx @tktco/create-devenv track "<pattern>"  # Add file patterns to the sync whitelist`,
+          );
+          log.dim(
+            `  npx @tktco/create-devenv track --list        # List currently tracked patterns`,
+          );
+          log.dim(`  Then re-run 'push --prepare' to include them in the manifest.`);
         }
         log.newline();
 
@@ -649,6 +660,13 @@ export const pushCommand = defineCommand({
           {
             description: `Run 'create-devenv push --execute' to create the PR`,
           },
+          ...(untrackedByFolder.length > 0
+            ? [
+                {
+                  description: `Run 'create-devenv track <pattern>' to add untracked files to sync whitelist`,
+                },
+              ]
+            : []),
         ]);
 
         return;

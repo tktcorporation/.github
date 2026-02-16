@@ -3,10 +3,21 @@ import { readFile, rm } from "node:fs/promises";
 import { defineCommand } from "citty";
 import { downloadTemplate } from "giget";
 import { join, resolve } from "pathe";
-import type { DevEnvConfig } from "../modules/schemas";
+import { defaultModules, loadModulesFile, modulesFileExists } from "../modules";
+import type { DevEnvConfig, TemplateModule } from "../modules/schemas";
 import { configSchema } from "../modules/schemas";
 import { detectDiff, formatDiff, hasDiff } from "../utils/diff";
-import { box, diffHeader, log, showHeader, showNextSteps, step, withSpinner } from "../utils/ui";
+import { detectUntrackedFiles, getTotalUntrackedCount } from "../utils/untracked";
+import {
+  box,
+  diffHeader,
+  log,
+  pc,
+  showHeader,
+  showNextSteps,
+  step,
+  withSpinner,
+} from "../utils/ui";
 
 const TEMPLATE_SOURCE = "gh:tktcorporation/.github";
 
@@ -74,6 +85,15 @@ export const diffCommand = defineCommand({
         }),
       );
 
+      // modules.jsonc を読み込み
+      let moduleList: TemplateModule[];
+      if (modulesFileExists(templateDir)) {
+        const loaded = await loadModulesFile(templateDir);
+        moduleList = loaded.modules;
+      } else {
+        moduleList = defaultModules;
+      }
+
       // Step 2: 差分を検出
       step({ current: 2, total: totalSteps }, "Detecting changes...");
 
@@ -83,8 +103,18 @@ export const diffCommand = defineCommand({
           templateDir,
           moduleIds: config.modules,
           config,
+          moduleList,
         }),
       );
+
+      // 未トラックファイルを検出
+      const untrackedByFolder = await detectUntrackedFiles({
+        targetDir,
+        moduleIds: config.modules,
+        config,
+        moduleList,
+      });
+      const untrackedCount = getTotalUntrackedCount(untrackedByFolder);
 
       // 結果表示
       log.newline();
@@ -92,9 +122,29 @@ export const diffCommand = defineCommand({
       if (hasDiff(diff)) {
         diffHeader("Changes detected:");
         console.log(formatDiff(diff, args.verbose));
+
+        // 未トラックファイルがあればヒントを表示
+        if (untrackedCount > 0) {
+          log.newline();
+          log.warn(`${untrackedCount} untracked file(s) found outside the sync whitelist:`);
+          for (const group of untrackedByFolder) {
+            for (const file of group.files) {
+              console.log(`  ${pc.dim("•")} ${file.path}`);
+            }
+          }
+          log.newline();
+          log.info(
+            `To include these files in sync, add them to tracking with the ${pc.cyan("track")} command:`,
+          );
+          log.dim(`  npx @tktco/create-devenv track "<pattern>"`);
+          log.dim(
+            `  Example: npx @tktco/create-devenv track "${untrackedByFolder[0]?.files[0]?.path || ".cloud/rules/*.md"}"`,
+          );
+        }
+
         log.newline();
 
-        showNextSteps([
+        const nextSteps = [
           {
             command: "npx @tktco/create-devenv push",
             description: "Push your local changes to the template repository",
@@ -103,7 +153,30 @@ export const diffCommand = defineCommand({
             command: "npx @tktco/create-devenv diff --verbose",
             description: "Show detailed diff output",
           },
-        ]);
+        ];
+        if (untrackedCount > 0) {
+          nextSteps.push({
+            command: "npx @tktco/create-devenv track <pattern>",
+            description: "Add untracked files to the sync whitelist so they can be pushed",
+          });
+        }
+
+        showNextSteps(nextSteps);
+      } else if (untrackedCount > 0) {
+        box("No tracked changes", "success");
+        log.info("Your tracked files are in sync with the template.");
+        log.newline();
+        log.warn(`However, ${untrackedCount} untracked file(s) exist outside the sync whitelist:`);
+        for (const group of untrackedByFolder) {
+          for (const file of group.files) {
+            console.log(`  ${pc.dim("•")} ${file.path}`);
+          }
+        }
+        log.newline();
+        log.info(
+          `Use ${pc.cyan("npx @tktco/create-devenv track <pattern>")} to add them, then ${pc.cyan("push")} to sync.`,
+        );
+        log.newline();
       } else {
         box("No changes", "success");
         log.info("Your local files are in sync with the template");
