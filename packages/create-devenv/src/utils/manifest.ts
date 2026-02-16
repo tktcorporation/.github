@@ -42,6 +42,8 @@ export interface GenerateManifestOptions {
   untrackedByFolder?: UntrackedFilesByFolder[];
   /** デフォルトのPRタイトル */
   defaultTitle?: string;
+  /** modules.jsonc の変更パス（ローカルモジュール追加がある場合） */
+  modulesFileChange?: string;
 }
 
 /**
@@ -90,7 +92,7 @@ function countDiffLines(
  * マニフェストファイルを生成
  */
 export function generateManifest(options: GenerateManifestOptions): PushManifest {
-  const { diff, pushableFiles, untrackedByFolder, defaultTitle } = options;
+  const { diff, pushableFiles, untrackedByFolder, defaultTitle, modulesFileChange } = options;
 
   const manifest: PushManifest = {
     version: 1,
@@ -102,16 +104,32 @@ export function generateManifest(options: GenerateManifestOptions): PushManifest
       title: defaultTitle || "feat: update template configuration",
       body: undefined,
     },
-    files: pushableFiles.map((file) => {
-      const { added, removed } = countDiffLines(file.localContent, file.templateContent, file.type);
-      return {
-        path: file.path,
-        type: file.type,
-        selected: true, // デフォルトで全選択
-        lines_added: added > 0 ? added : undefined,
-        lines_removed: removed > 0 ? removed : undefined,
-      };
-    }),
+    files: [
+      ...pushableFiles.map((file) => {
+        const { added, removed } = countDiffLines(
+          file.localContent,
+          file.templateContent,
+          file.type,
+        );
+        return {
+          path: file.path,
+          type: file.type as "added" | "modified" | "deleted" | "unchanged",
+          selected: true, // デフォルトで全選択
+          lines_added: added > 0 ? added : undefined,
+          lines_removed: removed > 0 ? removed : undefined,
+        };
+      }),
+      // modules.jsonc の変更がある場合はマニフェストに含める
+      ...(modulesFileChange
+        ? [
+            {
+              path: modulesFileChange,
+              type: "modified" as const,
+              selected: true,
+            },
+          ]
+        : []),
+    ],
     untracked_files: untrackedByFolder?.flatMap((folder) =>
       folder.files.map((file) => ({
         path: file.path,

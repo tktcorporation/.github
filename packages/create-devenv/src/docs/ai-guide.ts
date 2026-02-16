@@ -49,6 +49,11 @@ npx @tktco/create-devenv push --prepare    # Generate manifest
 # Edit ${MANIFEST_FILENAME}              # Select files
 npx @tktco/create-devenv push --execute    # Create PR
 
+# Add files to tracking (non-interactive)
+npx @tktco/create-devenv track ".cloud/rules/*.md"            # Add pattern (auto-detect module)
+npx @tktco/create-devenv track ".cloud/config.json" -m .cloud # Specify module explicitly
+npx @tktco/create-devenv track --list                         # List tracked modules/patterns
+
 # Other commands
 npx @tktco/create-devenv init [dir]        # Apply template (interactive)
 npx @tktco/create-devenv diff              # Show differences
@@ -129,12 +134,96 @@ npx @tktco/create-devenv push --execute
 The token needs \`repo\` scope for creating PRs.`,
     },
     {
+      title: "Track Command for AI Agents",
+      content: `The \`track\` command allows AI agents to add files or patterns to the sync whitelist non-interactively.
+This is useful when you create new files or directories that should be part of the template.
+
+### Add patterns to an existing module
+
+\`\`\`bash
+# Auto-detects module from path (.claude module)
+npx @tktco/create-devenv track ".claude/commands/*.md"
+
+# Explicit module
+npx @tktco/create-devenv track ".devcontainer/new-script.sh" --module .devcontainer
+\`\`\`
+
+### Create a new module with patterns
+
+When the module doesn't exist yet, it is automatically created:
+
+\`\`\`bash
+# Creates ".cloud" module and adds the pattern
+npx @tktco/create-devenv track ".cloud/rules/*.md"
+
+# With custom name and description
+npx @tktco/create-devenv track ".cloud/rules/*.md" \\
+  --module .cloud \\
+  --name "Cloud Rules" \\
+  --description "Cloud configuration and rule files"
+\`\`\`
+
+### List current tracking configuration
+
+\`\`\`bash
+npx @tktco/create-devenv track --list
+\`\`\`
+
+### Options
+
+| Option | Alias | Description |
+|--------|-------|-------------|
+| \`--module <id>\` | \`-m\` | Module ID to add patterns to (auto-detected if omitted) |
+| \`--name <name>\` | | Module display name (for new modules) |
+| \`--description <desc>\` | | Module description (for new modules) |
+| \`--dir <path>\` | \`-d\` | Project directory (default: current directory) |
+| \`--list\` | \`-l\` | List all tracked modules and patterns |`,
+    },
+    {
       title: "Best Practices for AI Agents",
       content: `1. **Always use \`--prepare\` then \`--execute\`** for non-interactive operation
 2. **Review the diff first** with \`npx @tktco/create-devenv diff\`
 3. **Set meaningful PR titles** that follow conventional commits (e.g., \`feat:\`, \`fix:\`, \`docs:\`)
 4. **Deselect unrelated changes** by setting \`selected: false\`
-5. **Use environment variables** for tokens instead of hardcoding in manifest`,
+5. **Use environment variables** for tokens instead of hardcoding in manifest
+6. **Use \`track\` command** to add new files to the sync whitelist before pushing`,
+    },
+    {
+      title: "Track + Push: Adding New Files to Template",
+      content: `When you create new files that should be part of the template, use \`track\` then \`push\`.
+The \`push\` command **automatically detects** changes made by \`track\` to the local \`modules.jsonc\`
+and includes them in the PR.
+
+### Workflow
+
+\`\`\`bash
+# 1. Create files locally
+mkdir -p .cloud/rules
+echo "naming conventions..." > .cloud/rules/naming.md
+
+# 2. Add to tracking (updates local .devenv/modules.jsonc)
+npx @tktco/create-devenv track ".cloud/rules/*.md"
+
+# 3. Push detects local module additions automatically
+npx @tktco/create-devenv push --prepare
+\`\`\`
+
+### What happens internally
+
+1. \`track\` adds patterns to **local** \`.devenv/modules.jsonc\` (creates new modules if needed)
+2. \`push --prepare\` downloads the template and compares its \`modules.jsonc\` with local
+3. New modules and patterns are detected and merged into the detection scope
+4. The manifest includes:
+   - New files (\`.cloud/rules/naming.md\`) as \`type: added\` with \`selected: true\`
+   - \`.devenv/modules.jsonc\` as \`type: modified\` with \`selected: true\`
+5. \`push --execute\` creates a PR that adds both the files AND the updated module definitions
+
+### Key behavior
+
+- **No need to manually edit modules.jsonc** — \`track\` handles it
+- **push detects local changes** — no extra flags needed; just run \`push --prepare\` after \`track\`
+- **New modules are auto-created** — if \`.cloud\` doesn't exist in the template, it's added
+- **Existing module patterns can also be extended** — \`track\` works for both new and existing modules`,
     },
   ];
 }

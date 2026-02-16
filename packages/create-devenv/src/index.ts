@@ -6,6 +6,7 @@ import { aiDocsCommand } from "./commands/ai-docs";
 import { diffCommand } from "./commands/diff";
 import { initCommand } from "./commands/init";
 import { pushCommand } from "./commands/push";
+import { trackCommand } from "./commands/track";
 import { log, pc, showHeader } from "./utils/ui";
 
 const main = defineCommand({
@@ -18,6 +19,7 @@ const main = defineCommand({
     init: initCommand,
     push: pushCommand,
     diff: diffCommand,
+    track: trackCommand,
     "ai-docs": aiDocsCommand,
   },
 });
@@ -79,7 +81,7 @@ async function promptCommand(): Promise<void> {
 const args = process.argv.slice(2);
 const hasSubCommand =
   args.length > 0 &&
-  ["init", "push", "diff", "ai-docs", "--help", "-h", "--version", "-v"].includes(args[0]);
+  ["init", "push", "diff", "track", "ai-docs", "--help", "-h", "--version", "-v"].includes(args[0]);
 
 if (!hasSubCommand && args.length > 0 && !args[0].startsWith("-")) {
   // npx @tktco/create-devenv . のような形式は init コマンドとして実行
