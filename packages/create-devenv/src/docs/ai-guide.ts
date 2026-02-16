@@ -44,6 +44,12 @@ export function getDocSections(): DocSection[] {
     {
       title: "Quick Reference",
       content: `\`\`\`bash
+# Non-interactive init for AI agents
+npx @tktco/create-devenv init --yes                           # All modules, overwrite strategy
+npx @tktco/create-devenv init --modules .,devcontainer        # Specific modules only
+npx @tktco/create-devenv init --modules .github -s skip       # Specific modules with skip strategy
+npx @tktco/create-devenv init --yes --overwrite-strategy skip # All modules with skip strategy
+
 # Non-interactive push workflow for AI agents
 npx @tktco/create-devenv push --prepare    # Generate manifest
 # Edit ${MANIFEST_FILENAME}              # Select files
@@ -61,6 +67,42 @@ npx @tktco/create-devenv diff              # Show differences (also reports untr
 npx @tktco/create-devenv init [dir]        # Apply template (interactive)
 npx @tktco/create-devenv ai-docs           # Show this guide
 \`\`\``,
+    },
+    {
+      title: "Init Command for AI Agents",
+      content: `The \`init\` command supports non-interactive options for AI agents:
+
+### Options
+
+| Option | Alias | Description |
+|--------|-------|-------------|
+| \`--yes\` | \`-y\` | Select all modules with overwrite strategy |
+| \`--modules <ids>\` | \`-m\` | Comma-separated module IDs to apply |
+| \`--overwrite-strategy <strategy>\` | \`-s\` | Strategy for existing files: \`overwrite\`, \`skip\`, or \`prompt\` |
+| \`--force\` | | Force overwrite (overrides strategy to \`overwrite\`) |
+
+### Examples
+
+\`\`\`bash
+# Apply only specific modules (skips module selection prompt)
+npx @tktco/create-devenv init --modules .github,.claude
+
+# Apply specific modules and skip existing files
+npx @tktco/create-devenv init --modules devcontainer -s skip
+
+# Apply all modules but skip existing files
+npx @tktco/create-devenv init --yes --overwrite-strategy skip
+
+# Re-init when .devenv.json exists, replacing only specific modules
+npx @tktco/create-devenv init --modules . -s overwrite
+\`\`\`
+
+### Behavior
+
+- \`--modules\` or \`--yes\`: Skips the module selection prompt entirely
+- \`--overwrite-strategy\`: Sets how to handle existing files (default: \`overwrite\` in non-interactive mode)
+- When neither is provided, interactive prompts are shown
+- \`.devenv.json\` is always updated regardless of strategy`,
     },
     {
       title: "Important: Untracked Files and the Track Command",
@@ -208,13 +250,14 @@ npx @tktco/create-devenv track --list
     },
     {
       title: "Best Practices for AI Agents",
-      content: `1. **Always use \`--prepare\` then \`--execute\`** for non-interactive operation
-2. **Review the diff first** with \`npx @tktco/create-devenv diff\` — this also reports untracked files
-3. **Check for untracked files** — if \`diff\` or \`push --prepare\` reports untracked files, use \`track\` to add them before pushing
-4. **Use \`track\` command** to add new files to the sync whitelist (non-interactive, no prompts)
-5. **Set meaningful PR titles** that follow conventional commits (e.g., \`feat:\`, \`fix:\`, \`docs:\`)
-6. **Deselect unrelated changes** by setting \`selected: false\`
-7. **Use environment variables** for tokens instead of hardcoding in manifest`,
+      content: `1. **Use \`--modules\` and \`--overwrite-strategy\`** for granular non-interactive init (e.g., \`init --modules .github,.claude -s skip\`)
+2. **Always use \`--prepare\` then \`--execute\`** for non-interactive push operation
+3. **Review the diff first** with \`npx @tktco/create-devenv diff\` — this also reports untracked files
+4. **Check for untracked files** — if \`diff\` or \`push --prepare\` reports untracked files, use \`track\` to add them before pushing
+5. **Use \`track\` command** to add new files to the sync whitelist (non-interactive, no prompts)
+6. **Set meaningful PR titles** that follow conventional commits (e.g., \`feat:\`, \`fix:\`, \`docs:\`)
+7. **Deselect unrelated changes** by setting \`selected: false\`
+8. **Use environment variables** for tokens instead of hardcoding in manifest`,
     },
     {
       title: "Track + Push: Adding New Files to Template",
