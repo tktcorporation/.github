@@ -1,9 +1,10 @@
 import { existsSync, mkdirSync } from "node:fs";
 import { defineCommand } from "citty";
-import { resolve } from "pathe";
+import { join, resolve } from "pathe";
 import {
   defaultModules,
   getModuleById,
+  getModulesFilePath,
   loadModulesFile,
   modulesFileExists,
 } from "../modules/index";
@@ -14,7 +15,12 @@ import type {
   TemplateModule,
 } from "../modules/schemas";
 import { promptInit } from "../prompts/init";
-import { downloadTemplateToTemp, fetchTemplates, writeFileWithStrategy } from "../utils/template";
+import {
+  copyFile,
+  downloadTemplateToTemp,
+  fetchTemplates,
+  writeFileWithStrategy,
+} from "../utils/template";
 import {
   box,
   calculateSummary,
@@ -139,6 +145,10 @@ export const initCommand = defineCommand({
         allResults.push(envResult);
       }
 
+      // modules.jsonc をテンプレートからコピー（track コマンドが必要とする）
+      const modulesJsoncResult = await copyModulesJsonc(templateDir, targetDir, effectiveStrategy);
+      allResults.push(modulesJsoncResult);
+
       // 設定ファイル生成（常に更新）
       const configResult = await createDevEnvConfig(targetDir, answers.modules);
       allResults.push(configResult);
@@ -232,6 +242,25 @@ async function createDevEnvConfig(
     strategy: "overwrite",
     relativePath: ".devenv.json",
   });
+}
+
+/**
+ * テンプレートから modules.jsonc をコピー
+ */
+async function copyModulesJsonc(
+  templateDir: string,
+  targetDir: string,
+  strategy: OverwriteStrategy,
+): Promise<FileOperationResult> {
+  const modulesRelPath = ".devenv/modules.jsonc";
+  const srcPath = join(templateDir, modulesRelPath);
+  const destPath = getModulesFilePath(targetDir);
+
+  if (!existsSync(srcPath)) {
+    return { action: "skipped", path: modulesRelPath };
+  }
+
+  return copyFile(srcPath, destPath, strategy, modulesRelPath);
 }
 
 /**
