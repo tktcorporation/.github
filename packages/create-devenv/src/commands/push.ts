@@ -5,7 +5,7 @@ import { downloadTemplate } from "giget";
 import { parse } from "jsonc-parser";
 import { join, resolve } from "pathe";
 import {
-  addPatternToModulesFile,
+  addPatternToModulesFileWithCreate,
   defaultModules,
   loadModulesFile,
   modulesFileExists,
@@ -46,6 +46,97 @@ import {
 
 const MODULES_FILE_PATH = ".devenv/modules.jsonc";
 const README_PATH = "README.md";
+
+interface LocalModuleAdditions {
+  mergedModuleList: TemplateModule[];
+  newModuleIds: string[];
+  updatedModulesContent: string | undefined;
+}
+
+/**
+ * ローカルの modules.jsonc とテンプレートの modules.jsonc を比較し、
+ * ローカルにのみ存在するモジュール（track コマンドで追加されたもの等）を検出してマージする。
+ * テンプレートの raw content をベースに新モジュールを追加した内容を返す。
+ */
+async function detectLocalModuleAdditions(
+  targetDir: string,
+  templateModules: TemplateModule[],
+  templateRawContent: string,
+): Promise<LocalModuleAdditions> {
+  if (!modulesFileExists(targetDir)) {
+    return {
+      mergedModuleList: templateModules,
+      newModuleIds: [],
+      updatedModulesContent: undefined,
+    };
+  }
+
+  const local = await loadModulesFile(targetDir);
+  const templateModuleIds = new Set(templateModules.map((m) => m.id));
+
+  // ローカルにのみ存在するモジュールを検出
+  const newModules = local.modules.filter((m) => !templateModuleIds.has(m.id));
+
+  if (newModules.length === 0) {
+    // 新モジュールはないが、既存モジュールにローカルでパターンが追加されていないかチェック
+    let updatedContent = templateRawContent;
+    let hasPatternAdditions = false;
+    for (const localMod of local.modules) {
+      const templateMod = templateModules.find((m) => m.id === localMod.id);
+      if (!templateMod) continue;
+      const newPatterns = localMod.patterns.filter((p) => !templateMod.patterns.includes(p));
+      if (newPatterns.length > 0) {
+        updatedContent = addPatternToModulesFileWithCreate(
+          updatedContent,
+          localMod.id,
+          newPatterns,
+        );
+        hasPatternAdditions = true;
+      }
+    }
+
+    if (hasPatternAdditions) {
+      const merged = parse(updatedContent) as { modules: TemplateModule[] };
+      return {
+        mergedModuleList: merged.modules,
+        newModuleIds: [],
+        updatedModulesContent: updatedContent,
+      };
+    }
+
+    return {
+      mergedModuleList: templateModules,
+      newModuleIds: [],
+      updatedModulesContent: undefined,
+    };
+  }
+
+  // テンプレートの raw content に新モジュールを追加
+  let updatedContent = templateRawContent;
+  for (const mod of newModules) {
+    updatedContent = addPatternToModulesFileWithCreate(updatedContent, mod.id, mod.patterns, {
+      name: mod.name,
+      description: mod.description,
+    });
+  }
+
+  // 既存モジュールへのパターン追加もチェック
+  for (const localMod of local.modules) {
+    const templateMod = templateModules.find((m) => m.id === localMod.id);
+    if (!templateMod) continue; // 新モジュールは上で処理済み
+    const newPatterns = localMod.patterns.filter((p) => !templateMod.patterns.includes(p));
+    if (newPatterns.length > 0) {
+      updatedContent = addPatternToModulesFileWithCreate(updatedContent, localMod.id, newPatterns);
+    }
+  }
+
+  const merged = parse(updatedContent) as { modules: TemplateModule[] };
+  return {
+    mergedModuleList: merged.modules,
+    newModuleIds: newModules.map((m) => m.id),
+    updatedModulesContent: updatedContent,
+  };
+}
 
 /**
  * --execute モード: マニフェストファイルを使ってPRを作成
@@ -113,6 +204,22 @@ async function runExecuteMode(
       moduleList = defaultModules;
     }
 
+    // ローカルのモジュール追加を検出してマージ
+    const effectiveModuleIds = [...config.modules];
+    if (modulesRawContent) {
+      const localAdditions = await detectLocalModuleAdditions(
+        targetDir,
+        moduleList,
+        modulesRawContent,
+      );
+      moduleList = localAdditions.mergedModuleList;
+      for (const id of localAdditions.newModuleIds) {
+        if (!effectiveModuleIds.includes(id)) {
+          effectiveModuleIds.push(id);
+        }
+      }
+    }
+
     // Step 3: ファイル内容を取得
     step({ current: currentStep++, total: totalSteps }, "Preparing files...");
 
@@ -121,7 +228,7 @@ async function runExecuteMode(
       detectDiff({
         targetDir,
         templateDir,
-        moduleIds: config.modules,
+        moduleIds: effectiveModuleIds,
         config,
         moduleList,
       }),
@@ -161,18 +268,39 @@ async function runExecuteMode(
       content: f.localContent || "",
     }));
 
-    // 選択された未追跡ファイルの処理
-    let updatedModulesContent: string | undefined;
-    if (selectedUntracked.size > 0 && modulesRawContent) {
-      let currentContent = modulesRawContent;
-      for (const [moduleId, filePaths] of selectedUntracked) {
-        currentContent = addPatternToModulesFile(currentContent, moduleId, filePaths);
+    // modules.jsonc の変更を処理
+    // ローカルモジュール追加 + 未追跡ファイルのパターン追加を統合
+    if (modulesRawContent) {
+      const localAdditions = await detectLocalModuleAdditions(
+        targetDir,
+        moduleList,
+        modulesRawContent,
+      );
+      let modulesContent = localAdditions.updatedModulesContent || modulesRawContent;
+      let hasModulesChange = !!localAdditions.updatedModulesContent;
+
+      // 選択された未追跡ファイルのパターンも追加
+      if (selectedUntracked.size > 0) {
+        for (const [moduleId, filePaths] of selectedUntracked) {
+          modulesContent = addPatternToModulesFileWithCreate(modulesContent, moduleId, filePaths);
+        }
+        hasModulesChange = true;
       }
-      updatedModulesContent = currentContent;
-      files.push({
-        path: MODULES_FILE_PATH,
-        content: updatedModulesContent,
-      });
+
+      // modules.jsonc が選択されている場合、または未追跡ファイルがある場合にPRに含める
+      const modulesInManifest = selectedFilePaths.includes(MODULES_FILE_PATH);
+      if (hasModulesChange && (modulesInManifest || selectedUntracked.size > 0)) {
+        // 既に通常のファイルとして含まれている場合は上書き
+        const existingIdx = files.findIndex((f) => f.path === MODULES_FILE_PATH);
+        if (existingIdx !== -1) {
+          files[existingIdx].content = modulesContent;
+        } else {
+          files.push({
+            path: MODULES_FILE_PATH,
+            content: modulesContent,
+          });
+        }
+      }
     }
 
     // README 更新チェック
@@ -370,13 +498,36 @@ export const pushCommand = defineCommand({
         moduleList = defaultModules;
       }
 
-      // ホワイトリスト外ファイルの検出と追加確認
+      // ローカルのモジュール追加を検出してマージ
+      const effectiveModuleIds = [...config.modules];
       let updatedModulesContent: string | undefined;
 
-      if (!args.force && modulesRawContent) {
+      if (modulesRawContent) {
+        const localAdditions = await detectLocalModuleAdditions(
+          targetDir,
+          moduleList,
+          modulesRawContent,
+        );
+        moduleList = localAdditions.mergedModuleList;
+        updatedModulesContent = localAdditions.updatedModulesContent;
+        for (const id of localAdditions.newModuleIds) {
+          if (!effectiveModuleIds.includes(id)) {
+            effectiveModuleIds.push(id);
+          }
+        }
+        if (localAdditions.newModuleIds.length > 0) {
+          log.newline();
+          log.info(
+            `Detected ${localAdditions.newModuleIds.length} new module(s) from local: ${localAdditions.newModuleIds.join(", ")}`,
+          );
+        }
+      }
+
+      // ホワイトリスト外ファイルの検出と追加確認（インタラクティブモード）
+      if (!args.force && !args.prepare && modulesRawContent) {
         const untrackedByFolder = await detectUntrackedFiles({
           targetDir,
-          moduleIds: config.modules,
+          moduleIds: effectiveModuleIds,
           config,
           moduleList,
         });
@@ -390,9 +541,9 @@ export const pushCommand = defineCommand({
 
           if (selectedFiles.length > 0) {
             // modules.jsonc にパターンを追加（メモリ上）
-            let currentContent = modulesRawContent;
+            let currentContent = updatedModulesContent || modulesRawContent;
             for (const { moduleId, files } of selectedFiles) {
-              currentContent = addPatternToModulesFile(currentContent, moduleId, files);
+              currentContent = addPatternToModulesFileWithCreate(currentContent, moduleId, files);
             }
             updatedModulesContent = currentContent;
 
@@ -415,7 +566,7 @@ export const pushCommand = defineCommand({
         detectDiff({
           targetDir,
           templateDir,
-          moduleIds: config.modules,
+          moduleIds: effectiveModuleIds,
           config,
           moduleList,
         }),
@@ -455,7 +606,7 @@ export const pushCommand = defineCommand({
           !args.force && modulesRawContent
             ? await detectUntrackedFiles({
                 targetDir,
-                moduleIds: config.modules,
+                moduleIds: effectiveModuleIds,
                 config,
                 moduleList,
               })
@@ -467,6 +618,7 @@ export const pushCommand = defineCommand({
           pushableFiles,
           untrackedByFolder,
           defaultTitle: args.message,
+          modulesFileChange: updatedModulesContent ? MODULES_FILE_PATH : undefined,
         });
 
         const manifestPath = await saveManifest(targetDir, manifest);
@@ -477,6 +629,11 @@ export const pushCommand = defineCommand({
 
         console.log(`  ${pc.bold("File:")} ${pc.cyan(manifestPath)}`);
         console.log(`  ${pc.bold("Files:")} ${pushableFiles.length} files ready to push`);
+        if (updatedModulesContent) {
+          console.log(
+            `  ${pc.bold("Modules:")} modules.jsonc will be updated (new modules/patterns detected)`,
+          );
+        }
         if (untrackedByFolder.length > 0) {
           const untrackedCount = untrackedByFolder.reduce((sum, f) => sum + f.files.length, 0);
           console.log(
