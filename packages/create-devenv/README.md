@@ -68,8 +68,10 @@ ARGUMENTS
 
 OPTIONS
 
-    `--force`    Overwrite existing files
-  `-y, --yes`    Select all modules (non-interactive mode)
+                   `--force`    Overwrite existing files
+                 `-y, --yes`    Select all modules (non-interactive mode)
+             `-m, --modules`    Comma-separated module IDs to apply (non-interactive)
+  `-s, --overwrite-strategy`    Overwrite strategy: overwrite, skip, or prompt (non-interactive)
 ```
 
 ### `push`
