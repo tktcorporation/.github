@@ -54,10 +54,37 @@ npx @tktco/create-devenv track ".cloud/rules/*.md"            # Add pattern (aut
 npx @tktco/create-devenv track ".cloud/config.json" -m .cloud # Specify module explicitly
 npx @tktco/create-devenv track --list                         # List tracked modules/patterns
 
+# Show differences and detect untracked files
+npx @tktco/create-devenv diff              # Show differences (also reports untracked files)
+
 # Other commands
 npx @tktco/create-devenv init [dir]        # Apply template (interactive)
-npx @tktco/create-devenv diff              # Show differences
+npx @tktco/create-devenv ai-docs           # Show this guide
 \`\`\``,
+    },
+    {
+      title: "Important: Untracked Files and the Track Command",
+      content: `**The \`push\` and \`diff\` commands only operate on files that are in the sync whitelist (tracked patterns).**
+If you create new files or directories that don't match any existing pattern, they will appear as **untracked** and will NOT be included in diffs or push operations.
+
+To sync these files to the template, you **must** first add them to tracking:
+
+\`\`\`bash
+# 1. Check for untracked files
+npx @tktco/create-devenv diff
+
+# 2. Add untracked files to the whitelist
+npx @tktco/create-devenv track "<file-or-glob-pattern>"
+
+# 3. Now push will include these files
+npx @tktco/create-devenv push --prepare
+\`\`\`
+
+**Key points:**
+- \`diff\` will report untracked files and suggest using \`track\`
+- \`push --prepare\` will list untracked files in the manifest (with \`selected: false\` by default)
+- \`track\` is non-interactive and designed for AI agents — no prompts required
+- After running \`track\`, re-run \`push --prepare\` to include the newly tracked files`,
     },
     {
       title: "Push Workflow for AI Agents",
@@ -182,11 +209,12 @@ npx @tktco/create-devenv track --list
     {
       title: "Best Practices for AI Agents",
       content: `1. **Always use \`--prepare\` then \`--execute\`** for non-interactive operation
-2. **Review the diff first** with \`npx @tktco/create-devenv diff\`
-3. **Set meaningful PR titles** that follow conventional commits (e.g., \`feat:\`, \`fix:\`, \`docs:\`)
-4. **Deselect unrelated changes** by setting \`selected: false\`
-5. **Use environment variables** for tokens instead of hardcoding in manifest
-6. **Use \`track\` command** to add new files to the sync whitelist before pushing`,
+2. **Review the diff first** with \`npx @tktco/create-devenv diff\` — this also reports untracked files
+3. **Check for untracked files** — if \`diff\` or \`push --prepare\` reports untracked files, use \`track\` to add them before pushing
+4. **Use \`track\` command** to add new files to the sync whitelist (non-interactive, no prompts)
+5. **Set meaningful PR titles** that follow conventional commits (e.g., \`feat:\`, \`fix:\`, \`docs:\`)
+6. **Deselect unrelated changes** by setting \`selected: false\`
+7. **Use environment variables** for tokens instead of hardcoding in manifest`,
     },
     {
       title: "Track + Push: Adding New Files to Template",
