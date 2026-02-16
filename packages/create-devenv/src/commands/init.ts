@@ -61,6 +61,16 @@ export const initCommand = defineCommand({
       description: "Select all modules (non-interactive mode)",
       default: false,
     },
+    modules: {
+      type: "string",
+      alias: "m",
+      description: "Comma-separated module IDs to apply (non-interactive)",
+    },
+    "overwrite-strategy": {
+      type: "string",
+      alias: "s",
+      description: "Overwrite strategy: overwrite, skip, or prompt (non-interactive)",
+    },
   },
   async run({ args }) {
     // ヘッダー表示
@@ -103,12 +113,55 @@ export const initCommand = defineCommand({
       log.newline();
 
       let answers: Answers;
-      if (args.yes) {
+      const hasModulesArg = typeof args.modules === "string" && args.modules.length > 0;
+      const hasStrategyArg =
+        typeof args["overwrite-strategy"] === "string" && args["overwrite-strategy"].length > 0;
+
+      if (args.yes || hasModulesArg) {
+        // --yes: 全モジュール選択、--modules: 指定モジュール選択
+        let selectedModules: string[];
+        if (hasModulesArg) {
+          const requestedIds = (args.modules as string).split(",").map((s) => s.trim());
+          const validIds = moduleList.map((m) => m.id);
+          const invalidIds = requestedIds.filter((id) => !validIds.includes(id));
+          if (invalidIds.length > 0) {
+            log.error(
+              `Unknown module(s): ${invalidIds.join(", ")}. Available: ${validIds.join(", ")}`,
+            );
+            return;
+          }
+          selectedModules = requestedIds;
+        } else {
+          selectedModules = moduleList.map((m) => m.id);
+        }
+
+        // --overwrite-strategy: 指定戦略、なければ overwrite
+        let overwriteStrategy: OverwriteStrategy = "overwrite";
+        if (hasStrategyArg) {
+          const strategy = args["overwrite-strategy"] as string;
+          if (strategy !== "overwrite" && strategy !== "skip" && strategy !== "prompt") {
+            log.error(
+              `Invalid overwrite strategy: ${strategy}. Must be: overwrite, skip, or prompt`,
+            );
+            return;
+          }
+          overwriteStrategy = strategy;
+        }
+
         answers = {
-          modules: moduleList.map((m) => m.id),
-          overwriteStrategy: "overwrite",
+          modules: selectedModules,
+          overwriteStrategy,
         };
-        log.info(`Auto-selected ${pc.cyan(moduleList.length.toString())} modules`);
+        log.info(`Selected ${pc.cyan(selectedModules.length.toString())} modules`);
+      } else if (hasStrategyArg) {
+        // --overwrite-strategy のみ指定：モジュール選択はインタラクティブ
+        const strategy = args["overwrite-strategy"] as string;
+        if (strategy !== "overwrite" && strategy !== "skip" && strategy !== "prompt") {
+          log.error(`Invalid overwrite strategy: ${strategy}. Must be: overwrite, skip, or prompt`);
+          return;
+        }
+        answers = await promptInit(moduleList);
+        answers.overwriteStrategy = strategy;
       } else {
         answers = await promptInit(moduleList);
       }

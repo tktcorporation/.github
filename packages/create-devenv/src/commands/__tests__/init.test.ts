@@ -311,6 +311,173 @@ describe("initCommand", () => {
       expect(mockCleanup).toHaveBeenCalled();
     });
 
+    it("--modules オプションで指定モジュールのみ選択", async () => {
+      vol.fromJSON({
+        "/test": null,
+      });
+
+      mockFetchTemplates.mockResolvedValue([{ action: "copied", path: ".mcp.json" }]);
+
+      await (initCommand.run as any)({
+        args: { dir: "/test", force: false, yes: false, modules: "." },
+        rawArgs: [],
+        cmd: initCommand,
+      });
+
+      // promptInit は呼ばれない（非インタラクティブ）
+      expect(mockPromptInit).not.toHaveBeenCalled();
+      // fetchTemplates は指定モジュールで呼ばれる
+      expect(mockFetchTemplates).toHaveBeenCalledWith(
+        expect.objectContaining({
+          modules: ["."],
+        }),
+      );
+    });
+
+    it("--modules で複数モジュールをカンマ区切りで指定", async () => {
+      vol.fromJSON({
+        "/test": null,
+      });
+
+      mockFetchTemplates.mockResolvedValue([]);
+
+      await (initCommand.run as any)({
+        args: { dir: "/test", force: false, yes: false, modules: ".,.github" },
+        rawArgs: [],
+        cmd: initCommand,
+      });
+
+      expect(mockPromptInit).not.toHaveBeenCalled();
+      expect(mockFetchTemplates).toHaveBeenCalledWith(
+        expect.objectContaining({
+          modules: [".", ".github"],
+        }),
+      );
+    });
+
+    it("--modules で無効なモジュール ID を指定するとエラー", async () => {
+      vol.fromJSON({
+        "/test": null,
+      });
+
+      await (initCommand.run as any)({
+        args: { dir: "/test", force: false, yes: false, modules: "invalid-module" },
+        rawArgs: [],
+        cmd: initCommand,
+      });
+
+      expect(mockLog.error).toHaveBeenCalledWith(expect.stringContaining("Unknown module(s)"));
+      expect(mockFetchTemplates).not.toHaveBeenCalled();
+    });
+
+    it("--overwrite-strategy で skip 戦略を指定", async () => {
+      vol.fromJSON({
+        "/test": null,
+      });
+
+      mockFetchTemplates.mockResolvedValue([]);
+
+      await (initCommand.run as any)({
+        args: {
+          dir: "/test",
+          force: false,
+          yes: true,
+          "overwrite-strategy": "skip",
+        },
+        rawArgs: [],
+        cmd: initCommand,
+      });
+
+      expect(mockFetchTemplates).toHaveBeenCalledWith(
+        expect.objectContaining({
+          overwriteStrategy: "skip",
+        }),
+      );
+    });
+
+    it("--modules と --overwrite-strategy の組み合わせ", async () => {
+      vol.fromJSON({
+        "/test": null,
+      });
+
+      mockFetchTemplates.mockResolvedValue([]);
+
+      await (initCommand.run as any)({
+        args: {
+          dir: "/test",
+          force: false,
+          yes: false,
+          modules: ".",
+          "overwrite-strategy": "skip",
+        },
+        rawArgs: [],
+        cmd: initCommand,
+      });
+
+      expect(mockPromptInit).not.toHaveBeenCalled();
+      expect(mockFetchTemplates).toHaveBeenCalledWith(
+        expect.objectContaining({
+          modules: ["."],
+          overwriteStrategy: "skip",
+        }),
+      );
+    });
+
+    it("--overwrite-strategy に無効な値を指定するとエラー", async () => {
+      vol.fromJSON({
+        "/test": null,
+      });
+
+      await (initCommand.run as any)({
+        args: {
+          dir: "/test",
+          force: false,
+          yes: true,
+          "overwrite-strategy": "invalid",
+        },
+        rawArgs: [],
+        cmd: initCommand,
+      });
+
+      expect(mockLog.error).toHaveBeenCalledWith(
+        expect.stringContaining("Invalid overwrite strategy"),
+      );
+      expect(mockFetchTemplates).not.toHaveBeenCalled();
+    });
+
+    it("--overwrite-strategy のみ指定時はモジュール選択はインタラクティブ", async () => {
+      vol.fromJSON({
+        "/test": null,
+      });
+
+      mockPromptInit.mockResolvedValueOnce({
+        modules: ["."],
+        overwriteStrategy: "prompt",
+      });
+
+      mockFetchTemplates.mockResolvedValue([]);
+
+      await (initCommand.run as any)({
+        args: {
+          dir: "/test",
+          force: false,
+          yes: false,
+          "overwrite-strategy": "skip",
+        },
+        rawArgs: [],
+        cmd: initCommand,
+      });
+
+      // モジュール選択はインタラクティブ
+      expect(mockPromptInit).toHaveBeenCalled();
+      // 戦略は --overwrite-strategy で上書き
+      expect(mockFetchTemplates).toHaveBeenCalledWith(
+        expect.objectContaining({
+          overwriteStrategy: "skip",
+        }),
+      );
+    });
+
     it("'init' 引数は無視して現在のディレクトリを使用", async () => {
       vol.fromJSON({
         ".": null,
