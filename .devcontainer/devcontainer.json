@@ -55,7 +55,7 @@
     "install-packages": [
       "bash",
       "-c",
-      "set -e; sudo apt-get update && sudo apt-get install -y build-essential fzf ripgrep bc gpg ca-certificates curl"
+      "set -e; sudo apt-get update && sudo apt-get install -y build-essential fzf ripgrep bc gpg ca-certificates curl tmux"
     ]
   },
   "updateContentCommand": {
@@ -68,7 +68,8 @@
     "trust-mise": ["mise", "trust"]
   },
   "postCreateCommand": {
-    "mise-install": "mise install"
+    "mise-install": "mise install",
+    "fix-pnpm-store-permissions": ["bash", "-lc", "sudo chown -R $(whoami) .pnpm-store"]
   },
   "postStartCommand": {
     "setup-chrome-devtools-mcp": ["bash", "-lc", ".devcontainer/setup-chrome-devtools-mcp.sh"],
