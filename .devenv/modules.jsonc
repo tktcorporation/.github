@@ -43,6 +43,8 @@
       "setupDescription": "Claude Code project settings will be applied",
       "patterns": [
         ".claude/settings.json",
+        ".claude/hooks/*.sh",
+        ".claude/rules/*.md",
         // Excluded: settings.local.json (personal settings)
       ],
     },
