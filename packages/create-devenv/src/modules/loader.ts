@@ -86,6 +86,52 @@ export function addPatternToModulesFile(
 }
 
 /**
+ * modules.jsonc にパターンを追加（モジュールが存在しない場合は作成）
+ * @returns 更新後の JSONC 文字列
+ */
+export function addPatternToModulesFileWithCreate(
+  rawContent: string,
+  moduleId: string,
+  patterns: string[],
+  moduleOptions?: { name?: string; description?: string },
+): string {
+  const parsed = parse(rawContent) as ModulesFile;
+  const moduleIndex = parsed.modules.findIndex((m) => m.id === moduleId);
+
+  if (moduleIndex !== -1) {
+    // 既存モジュールにパターンを追加
+    return addPatternToModulesFile(rawContent, moduleId, patterns);
+  }
+
+  // 新しいモジュールを作成
+  const displayName =
+    moduleOptions?.name ||
+    (moduleId === "."
+      ? "Root"
+      : moduleId
+          .replace(/^\./, "")
+          .replace(/[-_]/g, " ")
+          .replace(/\b\w/g, (c) => c.toUpperCase()));
+  const description =
+    moduleOptions?.description || `Files in ${moduleId === "." ? "root" : moduleId} directory`;
+
+  const newModule: TemplateModule = {
+    id: moduleId,
+    name: displayName,
+    description,
+    patterns,
+  };
+
+  const newModules = [...parsed.modules, newModule];
+
+  const edits = modify(rawContent, ["modules"], newModules, {
+    formattingOptions: { tabSize: 2, insertSpaces: true },
+  });
+
+  return applyEdits(rawContent, edits);
+}
+
+/**
  * modules.jsonc を保存
  */
 export async function saveModulesFile(baseDir: string, content: string): Promise<void> {

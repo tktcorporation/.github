@@ -17,6 +17,7 @@ const {
   loadModulesFile,
   getModuleByIdFromList,
   addPatternToModulesFile,
+  addPatternToModulesFileWithCreate,
   saveModulesFile,
   getModulesFilePath,
   modulesFileExists,
@@ -266,6 +267,90 @@ describe("addPatternToModulesFile", () => {
 
     const parsed = JSON.parse(result);
     expect(parsed.modules[0].patterns).toHaveLength(3);
+  });
+});
+
+describe("addPatternToModulesFileWithCreate", () => {
+  it("既存モジュールにパターンを追加できる", () => {
+    const rawContent = JSON.stringify(
+      {
+        modules: [
+          {
+            id: ".devcontainer",
+            name: "DevContainer",
+            description: "Test",
+            patterns: [".devcontainer/devcontainer.json"],
+          },
+        ],
+      },
+      null,
+      2,
+    );
+
+    const result = addPatternToModulesFileWithCreate(rawContent, ".devcontainer", [
+      ".devcontainer/new.sh",
+    ]);
+
+    const parsed = JSON.parse(result);
+    expect(parsed.modules).toHaveLength(1);
+    expect(parsed.modules[0].patterns).toContain(".devcontainer/new.sh");
+  });
+
+  it("存在しないモジュールの場合は新規作成する", () => {
+    const rawContent = JSON.stringify(
+      {
+        modules: [
+          {
+            id: ".",
+            name: "Root",
+            description: "Root files",
+            patterns: [".mcp.json"],
+          },
+        ],
+      },
+      null,
+      2,
+    );
+
+    const result = addPatternToModulesFileWithCreate(rawContent, ".cloud", [".cloud/rules/*.md"]);
+
+    const parsed = JSON.parse(result);
+    expect(parsed.modules).toHaveLength(2);
+    expect(parsed.modules[1].id).toBe(".cloud");
+    expect(parsed.modules[1].patterns).toContain(".cloud/rules/*.md");
+  });
+
+  it("新規モジュールにカスタム名と説明を設定できる", () => {
+    const rawContent = JSON.stringify({ modules: [] }, null, 2);
+
+    const result = addPatternToModulesFileWithCreate(rawContent, ".cloud", [".cloud/config.json"], {
+      name: "Cloud Rules",
+      description: "Cloud configuration files",
+    });
+
+    const parsed = JSON.parse(result);
+    expect(parsed.modules[0].name).toBe("Cloud Rules");
+    expect(parsed.modules[0].description).toBe("Cloud configuration files");
+  });
+
+  it("新規モジュールのデフォルト名を自動生成する", () => {
+    const rawContent = JSON.stringify({ modules: [] }, null, 2);
+
+    const result = addPatternToModulesFileWithCreate(rawContent, ".cloud", [".cloud/rules/*.md"]);
+
+    const parsed = JSON.parse(result);
+    expect(parsed.modules[0].name).toBe("Cloud");
+    expect(parsed.modules[0].description).toBe("Files in .cloud directory");
+  });
+
+  it("ルートモジュールのデフォルト名は Root になる", () => {
+    const rawContent = JSON.stringify({ modules: [] }, null, 2);
+
+    const result = addPatternToModulesFileWithCreate(rawContent, ".", [".new-config"]);
+
+    const parsed = JSON.parse(result);
+    expect(parsed.modules[0].name).toBe("Root");
+    expect(parsed.modules[0].description).toBe("Files in root directory");
   });
 });
 

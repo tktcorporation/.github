@@ -3,6 +3,7 @@ import type { TemplateModule } from "./schemas";
 // Re-export loader functions
 export {
   addPatternToModulesFile,
+  addPatternToModulesFileWithCreate,
   getModulesFilePath,
   loadModulesFile,
   modulesFileExists,
