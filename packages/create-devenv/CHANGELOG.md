@@ -1,5 +1,13 @@
 # @tktco/create-devenv
 
+## 0.11.1
+
+### Patch Changes
+
+- [#81](https://github.com/tktcorporation/.github/pull/81) [`b0957ca`](https://github.com/tktcorporation/.github/commit/b0957cac35cff736df8f1d8a8e74b724d8bc7c67) Thanks [@tktcorporation](https://github.com/tktcorporation)! - fix: Claude モジュールの patterns に hooks と rules を追加
+
+- [#81](https://github.com/tktcorporation/.github/pull/81) [`53a5b6f`](https://github.com/tktcorporation/.github/commit/53a5b6fad6c7e66d4016a5914cd947b4c9e10aa4) Thanks [@tktcorporation](https://github.com/tktcorporation)! - fix: push --execute で未追跡ファイルの内容が PR に含まれないバグを修正
+
 ## 0.11.0
 
 ### Minor Changes
