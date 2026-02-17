@@ -188,6 +188,8 @@ GitHub Actions and labeler workflows
 Claude Code project settings
 
 - `.claude/settings.json`
+- `.claude/hooks/*.sh`
+- `.claude/rules/*.md`
 
 ### Config
 
