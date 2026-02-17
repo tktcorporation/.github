@@ -206,6 +206,8 @@ async function runExecuteMode(
 
     // ローカルのモジュール追加を検出してマージ
     const effectiveModuleIds = [...config.modules];
+    let updatedModulesContent: string | undefined;
+
     if (modulesRawContent) {
       const localAdditions = await detectLocalModuleAdditions(
         targetDir,
@@ -213,6 +215,7 @@ async function runExecuteMode(
         modulesRawContent,
       );
       moduleList = localAdditions.mergedModuleList;
+      updatedModulesContent = localAdditions.updatedModulesContent;
       for (const id of localAdditions.newModuleIds) {
         if (!effectiveModuleIds.includes(id)) {
           effectiveModuleIds.push(id);
@@ -220,10 +223,26 @@ async function runExecuteMode(
       }
     }
 
+    // 選択された未追跡ファイルのパターンを moduleList に反映
+    // （interactive モードと同様に detectDiff の前に実行する）
+    if (selectedUntracked.size > 0 && modulesRawContent) {
+      let currentContent = updatedModulesContent || modulesRawContent;
+      for (const [moduleId, filePaths] of selectedUntracked) {
+        currentContent = addPatternToModulesFileWithCreate(currentContent, moduleId, filePaths);
+      }
+      updatedModulesContent = currentContent;
+
+      // 更新されたモジュールリストを再パースして反映
+      const parsedUpdated = parse(updatedModulesContent) as {
+        modules: TemplateModule[];
+      };
+      moduleList = parsedUpdated.modules;
+    }
+
     // Step 3: ファイル内容を取得
     step({ current: currentStep++, total: totalSteps }, "Preparing files...");
 
-    // 差分を検出してファイル内容を取得
+    // 差分を検出（更新済み moduleList を使用するため、未追跡ファイルも pushable に含まれる）
     const diff = await withSpinner("Analyzing differences...", () =>
       detectDiff({
         targetDir,
@@ -259,45 +278,31 @@ async function runExecuteMode(
       log.newline();
     }
 
-    // 選択されたファイルの内容を取得（存在するもののみ）
+    // 選択されたファイルの内容を取得
+    // マニフェストの files と untracked files の両方をフィルタ対象にする
     const pushableFiles = getPushableFiles(diff);
-    const selectedFiles = pushableFiles.filter((f) => selectedFilePaths.includes(f.path));
+    const allSelectedPaths = [
+      ...selectedFilePaths,
+      ...Array.from(selectedUntracked.values()).flat(),
+    ];
+    const selectedFiles = pushableFiles.filter((f) => allSelectedPaths.includes(f.path));
 
     const files: { path: string; content: string }[] = selectedFiles.map((f) => ({
       path: f.path,
       content: f.localContent || "",
     }));
 
-    // modules.jsonc の変更を処理
-    // ローカルモジュール追加 + 未追跡ファイルのパターン追加を統合
-    if (modulesRawContent) {
-      const localAdditions = await detectLocalModuleAdditions(
-        targetDir,
-        moduleList,
-        modulesRawContent,
-      );
-      let modulesContent = localAdditions.updatedModulesContent || modulesRawContent;
-      let hasModulesChange = !!localAdditions.updatedModulesContent;
-
-      // 選択された未追跡ファイルのパターンも追加
-      if (selectedUntracked.size > 0) {
-        for (const [moduleId, filePaths] of selectedUntracked) {
-          modulesContent = addPatternToModulesFileWithCreate(modulesContent, moduleId, filePaths);
-        }
-        hasModulesChange = true;
-      }
-
-      // modules.jsonc が選択されている場合、または未追跡ファイルがある場合にPRに含める
+    // modules.jsonc の変更があれば追加
+    if (updatedModulesContent) {
       const modulesInManifest = selectedFilePaths.includes(MODULES_FILE_PATH);
-      if (hasModulesChange && (modulesInManifest || selectedUntracked.size > 0)) {
-        // 既に通常のファイルとして含まれている場合は上書き
+      if (modulesInManifest || selectedUntracked.size > 0) {
         const existingIdx = files.findIndex((f) => f.path === MODULES_FILE_PATH);
         if (existingIdx !== -1) {
-          files[existingIdx].content = modulesContent;
+          files[existingIdx].content = updatedModulesContent;
         } else {
           files.push({
             path: MODULES_FILE_PATH,
-            content: modulesContent,
+            content: updatedModulesContent,
           });
         }
       }
