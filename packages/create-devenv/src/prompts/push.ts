@@ -1,9 +1,7 @@
-import * as readline from "node:readline";
 import { checkbox, confirm, input, password, Separator } from "@inquirer/prompts";
-import { match, P } from "ts-pattern";
 import type { DiffResult, FileDiff } from "../modules/schemas";
 import { formatDiff } from "../utils/diff";
-import { getFileLabel, showDiffSummaryBox, showFileDiffBox } from "../utils/diff-viewer";
+import { getFileLabel, showDiffSummaryBox } from "../utils/diff-viewer";
 import type { UntrackedFile, UntrackedFilesByFolder } from "../utils/untracked";
 
 export interface SelectedUntrackedFiles {
@@ -88,166 +86,19 @@ export async function promptGitHubToken(): Promise<string> {
   });
 }
 
-// ────────────────────────────────────────────────────────────────
-// キーアクション定義
-// ────────────────────────────────────────────────────────────────
-
-/** キー操作によるアクション */
-type KeyAction = "next" | "prev" | "exit" | "forceExit" | "none";
-
-/** キー入力をアクションに変換 */
-const classifyKeyAction = (key: readline.Key): KeyAction =>
-  match(key)
-    .with({ ctrl: true, name: "c" }, () => "forceExit" as const)
-    .with({ name: P.union("n", "right", "down", "j") }, () => "next" as const)
-    .with({ name: P.union("p", "left", "up", "k") }, () => "prev" as const)
-    .with({ name: P.union("return", "q", "escape") }, () => "exit" as const)
-    .otherwise(() => "none" as const);
-
-// ────────────────────────────────────────────────────────────────
-// インタラクティブ diff ビューア
-// ────────────────────────────────────────────────────────────────
-
-/**
- * インタラクティブ diff ビューア
- * n/p キーでファイル間をナビゲート、Enter または q で終了
- */
-async function interactiveDiffViewer(files: FileDiff[]): Promise<void> {
-  if (files.length === 0) return;
-
-  // TTY でない場合は全ファイルを順次表示
-  if (!process.stdin.isTTY) {
-    files.forEach((file, i) => {
-      showFileDiffBox(file, i, files.length, { showLineNumbers: true });
-    });
-    return;
-  }
-
-  let currentIndex = 0;
-
-  const showCurrentDiff = (): void => {
-    console.clear();
-    showFileDiffBox(files[currentIndex], currentIndex, files.length, {
-      showLineNumbers: true,
-      maxLines: 30,
-    });
-  };
-
-  return new Promise((resolve) => {
-    try {
-      // @inquirer/prompts が登録した keypress リスナーが残っている可能性があるため、
-      // 新しいリスナーを登録する前にすべて削除して競合を防ぐ
-      process.stdin.removeAllListeners("keypress");
-
-      let cleanedUp = false;
-
-      const cleanup = (): void => {
-        if (cleanedUp) return;
-        cleanedUp = true;
-        try {
-          process.stdin.removeListener("keypress", handleKeypress);
-        } catch {
-          // リスナー削除の失敗は無視
-        }
-        try {
-          process.stdin.setRawMode(false);
-        } catch {
-          console.error(
-            "ターミナルの raw モード解除に失敗しました。ターミナルが正常に動作しない場合は `reset` コマンドを実行してください。",
-          );
-        }
-        try {
-          // 次の @inquirer/prompts が使えるよう stdin を resume 状態に戻す
-          process.stdin.resume();
-        } catch {
-          console.error(
-            "標準入力の再開に失敗しました。後続のプロンプトが正常に動作しない可能性があります。",
-          );
-        }
-      };
-
-      const handleKeypress = (_str: string, key: readline.Key): void => {
-        const action = classifyKeyAction(key);
-
-        match(action)
-          .with("next", () => {
-            if (currentIndex < files.length - 1) {
-              currentIndex++;
-              showCurrentDiff();
-            }
-          })
-          .with("prev", () => {
-            if (currentIndex > 0) {
-              currentIndex--;
-              showCurrentDiff();
-            }
-          })
-          .with("exit", () => {
-            cleanup();
-            console.clear();
-            resolve();
-          })
-          .with("forceExit", () => {
-            try {
-              cleanup();
-            } catch {
-              // cleanup エラーは無視
-            }
-            process.exit(0);
-          })
-          .with("none", () => {
-            // 未知のキーは無視
-          })
-          .exhaustive();
-      };
-
-      // stdin をセットアップ
-      readline.emitKeypressEvents(process.stdin);
-      process.stdin.setRawMode(true);
-      process.stdin.resume();
-      process.stdin.on("keypress", handleKeypress);
-
-      showCurrentDiff();
-    } catch (error) {
-      // セットアップ失敗時はフォールバック（非インタラクティブ表示）
-      console.error(
-        "インタラクティブ diff ビューアのセットアップに失敗しました。非インタラクティブモードで表示します。",
-        error,
-      );
-      files.forEach((file, i) => {
-        showFileDiffBox(file, i, files.length, { showLineNumbers: true });
-      });
-      resolve();
-    }
-  });
-}
-
 /**
  * diff を表示しながらファイルを選択するプロンプト
- * Option 2: サマリー → オプションで詳細確認 → ファイル選択
+ * サマリー表示後、直接ファイル選択チェックボックスを表示
  */
 export async function promptSelectFilesWithDiff(pushableFiles: FileDiff[]): Promise<FileDiff[]> {
   if (pushableFiles.length === 0) {
     return [];
   }
 
-  // Step 1: サマリーボックスを表示
+  // サマリーボックスを表示
   showDiffSummaryBox(pushableFiles);
 
-  // Step 2: 詳細確認するか確認
-  const viewDetails = await confirm({
-    message: "詳細な diff を確認しますか？",
-    default: false,
-  });
-
-  if (viewDetails) {
-    // Step 3: インタラクティブ diff ビューア
-    await interactiveDiffViewer(pushableFiles);
-    // 再度サマリーを表示
-    showDiffSummaryBox(pushableFiles);
-  }
-
-  // Step 4: チェックボックスでファイル選択
+  // チェックボックスでファイル選択（デフォルト全選択）
   const choices = pushableFiles.map((file) => ({
     name: getFileLabel(file),
     value: file,
@@ -262,7 +113,7 @@ export async function promptSelectFilesWithDiff(pushableFiles: FileDiff[]): Prom
 
 /**
  * ホワイトリスト外ファイルの追加確認プロンプト
- * 2ステップUI: フォルダ選択 → ファイル選択
+ * ホワイトリスト形式: 全ファイルをデフォルト選択状態で表示し、不要なものを外す
  */
 export async function promptAddUntrackedFiles(
   untrackedByFolder: UntrackedFilesByFolder[],
@@ -280,29 +131,11 @@ export async function promptAddUntrackedFiles(
   }
   console.log();
 
-  // Step 1: 詳細を確認するフォルダを選択
-  const folderChoices = untrackedByFolder.map(({ folder, files }) => ({
-    name: `${folder} (${files.length}件)`,
-    value: folder,
-    checked: true, // デフォルトで全選択
-  }));
+  // 全ファイルをフォルダ別ツリー形式で表示（デフォルト全選択）
+  const allFileChoices: ({ name: string; value: UntrackedFile; checked: boolean } | Separator)[] =
+    [];
 
-  const selectedFolders = await checkbox<string>({
-    message: "詳細を確認するフォルダを選択してください",
-    choices: folderChoices,
-  });
-
-  if (selectedFolders.length === 0) {
-    return [];
-  }
-
-  // 選択されたフォルダのファイルのみを抽出
-  const selectedFolderData = untrackedByFolder.filter((f) => selectedFolders.includes(f.folder));
-
-  // Step 2: ファイルを選択（罫線付きツリー形式で表示）
-  const allFileChoices: ({ name: string; value: UntrackedFile } | Separator)[] = [];
-
-  for (const { folder, files } of selectedFolderData) {
+  for (const { folder, files } of untrackedByFolder) {
     // フォルダヘッダーを追加
     allFileChoices.push(new Separator(`\n  ── ${folder} ──`));
 
@@ -323,6 +156,7 @@ export async function promptAddUntrackedFiles(
       allFileChoices.push({
         name: `${prefix} ${relativePath}`,
         value: file,
+        checked: true,
       });
     }
   }
