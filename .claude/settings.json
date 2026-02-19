@@ -5,7 +5,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": ".claude/hooks/ensure-jj.sh"
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/ensure-jj.sh\""
           }
         ]
       }
@@ -16,7 +16,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": ".claude/hooks/prefer-jj.sh"
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/prefer-jj.sh\""
           }
         ]
       }
