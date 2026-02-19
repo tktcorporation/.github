@@ -7,7 +7,11 @@
       "name": "Root",
       "description": "MCP, mise, and other root-level config files",
       "setupDescription": "Root config files will be applied",
-      "patterns": [".mcp.json", ".mise.toml"],
+      "patterns": [
+        ".mcp.json",
+        ".mise.toml",
+        ".devenv.json"
+      ],
     },
     {
       "id": ".devcontainer",
