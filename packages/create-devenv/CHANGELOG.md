@@ -1,5 +1,11 @@
 # @tktco/create-devenv
 
+## 0.11.2
+
+### Patch Changes
+
+- [#88](https://github.com/tktcorporation/.github/pull/88) [`8add69e`](https://github.com/tktcorporation/.github/commit/8add69e276683020ee855b5d3e8566f2a1b28054) Thanks [@tktcorporation](https://github.com/tktcorporation)! - `push --execute` で PR 作成成功後に `.devenv-push-manifest.yaml` を自動削除するように変更
+
 ## 0.11.1
 
 ### Patch Changes
