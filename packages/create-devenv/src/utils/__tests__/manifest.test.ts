@@ -14,6 +14,7 @@ vi.mock("node:fs", async () => {
 
 // モック後にインポート
 const {
+  deleteManifest,
   generateManifest,
   serializeManifest,
   saveManifest,
@@ -188,6 +189,28 @@ describe("manifestExists", () => {
     vol.fromJSON({});
 
     expect(manifestExists("/project")).toBe(false);
+  });
+});
+
+describe("deleteManifest", () => {
+  beforeEach(() => {
+    vol.reset();
+  });
+
+  it("マニフェストファイルを削除できる", async () => {
+    vol.fromJSON({
+      [`/project/${MANIFEST_FILENAME}`]: "version: 1",
+    });
+
+    expect(manifestExists("/project")).toBe(true);
+    await deleteManifest("/project");
+    expect(manifestExists("/project")).toBe(false);
+  });
+
+  it("マニフェストファイルが存在しない場合でもエラーにならない", async () => {
+    vol.fromJSON({});
+
+    await expect(deleteManifest("/project")).resolves.not.toThrow();
   });
 });
 

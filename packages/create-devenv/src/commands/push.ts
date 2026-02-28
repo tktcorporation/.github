@@ -23,6 +23,7 @@ import {
 import { detectDiff, formatDiff, getPushableFiles } from "../utils/diff";
 import { createPullRequest, getGitHubToken } from "../utils/github";
 import {
+  deleteManifest,
   generateManifest,
   getSelectedFilePaths,
   getSelectedUntrackedFiles,
@@ -350,6 +351,9 @@ async function runExecuteMode(
       }),
     );
 
+    // マニフェストファイルを自動削除（PR作成に成功したので不要）
+    await deleteManifest(targetDir);
+
     // 成功メッセージ
     box("Pull request created!", "success");
 
@@ -358,12 +362,12 @@ async function runExecuteMode(
     console.log(`  ${pc.bold("Files:")}  ${files.length} files included`);
     log.newline();
 
+    log.dim(`Cleaned up ${MANIFEST_FILENAME}`);
+    log.newline();
+
     showNextSteps([
       {
         description: `Review and merge the PR at ${result.url}`,
-      },
-      {
-        description: `Delete ${MANIFEST_FILENAME} after PR is merged`,
       },
     ]);
   } finally {

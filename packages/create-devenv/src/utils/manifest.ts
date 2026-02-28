@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { readFile, writeFile } from "node:fs/promises";
+import { readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "pathe";
 import { stringify, parse } from "yaml";
 import type { FileDiff, PushManifest, DiffResult } from "../modules/schemas";
@@ -191,6 +191,19 @@ export async function loadManifest(targetDir: string): Promise<PushManifest> {
   }
 
   return result.data;
+}
+
+/**
+ * マニフェストファイルを削除する。
+ *
+ * 背景: --execute でPR作成が成功した後、マニフェストはもう不要なので自動的にクリーンアップする。
+ * ファイルが存在しない場合は何もしない。
+ */
+export async function deleteManifest(targetDir: string): Promise<void> {
+  const manifestPath = join(targetDir, MANIFEST_FILENAME);
+  if (existsSync(manifestPath)) {
+    await rm(manifestPath);
+  }
 }
 
 /**
