@@ -18,6 +18,88 @@ importers:
         specifier: ^4.59.0
         version: 4.59.0
 
+  packages/berm:
+    dependencies:
+      '@inquirer/prompts':
+        specifier: ^8.0.2
+        version: 8.0.2(@types/node@22.19.2)
+      '@octokit/rest':
+        specifier: ^22.0.1
+        version: 22.0.1
+      citty:
+        specifier: ^0.1.6
+        version: 0.1.6
+      cli-highlight:
+        specifier: ^2.1.11
+        version: 2.1.11
+      consola:
+        specifier: ^3.4.2
+        version: 3.4.2
+      defu:
+        specifier: ^6.1.4
+        version: 6.1.4
+      diff:
+        specifier: ^8.0.3
+        version: 8.0.3
+      giget:
+        specifier: ^2.0.0
+        version: 2.0.0
+      ignore:
+        specifier: ^7.0.5
+        version: 7.0.5
+      jsonc-parser:
+        specifier: ^3.3.1
+        version: 3.3.1
+      nanospinner:
+        specifier: ^1.2.2
+        version: 1.2.2
+      pathe:
+        specifier: ^2.0.3
+        version: 2.0.3
+      picocolors:
+        specifier: ^1.1.1
+        version: 1.1.1
+      tinyglobby:
+        specifier: ^0.2.15
+        version: 0.2.15
+      ts-pattern:
+        specifier: ^5.9.0
+        version: 5.9.0
+      yaml:
+        specifier: ^2.8.2
+        version: 2.8.2
+      zod:
+        specifier: ^4.1.13
+        version: 4.1.13
+    devDependencies:
+      '@types/node':
+        specifier: ^22.19.2
+        version: 22.19.2
+      '@vitest/coverage-v8':
+        specifier: ^4.0.15
+        version: 4.0.15(vitest@4.0.15(@types/node@22.19.2)(jiti@2.6.1)(yaml@2.8.2))
+      memfs:
+        specifier: ^4.51.1
+        version: 4.51.1
+      oxfmt:
+        specifier: ^0.19.0
+        version: 0.19.0
+      oxlint:
+        specifier: ^1.0.0
+        version: 1.34.0(oxlint-tsgolint@0.15.0)
+      oxlint-tsgolint:
+        specifier: latest
+        version: 0.15.0
+      tsdown:
+        specifier: ^0.18.1
+        version: 0.18.1(typescript@5.9.3)
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^4.0.15
+        version: 4.0.15(@types/node@22.19.2)(jiti@2.6.1)(yaml@2.8.2)
+
   packages/create-devenv:
     dependencies:
       '@inquirer/prompts':
