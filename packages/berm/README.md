@@ -1,18 +1,29 @@
-# @tktco/berm
+<p align="center">
+<br>
+<h1 align="center">berm</h1>
+<p align="center">
+A bi-directional dev environment template that evolves with you.
+</p>
+<br>
+<p align="center">
+<a href="https://www.npmjs.com/package/@tktco/berm"><img src="https://img.shields.io/npm/v/@tktco/berm?color=a1b858&label=" alt="npm version"></a>
+<a href="https://www.npmjs.com/package/@tktco/berm"><img src="https://img.shields.io/npm/dm/@tktco/berm?color=50a36f&label=" alt="npm downloads"></a>
+<a href="https://github.com/tktcorporation/.github/blob/main/LICENSE"><img src="https://img.shields.io/github/license/tktcorporation/.github?color=blue&label=" alt="license"></a>
+</p>
+<br>
+</p>
 
-A bi-directional dev environment template that evolves as you use it.
+> _berm_ — a shaped, maintained buffer zone between structures. Like a berm bridges terrain, this tool bridges the gap between your template and your projects.
 
 ## Why
 
-The rise of AI-powered tools like Claude Code has changed how we work. Best practices evolve daily—new workflows, new configs, new integrations. And with multiple projects running in parallel, keeping dev environments in sync becomes a real challenge.
+Templates go stale the moment you scaffold them. Each project improves upon the original — better configs, new workflows, refined settings — but those improvements never flow back.
 
-Templates go stale the moment you create them. Each project improves upon the original—better configs, new workflows, refined settings—but those improvements never flow back. The template stays frozen while the real world moves on.
-
-This tool solves that with **bi-directional sync**:
+**berm** solves this with bi-directional sync:
 
 - **`init`** — Pull the latest template into your project
 - **`push`** — Push your improvements back to the template
-- **`diff`** — See what's changed between your project and the template
+- **`diff`** — See what's changed
 
 Your template stays alive, fed by every project that uses it.
 
@@ -203,4 +214,4 @@ See [CONTRIBUTING.md](./CONTRIBUTING.md).
 
 ## License
 
-MIT
+[MIT](./LICENSE) License &copy; [tktcorporation](https://github.com/tktcorporation)
