@@ -59,14 +59,14 @@ export const trackCommand = defineCommand({
     },
   },
   async run({ args }) {
-    showHeader("create-devenv track");
+    showHeader("berm track");
 
     const targetDir = resolve(args.dir);
 
     // modules.jsonc の存在確認
     if (!modulesFileExists(targetDir)) {
       log.error(".devenv/modules.jsonc not found.");
-      log.dim("Run 'create-devenv init' first to set up the project.");
+      log.dim("Run 'berm init' first to set up the project.");
       process.exit(1);
     }
 
@@ -125,8 +125,8 @@ export const trackCommand = defineCommand({
 
     if (patterns.length === 0) {
       log.error("No patterns specified.");
-      log.dim("Usage: create-devenv track <patterns...> [--module <id>]");
-      log.dim("Example: create-devenv track '.cloud/rules/*.md' '.cloud/config.json'");
+      log.dim("Usage: berm track <patterns...> [--module <id>]");
+      log.dim("Example: berm track '.cloud/rules/*.md' '.cloud/config.json'");
       process.exit(1);
     }
 

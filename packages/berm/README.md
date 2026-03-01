@@ -1,18 +1,29 @@
-# @tktco/create-devenv
+<p align="center">
+<br>
+<h1 align="center">berm</h1>
+<p align="center">
+A bi-directional dev environment template that evolves with you.
+</p>
+<br>
+<p align="center">
+<a href="https://www.npmjs.com/package/@tktco/berm"><img src="https://img.shields.io/npm/v/@tktco/berm?color=a1b858&label=" alt="npm version"></a>
+<a href="https://www.npmjs.com/package/@tktco/berm"><img src="https://img.shields.io/npm/dm/@tktco/berm?color=50a36f&label=" alt="npm downloads"></a>
+<a href="https://github.com/tktcorporation/.github/blob/main/LICENSE"><img src="https://img.shields.io/github/license/tktcorporation/.github?color=blue&label=" alt="license"></a>
+</p>
+<br>
+</p>
 
-A bi-directional dev environment template that evolves as you use it.
+> _berm_ — a shaped, maintained buffer zone between structures. Like a berm bridges terrain, this tool bridges the gap between your template and your projects.
 
 ## Why
 
-The rise of AI-powered tools like Claude Code has changed how we work. Best practices evolve daily—new workflows, new configs, new integrations. And with multiple projects running in parallel, keeping dev environments in sync becomes a real challenge.
+Templates go stale the moment you scaffold them. Each project improves upon the original — better configs, new workflows, refined settings — but those improvements never flow back.
 
-Templates go stale the moment you create them. Each project improves upon the original—better configs, new workflows, refined settings—but those improvements never flow back. The template stays frozen while the real world moves on.
-
-This tool solves that with **bi-directional sync**:
+**berm** solves this with bi-directional sync:
 
 - **`init`** — Pull the latest template into your project
 - **`push`** — Push your improvements back to the template
-- **`diff`** — See what's changed between your project and the template
+- **`diff`** — See what's changed
 
 Your template stays alive, fed by every project that uses it.
 
@@ -22,16 +33,16 @@ Your template stays alive, fed by every project that uses it.
 
 ```bash
 # Apply template to current directory
-npx @tktco/create-devenv
+npx @tktco/berm
 
 # Apply to a specific directory
-npx @tktco/create-devenv ./my-project
+npx @tktco/berm ./my-project
 
 # Push your improvements back
-npx @tktco/create-devenv push -m "Add new workflow"
+npx @tktco/berm push -m "Add new workflow"
 
 # Check what's different
-npx @tktco/create-devenv diff
+npx @tktco/berm diff
 ```
 
 <!-- USAGE:END -->
@@ -58,9 +69,9 @@ Pick what you need:
 Apply dev environment template to your project
 
 ```
-Apply dev environment template to your project (create-devenv vdev)
+Apply dev environment template to your project (berm vdev)
 
-USAGE `create-devenv [OPTIONS] [DIR]`
+USAGE `berm [OPTIONS] [DIR]`
 
 ARGUMENTS
 
@@ -135,18 +146,18 @@ AI coding agents can use the non-interactive workflow:
 
 ```bash
 # 1. Generate manifest file
-npx @tktco/create-devenv push --prepare
+npx @tktco/berm push --prepare
 
 # 2. Edit .devenv-push-manifest.yaml to select files and set PR details
 
 # 3. Create PR from manifest
-npx @tktco/create-devenv push --execute
+npx @tktco/berm push --execute
 ```
 
 For detailed documentation, run:
 
 ```bash
-npx @tktco/create-devenv ai-docs
+npx @tktco/berm ai-docs
 ```
 
 <!-- AI_AGENTS:END -->
@@ -203,4 +214,4 @@ See [CONTRIBUTING.md](./CONTRIBUTING.md).
 
 ## License
 
-MIT
+[MIT](./LICENSE) License &copy; [tktcorporation](https://github.com/tktcorporation)

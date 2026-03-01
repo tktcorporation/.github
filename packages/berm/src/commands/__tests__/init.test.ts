@@ -94,7 +94,7 @@ describe("initCommand", () => {
 
   describe("meta", () => {
     it("コマンドメタデータが正しい", () => {
-      expect((initCommand.meta as { name: string }).name).toBe("create-devenv");
+      expect((initCommand.meta as { name: string }).name).toBe("berm");
       expect((initCommand.meta as { description: string }).description).toBe(
         "Apply dev environment template to your project",
       );

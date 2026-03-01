@@ -40,7 +40,7 @@ export const diffCommand = defineCommand({
     },
   },
   async run({ args }) {
-    showHeader("create-devenv diff");
+    showHeader("berm diff");
 
     const targetDir = resolve(args.dir);
     const configPath = join(targetDir, ".devenv.json");
@@ -136,9 +136,9 @@ export const diffCommand = defineCommand({
           log.info(
             `To include these files in sync, add them to tracking with the ${pc.cyan("track")} command:`,
           );
-          log.dim(`  npx @tktco/create-devenv track "<pattern>"`);
+          log.dim(`  npx @tktco/berm track "<pattern>"`);
           log.dim(
-            `  Example: npx @tktco/create-devenv track "${untrackedByFolder[0]?.files[0]?.path || ".cloud/rules/*.md"}"`,
+            `  Example: npx @tktco/berm track "${untrackedByFolder[0]?.files[0]?.path || ".cloud/rules/*.md"}"`,
           );
         }
 
@@ -146,17 +146,17 @@ export const diffCommand = defineCommand({
 
         const nextSteps = [
           {
-            command: "npx @tktco/create-devenv push",
+            command: "npx @tktco/berm push",
             description: "Push your local changes to the template repository",
           },
           {
-            command: "npx @tktco/create-devenv diff --verbose",
+            command: "npx @tktco/berm diff --verbose",
             description: "Show detailed diff output",
           },
         ];
         if (untrackedCount > 0) {
           nextSteps.push({
-            command: "npx @tktco/create-devenv track <pattern>",
+            command: "npx @tktco/berm track <pattern>",
             description: "Add untracked files to the sync whitelist so they can be pushed",
           });
         }
@@ -174,7 +174,7 @@ export const diffCommand = defineCommand({
         }
         log.newline();
         log.info(
-          `Use ${pc.cyan("npx @tktco/create-devenv track <pattern>")} to add them, then ${pc.cyan("push")} to sync.`,
+          `Use ${pc.cyan("npx @tktco/berm track <pattern>")} to add them, then ${pc.cyan("push")} to sync.`,
         );
         log.newline();
       } else {

@@ -3,7 +3,7 @@
 ## 開発環境セットアップ
 
 ```bash
-cd packages/create-devenv
+cd packages/berm
 
 # 依存関係のインストール
 pnpm install

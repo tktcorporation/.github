@@ -36,7 +36,7 @@ export function showLogo(): void {
   const lines = [
     "╔═══════════════════════════════════════╗",
     "║                                       ║",
-    "║     create-devenv                     ║",
+    "║     berm                     ║",
     "║     Dev Environment Template Manager  ║",
     "║                                       ║",
     "╚═══════════════════════════════════════╝",

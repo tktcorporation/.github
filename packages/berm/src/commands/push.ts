@@ -275,7 +275,7 @@ async function runExecuteMode(
       if (newFiles.length > 0) {
         log.dim(`  New files (changed but not in manifest): ${newFiles.join(", ")}`);
       }
-      log.dim("  Consider running 'create-devenv push --prepare' to regenerate the manifest.");
+      log.dim("  Consider running 'berm push --prepare' to regenerate the manifest.");
       log.newline();
     }
 
@@ -426,7 +426,7 @@ export const pushCommand = defineCommand({
     },
   },
   async run({ args }) {
-    showHeader("create-devenv push");
+    showHeader("berm push");
 
     // --prepare と --execute の相互排他チェック
     if (args.prepare && args.execute) {
@@ -652,12 +652,8 @@ export const pushCommand = defineCommand({
           log.info(
             `${pc.bold("Hint:")} To sync untracked files to the template, first add them to tracking:`,
           );
-          log.dim(
-            `  npx @tktco/create-devenv track "<pattern>"  # Add file patterns to the sync whitelist`,
-          );
-          log.dim(
-            `  npx @tktco/create-devenv track --list        # List currently tracked patterns`,
-          );
+          log.dim(`  npx @tktco/berm track "<pattern>"  # Add file patterns to the sync whitelist`);
+          log.dim(`  npx @tktco/berm track --list        # List currently tracked patterns`);
           log.dim(`  Then re-run 'push --prepare' to include them in the manifest.`);
         }
         log.newline();
@@ -667,12 +663,12 @@ export const pushCommand = defineCommand({
             description: `Edit ${MANIFEST_FILENAME} to select files and configure PR`,
           },
           {
-            description: `Run 'create-devenv push --execute' to create the PR`,
+            description: `Run 'berm push --execute' to create the PR`,
           },
           ...(untrackedByFolder.length > 0
             ? [
                 {
-                  description: `Run 'create-devenv track <pattern>' to add untracked files to sync whitelist`,
+                  description: `Run 'berm track <pattern>' to add untracked files to sync whitelist`,
                 },
               ]
             : []),

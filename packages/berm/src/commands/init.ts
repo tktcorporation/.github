@@ -40,7 +40,7 @@ const version = typeof __VERSION__ !== "undefined" ? __VERSION__ : "dev";
 
 export const initCommand = defineCommand({
   meta: {
-    name: "create-devenv",
+    name: "berm",
     version,
     description: "Apply dev environment template to your project",
   },
@@ -74,7 +74,7 @@ export const initCommand = defineCommand({
   },
   async run({ args }) {
     // ヘッダー表示
-    showHeader("create-devenv", version);
+    showHeader("berm", version);
 
     // "init" という引数は無視して現在のディレクトリを使用
     const dir = args.dir === "init" ? "." : args.dir;
@@ -234,7 +234,7 @@ export const initCommand = defineCommand({
           description: "Commit the changes",
         },
         {
-          command: "npx @tktco/create-devenv diff",
+          command: "npx @tktco/berm diff",
           description: "Check for updates from upstream",
         },
       ]);

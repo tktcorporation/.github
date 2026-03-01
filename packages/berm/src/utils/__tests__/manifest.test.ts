@@ -107,7 +107,7 @@ describe("serializeManifest", () => {
 
     const yaml = serializeManifest(manifest);
 
-    expect(yaml).toContain("# create-devenv push manifest");
+    expect(yaml).toContain("# berm push manifest");
     expect(yaml).toContain("version: 1");
     expect(yaml).toContain("path: test.txt");
     expect(yaml).toContain("selected: true");
@@ -126,7 +126,7 @@ describe("serializeManifest", () => {
     const yaml = serializeManifest(manifest);
 
     expect(yaml).toContain("USAGE (for AI agents and humans):");
-    expect(yaml).toContain("create-devenv push --execute");
+    expect(yaml).toContain("berm push --execute");
   });
 });
 

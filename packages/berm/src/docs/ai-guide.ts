@@ -3,7 +3,7 @@
  *
  * This file serves as the single source of truth for AI-facing documentation.
  * It is used both for:
- *   - `create-devenv ai-docs` command output
+ *   - `berm ai-docs` command output
  *   - README.md "For AI Agents" section generation
  */
 
@@ -27,7 +27,7 @@ export function generateAiGuide(): string {
  * Generate the AI agent guide with header for CLI output
  */
 export function generateAiGuideWithHeader(): string {
-  const header = `# create-devenv v${version} - AI Agent Guide
+  const header = `# berm v${version} - AI Agent Guide
 
 This guide explains how AI coding agents (Claude Code, Cursor, etc.) can use this tool effectively.
 `;
@@ -45,27 +45,27 @@ export function getDocSections(): DocSection[] {
       title: "Quick Reference",
       content: `\`\`\`bash
 # Non-interactive init for AI agents
-npx @tktco/create-devenv init --yes                           # All modules, overwrite strategy
-npx @tktco/create-devenv init --modules .,devcontainer        # Specific modules only
-npx @tktco/create-devenv init --modules .github -s skip       # Specific modules with skip strategy
-npx @tktco/create-devenv init --yes --overwrite-strategy skip # All modules with skip strategy
+npx @tktco/berm init --yes                           # All modules, overwrite strategy
+npx @tktco/berm init --modules .,devcontainer        # Specific modules only
+npx @tktco/berm init --modules .github -s skip       # Specific modules with skip strategy
+npx @tktco/berm init --yes --overwrite-strategy skip # All modules with skip strategy
 
 # Non-interactive push workflow for AI agents
-npx @tktco/create-devenv push --prepare    # Generate manifest
+npx @tktco/berm push --prepare    # Generate manifest
 # Edit ${MANIFEST_FILENAME}              # Select files
-npx @tktco/create-devenv push --execute    # Create PR
+npx @tktco/berm push --execute    # Create PR
 
 # Add files to tracking (non-interactive)
-npx @tktco/create-devenv track ".cloud/rules/*.md"            # Add pattern (auto-detect module)
-npx @tktco/create-devenv track ".cloud/config.json" -m .cloud # Specify module explicitly
-npx @tktco/create-devenv track --list                         # List tracked modules/patterns
+npx @tktco/berm track ".cloud/rules/*.md"            # Add pattern (auto-detect module)
+npx @tktco/berm track ".cloud/config.json" -m .cloud # Specify module explicitly
+npx @tktco/berm track --list                         # List tracked modules/patterns
 
 # Show differences and detect untracked files
-npx @tktco/create-devenv diff              # Show differences (also reports untracked files)
+npx @tktco/berm diff              # Show differences (also reports untracked files)
 
 # Other commands
-npx @tktco/create-devenv init [dir]        # Apply template (interactive)
-npx @tktco/create-devenv ai-docs           # Show this guide
+npx @tktco/berm init [dir]        # Apply template (interactive)
+npx @tktco/berm ai-docs           # Show this guide
 \`\`\``,
     },
     {
@@ -85,16 +85,16 @@ npx @tktco/create-devenv ai-docs           # Show this guide
 
 \`\`\`bash
 # Apply only specific modules (skips module selection prompt)
-npx @tktco/create-devenv init --modules .github,.claude
+npx @tktco/berm init --modules .github,.claude
 
 # Apply specific modules and skip existing files
-npx @tktco/create-devenv init --modules devcontainer -s skip
+npx @tktco/berm init --modules devcontainer -s skip
 
 # Apply all modules but skip existing files
-npx @tktco/create-devenv init --yes --overwrite-strategy skip
+npx @tktco/berm init --yes --overwrite-strategy skip
 
 # Re-init when .devenv.json exists, replacing only specific modules
-npx @tktco/create-devenv init --modules . -s overwrite
+npx @tktco/berm init --modules . -s overwrite
 \`\`\`
 
 ### Behavior
@@ -113,13 +113,13 @@ To sync these files to the template, you **must** first add them to tracking:
 
 \`\`\`bash
 # 1. Check for untracked files
-npx @tktco/create-devenv diff
+npx @tktco/berm diff
 
 # 2. Add untracked files to the whitelist
-npx @tktco/create-devenv track "<file-or-glob-pattern>"
+npx @tktco/berm track "<file-or-glob-pattern>"
 
 # 3. Now push will include these files
-npx @tktco/create-devenv push --prepare
+npx @tktco/berm push --prepare
 \`\`\`
 
 **Key points:**
@@ -135,7 +135,7 @@ npx @tktco/create-devenv push --prepare
 ### Phase 1: Prepare
 
 \`\`\`bash
-npx @tktco/create-devenv push --prepare
+npx @tktco/berm push --prepare
 \`\`\`
 
 This generates \`${MANIFEST_FILENAME}\` containing:
@@ -173,7 +173,7 @@ files:
 export GITHUB_TOKEN="your-token"
 
 # Create the PR
-npx @tktco/create-devenv push --execute
+npx @tktco/berm push --execute
 \`\`\``,
     },
     {
@@ -211,10 +211,10 @@ This is useful when you create new files or directories that should be part of t
 
 \`\`\`bash
 # Auto-detects module from path (.claude module)
-npx @tktco/create-devenv track ".claude/commands/*.md"
+npx @tktco/berm track ".claude/commands/*.md"
 
 # Explicit module
-npx @tktco/create-devenv track ".devcontainer/new-script.sh" --module .devcontainer
+npx @tktco/berm track ".devcontainer/new-script.sh" --module .devcontainer
 \`\`\`
 
 ### Create a new module with patterns
@@ -223,10 +223,10 @@ When the module doesn't exist yet, it is automatically created:
 
 \`\`\`bash
 # Creates ".cloud" module and adds the pattern
-npx @tktco/create-devenv track ".cloud/rules/*.md"
+npx @tktco/berm track ".cloud/rules/*.md"
 
 # With custom name and description
-npx @tktco/create-devenv track ".cloud/rules/*.md" \\
+npx @tktco/berm track ".cloud/rules/*.md" \\
   --module .cloud \\
   --name "Cloud Rules" \\
   --description "Cloud configuration and rule files"
@@ -235,7 +235,7 @@ npx @tktco/create-devenv track ".cloud/rules/*.md" \\
 ### List current tracking configuration
 
 \`\`\`bash
-npx @tktco/create-devenv track --list
+npx @tktco/berm track --list
 \`\`\`
 
 ### Options
@@ -252,7 +252,7 @@ npx @tktco/create-devenv track --list
       title: "Best Practices for AI Agents",
       content: `1. **Use \`--modules\` and \`--overwrite-strategy\`** for granular non-interactive init (e.g., \`init --modules .github,.claude -s skip\`)
 2. **Always use \`--prepare\` then \`--execute\`** for non-interactive push operation
-3. **Review the diff first** with \`npx @tktco/create-devenv diff\` — this also reports untracked files
+3. **Review the diff first** with \`npx @tktco/berm diff\` — this also reports untracked files
 4. **Check for untracked files** — if \`diff\` or \`push --prepare\` reports untracked files, use \`track\` to add them before pushing
 5. **Use \`track\` command** to add new files to the sync whitelist (non-interactive, no prompts)
 6. **Set meaningful PR titles** that follow conventional commits (e.g., \`feat:\`, \`fix:\`, \`docs:\`)
@@ -273,10 +273,10 @@ mkdir -p .cloud/rules
 echo "naming conventions..." > .cloud/rules/naming.md
 
 # 2. Add to tracking (updates local .devenv/modules.jsonc)
-npx @tktco/create-devenv track ".cloud/rules/*.md"
+npx @tktco/berm track ".cloud/rules/*.md"
 
 # 3. Push detects local module additions automatically
-npx @tktco/create-devenv push --prepare
+npx @tktco/berm push --prepare
 \`\`\`
 
 ### What happens internally
@@ -309,16 +309,16 @@ export function generateReadmeSection(): string {
   lines.push("AI coding agents can use the non-interactive workflow:\n");
   lines.push("```bash");
   lines.push("# 1. Generate manifest file");
-  lines.push("npx @tktco/create-devenv push --prepare");
+  lines.push("npx @tktco/berm push --prepare");
   lines.push("");
   lines.push(`# 2. Edit ${MANIFEST_FILENAME} to select files and set PR details`);
   lines.push("");
   lines.push("# 3. Create PR from manifest");
-  lines.push("npx @tktco/create-devenv push --execute");
+  lines.push("npx @tktco/berm push --execute");
   lines.push("```\n");
   lines.push("For detailed documentation, run:\n");
   lines.push("```bash");
-  lines.push("npx @tktco/create-devenv ai-docs");
+  lines.push("npx @tktco/berm ai-docs");
   lines.push("```\n");
   return lines.join("\n");
 }

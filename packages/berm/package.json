@@ -1,5 +1,5 @@
 {
-  "name": "@tktco/create-devenv",
+  "name": "@tktco/berm",
   "version": "0.11.2",
   "description": "Interactive CLI to scaffold development environment templates",
   "repository": {
@@ -7,7 +7,7 @@
     "url": "https://github.com/tktcorporation/.github.git"
   },
   "bin": {
-    "create-devenv": "./dist/index.mjs"
+    "berm": "./dist/index.mjs"
   },
   "files": [
     "dist",

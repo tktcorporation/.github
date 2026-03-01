@@ -11,7 +11,7 @@ import { log, pc, showHeader } from "./utils/ui";
 
 const main = defineCommand({
   meta: {
-    name: "create-devenv",
+    name: "berm",
     version,
     description: "Dev environment template manager",
   },
@@ -39,7 +39,7 @@ function showAiHint(): void {
   log.newline();
   console.log(pc.dim("─".repeat(40)));
   console.log(
-    `${pc.dim("🤖 Are you an AI agent?")} Run ${pc.cyan("npx @tktco/create-devenv ai-docs")} for non-interactive usage guide.`,
+    `${pc.dim("🤖 Are you an AI agent?")} Run ${pc.cyan("npx @tktco/berm ai-docs")} for non-interactive usage guide.`,
   );
   console.log(pc.dim("─".repeat(40)));
   log.newline();
@@ -49,7 +49,7 @@ function showAiHint(): void {
  * コマンド選択プロンプト
  */
 async function promptCommand(): Promise<void> {
-  showHeader("create-devenv", version);
+  showHeader("berm", version);
   showAiHint();
 
   log.info("Select a command to run:");
@@ -84,7 +84,7 @@ const hasSubCommand =
   ["init", "push", "diff", "track", "ai-docs", "--help", "-h", "--version", "-v"].includes(args[0]);
 
 if (!hasSubCommand && args.length > 0 && !args[0].startsWith("-")) {
-  // npx @tktco/create-devenv . のような形式は init コマンドとして実行
+  // npx @tktco/berm . のような形式は init コマンドとして実行
   void runMain(initCommand);
 } else if (!hasSubCommand && args.length === 0) {
   // 引数なしの場合はコマンド選択プロンプトを表示
