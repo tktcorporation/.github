@@ -83,6 +83,7 @@ OPTIONS
                  `-y, --yes`    Select all modules (non-interactive mode)
              `-m, --modules`    Comma-separated module IDs to apply (non-interactive)
   `-s, --overwrite-strategy`    Overwrite strategy: overwrite, skip, or prompt (non-interactive)
+                    `--from`    Template source as owner/repo (e.g., my-org/my-templates)
 ```
 
 ### `push`

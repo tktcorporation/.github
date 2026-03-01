@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
     paths:
-      - "packages/create-devenv/**"
+      - "packages/berm/**"
       - ".github/workflows/ci.yml"
       - "pnpm-lock.yaml"
   pull_request:
@@ -30,7 +30,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Run oxlint
-        run: pnpm --filter @tktco/create-devenv run lint
+        run: pnpm --filter @tktco/berm run lint
 
   format:
     name: Format Check (oxfmt)
@@ -49,7 +49,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Run oxfmt
-        run: pnpm --filter @tktco/create-devenv run format:check
+        run: pnpm --filter @tktco/berm run format:check
 
   typecheck:
     name: Type Check (oxlint --type-check)
@@ -68,7 +68,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Run oxlint type-check
-        run: pnpm --filter @tktco/create-devenv run typecheck
+        run: pnpm --filter @tktco/berm run typecheck
 
   build:
     name: Build (tsdown)
@@ -87,15 +87,15 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build
-        run: pnpm --filter @tktco/create-devenv run build
+        run: pnpm --filter @tktco/berm run build
 
       - name: Test CLI help
-        run: node packages/create-devenv/dist/index.mjs --help
+        run: node packages/berm/dist/index.mjs --help
 
       - name: Test CLI dry run
         run: |
           mkdir -p /tmp/test-project
-          node packages/create-devenv/dist/index.mjs /tmp/test-project --yes
+          node packages/berm/dist/index.mjs /tmp/test-project --yes
           ls -la /tmp/test-project
           cat /tmp/test-project/.devenv.json
 
@@ -116,7 +116,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Run tests
-        run: pnpm --filter @tktco/create-devenv run test:run
+        run: pnpm --filter @tktco/berm run test:run
 
   docs:
     name: Check README
@@ -135,4 +135,4 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Check README is up to date
-        run: pnpm --filter @tktco/create-devenv run docs:check
+        run: pnpm --filter @tktco/berm run docs:check
