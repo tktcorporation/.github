@@ -13,6 +13,7 @@
 ## Task 1: @clack/prompts の導入と BermError の作成
 
 **Files:**
+
 - Modify: `packages/berm/package.json` — `@clack/prompts` を dependencies に追加
 - Create: `packages/berm/src/errors.ts` — BermError クラス
 
@@ -92,6 +93,7 @@ Add BermError for structured error handling, replacing scattered process.exit(1)
 ## Task 2: UI renderer の作成 — @clack/prompts ラッパー
 
 **Files:**
+
 - Create: `packages/berm/src/ui/renderer.ts` — @clack/prompts を使った統一出力インターフェース
 - Create: `packages/berm/src/ui/__tests__/renderer.test.ts`
 
@@ -149,9 +151,11 @@ export async function withSpinner<T>(message: string, task: () => Promise<T>): P
 }
 
 /** ファイル操作結果を表示（init コマンド用） */
-export function logFileResults(
-  results: { action: string; path: string }[],
-): { added: number; updated: number; skipped: number } {
+export function logFileResults(results: { action: string; path: string }[]): {
+  added: number;
+  updated: number;
+  skipped: number;
+} {
   let added = 0;
   let updated = 0;
   let skipped = 0;
@@ -189,9 +193,7 @@ export function logFileResults(
 }
 
 /** diff サマリーを表示（push/diff コマンド用） */
-export function logDiffSummary(
-  files: { path: string; type: string }[],
-): void {
+export function logDiffSummary(files: { path: string; type: string }[]): void {
   const changed = files.filter((f) => f.type !== "unchanged");
   if (changed.length === 0) {
     p.log.info("No changes detected");
@@ -269,7 +271,15 @@ vi.mock("@clack/prompts", () => ({
 }));
 
 import * as p from "@clack/prompts";
-import { intro, outro, log, withSpinner, logFileResults, logDiffSummary, logBermError } from "../renderer";
+import {
+  intro,
+  outro,
+  log,
+  withSpinner,
+  logFileResults,
+  logDiffSummary,
+  logBermError,
+} from "../renderer";
 
 describe("renderer", () => {
   beforeEach(() => {
@@ -405,6 +415,7 @@ module that wraps @clack/prompts for consistent, professional CLI output."
 ## Task 3: UI prompts の作成 — @clack/prompts ベースのプロンプト
 
 **Files:**
+
 - Create: `packages/berm/src/ui/prompts.ts` — 全プロンプトを @clack/prompts で再実装
 - Create: `packages/berm/src/ui/__tests__/prompts.test.ts`
 
@@ -707,6 +718,7 @@ using @clack/prompts for consistent, beautiful prompt UX."
 ## Task 4: diff-view の作成 — diff 表示をシンプルに
 
 **Files:**
+
 - Create: `packages/berm/src/ui/diff-view.ts` — word diff 付きの diff 表示（cli-highlight 不使用）
 - Create: `packages/berm/src/ui/__tests__/diff-view.test.ts`
 
@@ -781,7 +793,12 @@ export function formatStats(stats: DiffStats): string {
 /** 単一ファイルの diff を表示 */
 export function renderFileDiff(file: FileDiff): void {
   const stats = calculateDiffStats(file);
-  const typeLabel = file.type === "added" ? pc.green("added") : file.type === "modified" ? pc.yellow("modified") : pc.red("deleted");
+  const typeLabel =
+    file.type === "added"
+      ? pc.green("added")
+      : file.type === "modified"
+        ? pc.yellow("modified")
+        : pc.red("deleted");
 
   p.log.step(`${pc.bold(file.path)} ${pc.dim("—")} ${typeLabel} ${formatStats(stats)}`);
 
@@ -790,9 +807,15 @@ export function renderFileDiff(file: FileDiff): void {
   const diff = generateUnifiedDiff(file);
   if (!diff) return;
 
-  const lines = diff.split("\n").filter(
-    (l) => !l.startsWith("Index:") && !l.startsWith("===") && !l.startsWith("---") && !l.startsWith("+++"),
-  );
+  const lines = diff
+    .split("\n")
+    .filter(
+      (l) =>
+        !l.startsWith("Index:") &&
+        !l.startsWith("===") &&
+        !l.startsWith("---") &&
+        !l.startsWith("+++"),
+    );
 
   // word diff を適用して表示
   const rendered = applyWordDiffAndColorize(lines);
@@ -977,6 +1000,7 @@ Keep word diff and stats calculation."
 ## Task 5: init コマンドの書き直し
 
 **Files:**
+
 - Modify: `packages/berm/src/commands/init.ts` — 新しい UI 層を使って書き直し
 - Modify: `packages/berm/src/commands/__tests__/init.test.ts` — モックを更新
 
@@ -986,6 +1010,7 @@ Keep word diff and stats calculation."
 コマンドの構造は維持しつつ、UI 呼び出しを差し替える。
 
 主な変更点:
+
 - `showHeader()` → `intro("init")`
 - `log.info/error/warn` → `ui/renderer` の `log` に差し替え
 - `step()` → `log.step()`
@@ -1020,12 +1045,14 @@ Replace process.exit(1) with BermError throws."
 ## Task 6: diff コマンドの書き直し
 
 **Files:**
+
 - Modify: `packages/berm/src/commands/diff.ts`
 - Modify: `packages/berm/src/commands/__tests__/diff.test.ts`
 
 **Step 1: diff.ts を書き直し**
 
 主な変更点:
+
 - `showHeader("berm diff")` → `intro("diff")`
 - `step()` / `withSpinner()` → renderer の関数に差し替え
 - `diffHeader()` + `console.log(formatDiff(...))` → `logDiffSummary()` に統合
@@ -1052,6 +1079,7 @@ git commit -m "refactor(berm): rewrite diff command with @clack/prompts"
 ## Task 7: push コマンドの書き直し
 
 **Files:**
+
 - Modify: `packages/berm/src/commands/push.ts` — 774行を ~200行に削減
 - Modify: `packages/berm/src/commands/__tests__/push.test.ts`
 
@@ -1094,12 +1122,14 @@ Replace all UI calls with unified renderer."
 ## Task 8: track コマンドの書き直し
 
 **Files:**
+
 - Modify: `packages/berm/src/commands/track.ts`
 - Modify: `packages/berm/src/commands/__tests__/track.test.ts`
 
 **Step 1: track.ts を書き直し**
 
 主な変更:
+
 - `showHeader()` → `intro("track")`
 - `log.*` → renderer の `log` に差し替え
 - `box()` → `outro()` に統合
@@ -1122,11 +1152,13 @@ git commit -m "refactor(berm): rewrite track command with @clack/prompts"
 ## Task 9: エントリポイント (index.ts) の書き直し
 
 **Files:**
+
 - Modify: `packages/berm/src/index.ts` — select プロンプト廃止、BermError ハンドラ追加
 
 **Step 1: index.ts を書き直し**
 
 主な変更:
+
 - `promptCommand()` と `showAiHint()` を削除（引数なし実行は `--help` を表示）
 - `@inquirer/prompts` の `select` インポートを削除
 - `utils/ui` のインポートを削除
@@ -1183,6 +1215,7 @@ Remove @inquirer/prompts dependency from entry point."
 ## Task 10: 不要な依存と旧コードの削除
 
 **Files:**
+
 - Delete: `packages/berm/src/utils/ui.ts`
 - Delete: `packages/berm/src/utils/__tests__/ui.test.ts`
 - Delete: `packages/berm/src/utils/diff-viewer.ts`
@@ -1248,6 +1281,7 @@ Expected: ALL PASS
 **Step 4: changeset 追加**
 
 Run: `cd /home/user/.github && pnpm changeset add`
+
 - Package: `@tktco/berm`
 - Bump: `minor`
 - Summary: "Redesign CLI output and UX with @clack/prompts"
