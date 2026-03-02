@@ -35,17 +35,14 @@
     "docs:check": "npx tsx scripts/generate-readme.ts --check"
   },
   "dependencies": {
-    "@inquirer/prompts": "^8.0.2",
+    "@clack/prompts": "^1.0.1",
     "@octokit/rest": "^22.0.1",
     "citty": "^0.1.6",
-    "cli-highlight": "^2.1.11",
-    "consola": "^3.4.2",
     "defu": "^6.1.4",
     "diff": "^8.0.3",
     "giget": "^2.0.0",
     "ignore": "^7.0.5",
     "jsonc-parser": "^3.3.1",
-    "nanospinner": "^1.2.2",
     "pathe": "^2.0.3",
     "picocolors": "^1.1.1",
     "tinyglobby": "^0.2.15",

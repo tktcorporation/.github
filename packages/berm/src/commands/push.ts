@@ -4,6 +4,7 @@ import { defineCommand } from "citty";
 import { downloadTemplate } from "giget";
 import { parse } from "jsonc-parser";
 import { join, resolve } from "pathe";
+import { BermError } from "../errors";
 import {
   addPatternToModulesFileWithCreate,
   defaultModules,
@@ -13,14 +14,14 @@ import {
 import type { DevEnvConfig, TemplateModule } from "../modules/schemas";
 import { configSchema } from "../modules/schemas";
 import {
-  promptAddUntrackedFiles,
-  promptGitHubToken,
-  promptPrBody,
-  promptPrTitle,
-  promptPushConfirm,
-  promptSelectFilesWithDiff,
-} from "../prompts/push";
-import { detectDiff, formatDiff, getPushableFiles } from "../utils/diff";
+  confirmAction,
+  inputGitHubToken,
+  inputPrBody,
+  inputPrTitle,
+  selectPushFiles,
+} from "../ui/prompts";
+import { intro, log, logDiffSummary, outro, pc, withSpinner } from "../ui/renderer";
+import { detectDiff, getPushableFiles } from "../utils/diff";
 import { createPullRequest, getGitHubToken } from "../utils/github";
 import {
   deleteManifest,
@@ -34,16 +35,6 @@ import {
 import { detectAndUpdateReadme } from "../utils/readme";
 import { buildTemplateSource } from "../utils/template";
 import { detectUntrackedFiles } from "../utils/untracked";
-import {
-  box,
-  diffHeader,
-  log,
-  pc,
-  showHeader,
-  showNextSteps,
-  step,
-  withSpinner,
-} from "../utils/ui";
 
 const MODULES_FILE_PATH = ".devenv/modules.jsonc";
 const README_PATH = "README.md";
@@ -147,27 +138,24 @@ async function runExecuteMode(
   config: DevEnvConfig,
   messageOverride?: string,
 ): Promise<void> {
-  const totalSteps = 4;
-  let currentStep = 1;
-
   // Step 1: マニフェスト読み込み
-  step({ current: currentStep++, total: totalSteps }, "Loading manifest...");
+  log.step("Loading manifest...");
 
   let manifest;
   try {
     manifest = await loadManifest(targetDir);
   } catch (error) {
-    log.error((error as Error).message);
-    process.exit(1);
+    throw new BermError((error as Error).message);
   }
 
   const selectedFilePaths = getSelectedFilePaths(manifest);
   const selectedUntracked = getSelectedUntrackedFiles(manifest);
 
   if (selectedFilePaths.length === 0 && selectedUntracked.size === 0) {
-    log.newline();
     log.info("No files selected in manifest. Nothing to push.");
-    log.dim(`Edit ${MANIFEST_FILENAME} and set 'selected: true' for files you want to include.`);
+    log.message(
+      pc.dim(`Edit ${MANIFEST_FILENAME} and set 'selected: true' for files you want to include.`),
+    );
     return;
   }
 
@@ -181,7 +169,7 @@ async function runExecuteMode(
   }
 
   // Step 2: テンプレートダウンロード（差分取得用）
-  step({ current: currentStep++, total: totalSteps }, "Fetching template...");
+  log.step("Fetching template...");
 
   const templateSource = buildTemplateSource(config.source);
   const tempDir = join(targetDir, ".devenv-temp");
@@ -242,7 +230,7 @@ async function runExecuteMode(
     }
 
     // Step 3: ファイル内容を取得
-    step({ current: currentStep++, total: totalSteps }, "Preparing files...");
+    log.step("Preparing files...");
 
     // 差分を検出（更新済み moduleList を使用するため、未追跡ファイルも pushable に含まれる）
     const diff = await withSpinner("Analyzing differences...", () =>
@@ -268,16 +256,16 @@ async function runExecuteMode(
       .map((f) => f.path);
 
     if (missingFiles.length > 0 || newFiles.length > 0) {
-      log.newline();
       log.warn("Manifest is out of sync with current changes:");
       if (missingFiles.length > 0) {
-        log.dim(`  Missing files (in manifest but no longer changed): ${missingFiles.join(", ")}`);
+        log.message(
+          pc.dim(`  Missing files (in manifest but no longer changed): ${missingFiles.join(", ")}`),
+        );
       }
       if (newFiles.length > 0) {
-        log.dim(`  New files (changed but not in manifest): ${newFiles.join(", ")}`);
+        log.message(pc.dim(`  New files (changed but not in manifest): ${newFiles.join(", ")}`));
       }
-      log.dim("  Consider running 'berm push --prepare' to regenerate the manifest.");
-      log.newline();
+      log.message(pc.dim("  Consider running 'berm push --prepare' to regenerate the manifest."));
     }
 
     // 選択されたファイルの内容を取得
@@ -320,7 +308,6 @@ async function runExecuteMode(
     }
 
     if (files.length === 0) {
-      log.newline();
       log.info("No files to push after processing.");
       return;
     }
@@ -328,10 +315,10 @@ async function runExecuteMode(
     // GitHub トークン取得
     let token = manifest.github.token || getGitHubToken();
     if (!token) {
-      log.newline();
-      log.error("GitHub token not found.");
-      log.dim("Set GITHUB_TOKEN/GH_TOKEN environment variable, or add token to manifest.");
-      process.exit(1);
+      throw new BermError(
+        "GitHub token not found.",
+        "Set GITHUB_TOKEN or GH_TOKEN environment variable, or add token to manifest.",
+      );
     }
 
     // PR タイトル・本文
@@ -339,7 +326,7 @@ async function runExecuteMode(
     const body = manifest.pr.body;
 
     // Step 4: PR を作成
-    step({ current: currentStep++, total: totalSteps }, "Creating pull request...");
+    log.step("Creating pull request...");
 
     const result = await withSpinner("Creating PR on GitHub...", () =>
       createPullRequest(token, {
@@ -356,21 +343,16 @@ async function runExecuteMode(
     await deleteManifest(targetDir);
 
     // 成功メッセージ
-    box("Pull request created!", "success");
-
-    console.log(`  ${pc.bold("URL:")}    ${pc.cyan(result.url)}`);
-    console.log(`  ${pc.bold("Branch:")} ${result.branch}`);
-    console.log(`  ${pc.bold("Files:")}  ${files.length} files included`);
-    log.newline();
-
-    log.dim(`Cleaned up ${MANIFEST_FILENAME}`);
-    log.newline();
-
-    showNextSteps([
-      {
-        description: `Review and merge the PR at ${result.url}`,
-      },
-    ]);
+    log.success("Pull request created!");
+    log.message(
+      [
+        `URL:    ${pc.cyan(result.url)}`,
+        `Branch: ${result.branch}`,
+        `Files:  ${files.length} files included`,
+      ].join("\n"),
+    );
+    log.message(pc.dim(`Cleaned up ${MANIFEST_FILENAME}`));
+    outro(`Review and merge the PR at ${result.url}`);
   } finally {
     // 一時ディレクトリを削除
     if (existsSync(tempDir)) {
@@ -427,13 +409,14 @@ export const pushCommand = defineCommand({
     },
   },
   async run({ args }) {
-    showHeader("berm push");
+    intro("push");
 
     // --prepare と --execute の相互排他チェック
     if (args.prepare && args.execute) {
-      log.error("Cannot use --prepare and --execute together.");
-      log.dim("Use --prepare to generate a manifest, then --execute to create the PR.");
-      process.exit(1);
+      throw new BermError(
+        "Cannot use --prepare and --execute together.",
+        "Use --prepare to generate a manifest, then --execute to create the PR.",
+      );
     }
 
     // --prepare と --dry-run の組み合わせは警告（prepareはそもそもPRを作らない）
@@ -443,7 +426,9 @@ export const pushCommand = defineCommand({
 
     // --execute と --interactive の組み合わせは警告（executeは非インタラクティブ）
     if (args.execute && args.interactive) {
-      log.dim("Note: --execute mode is non-interactive. File selection is based on the manifest.");
+      log.message(
+        pc.dim("Note: --execute mode is non-interactive. File selection is based on the manifest."),
+      );
     }
 
     const targetDir = resolve(args.dir);
@@ -451,8 +436,7 @@ export const pushCommand = defineCommand({
 
     // .devenv.json の存在確認
     if (!existsSync(configPath)) {
-      log.error(".devenv.json not found. Run 'init' command first.");
-      process.exit(1);
+      throw new BermError(".devenv.json not found.", "Run 'berm init' first.");
     }
 
     // 設定読み込み
@@ -461,9 +445,7 @@ export const pushCommand = defineCommand({
     const parseResult = configSchema.safeParse(configData);
 
     if (!parseResult.success) {
-      log.error("Invalid .devenv.json format");
-      log.dim(parseResult.error.message);
-      process.exit(1);
+      throw new BermError("Invalid .devenv.json format", parseResult.error.message);
     }
 
     const config: DevEnvConfig = parseResult.data;
@@ -479,11 +461,8 @@ export const pushCommand = defineCommand({
       return;
     }
 
-    const totalSteps = args.dryRun ? 2 : args.prepare ? 2 : 4;
-    let currentStep = 1;
-
     // Step 1: テンプレートをダウンロード
-    step({ current: currentStep++, total: totalSteps }, "Fetching template...");
+    log.step("Fetching template...");
 
     // テンプレートを一時ディレクトリにダウンロード
     const templateSource = buildTemplateSource(config.source);
@@ -527,14 +506,13 @@ export const pushCommand = defineCommand({
           }
         }
         if (localAdditions.newModuleIds.length > 0) {
-          log.newline();
           log.info(
             `Detected ${localAdditions.newModuleIds.length} new module(s) from local: ${localAdditions.newModuleIds.join(", ")}`,
           );
         }
       }
 
-      // ホワイトリスト外ファイルの検出と追加確認（インタラクティブモード）
+      // ホワイトリスト外ファイルの検出と情報表示
       if (!args.force && !args.prepare && modulesRawContent) {
         const untrackedByFolder = await detectUntrackedFiles({
           targetDir,
@@ -544,34 +522,13 @@ export const pushCommand = defineCommand({
         });
 
         if (untrackedByFolder.length > 0) {
-          log.newline();
-          log.info(pc.bold("Untracked files detected:"));
-          log.newline();
-
-          const selectedFiles = await promptAddUntrackedFiles(untrackedByFolder);
-
-          if (selectedFiles.length > 0) {
-            // modules.jsonc にパターンを追加（メモリ上）
-            let currentContent = updatedModulesContent || modulesRawContent;
-            for (const { moduleId, files } of selectedFiles) {
-              currentContent = addPatternToModulesFileWithCreate(currentContent, moduleId, files);
-            }
-            updatedModulesContent = currentContent;
-
-            // 更新されたモジュールリストを再パースして反映
-            const parsedUpdated = parse(updatedModulesContent) as {
-              modules: TemplateModule[];
-            };
-            moduleList = parsedUpdated.modules;
-
-            const totalAdded = selectedFiles.reduce((sum, s) => sum + s.files.length, 0);
-            log.success(`${totalAdded} patterns will be added to modules.jsonc`);
-          }
+          const untrackedCount = untrackedByFolder.reduce((sum, f) => sum + f.files.length, 0);
+          log.info(`${untrackedCount} untracked file(s) detected (not included in push)`);
         }
       }
 
       // Step 2: 差分を検出
-      step({ current: currentStep++, total: totalSteps }, "Detecting changes...");
+      log.step("Detecting changes...");
 
       const diff = await withSpinner("Analyzing differences...", () =>
         detectDiff({
@@ -587,26 +544,22 @@ export const pushCommand = defineCommand({
       let pushableFiles = getPushableFiles(diff);
 
       if (pushableFiles.length === 0 && !updatedModulesContent) {
-        log.newline();
         log.info("No changes to push");
-        diffHeader("Current status:");
-        console.log(formatDiff(diff, false));
+        log.step("Current status:");
+        logDiffSummary(diff.files);
         return;
       }
 
       // ドライランモード
       if (args.dryRun) {
-        log.newline();
-        box("Dry run mode", "info");
-
-        diffHeader("Files that would be included in PR:");
-        console.log(formatDiff(diff, true));
+        log.info("Dry run mode");
+        log.step("Files that would be included in PR:");
+        logDiffSummary(diff.files);
 
         if (updatedModulesContent) {
-          console.log(`  ${pc.green("+")} ${MODULES_FILE_PATH} ${pc.dim("(pattern additions)")}`);
+          log.message(`${pc.green("+")} ${MODULES_FILE_PATH} ${pc.dim("(pattern additions)")}`);
         }
 
-        log.newline();
         log.info("No PR was created (dry run)");
         return;
       }
@@ -634,64 +587,57 @@ export const pushCommand = defineCommand({
 
         const manifestPath = await saveManifest(targetDir, manifest);
 
-        log.newline();
-        box("Manifest file generated!", "success");
-        log.newline();
+        log.success("Manifest file generated!");
+        log.message(
+          [
+            `File:   ${pc.cyan(manifestPath)}`,
+            `Files:  ${pushableFiles.length} files ready to push`,
+            ...(updatedModulesContent
+              ? ["Modules: modules.jsonc will be updated (new modules/patterns detected)"]
+              : []),
+            ...(untrackedByFolder.length > 0
+              ? (() => {
+                  const untrackedCount = untrackedByFolder.reduce(
+                    (sum, f) => sum + f.files.length,
+                    0,
+                  );
+                  return [`Untracked: ${untrackedCount} files detected (not selected by default)`];
+                })()
+              : []),
+          ].join("\n"),
+        );
 
-        console.log(`  ${pc.bold("File:")} ${pc.cyan(manifestPath)}`);
-        console.log(`  ${pc.bold("Files:")} ${pushableFiles.length} files ready to push`);
-        if (updatedModulesContent) {
-          console.log(
-            `  ${pc.bold("Modules:")} modules.jsonc will be updated (new modules/patterns detected)`,
-          );
-        }
         if (untrackedByFolder.length > 0) {
-          const untrackedCount = untrackedByFolder.reduce((sum, f) => sum + f.files.length, 0);
-          console.log(
-            `  ${pc.bold("Untracked:")} ${untrackedCount} files detected (not selected by default)`,
-          );
-          log.newline();
           log.info(
             `${pc.bold("Hint:")} To sync untracked files to the template, first add them to tracking:`,
           );
-          log.dim(`  npx @tktco/berm track "<pattern>"  # Add file patterns to the sync whitelist`);
-          log.dim(`  npx @tktco/berm track --list        # List currently tracked patterns`);
-          log.dim(`  Then re-run 'push --prepare' to include them in the manifest.`);
+          log.message(
+            pc.dim(
+              [
+                `  npx @tktco/berm track "<pattern>"  # Add file patterns to the sync whitelist`,
+                `  npx @tktco/berm track --list        # List currently tracked patterns`,
+                `  Then re-run 'push --prepare' to include them in the manifest.`,
+              ].join("\n"),
+            ),
+          );
         }
-        log.newline();
 
-        showNextSteps([
-          {
-            description: `Edit ${MANIFEST_FILENAME} to select files and configure PR`,
-          },
-          {
-            description: `Run 'berm push --execute' to create the PR`,
-          },
-          ...(untrackedByFolder.length > 0
-            ? [
-                {
-                  description: `Run 'berm track <pattern>' to add untracked files to sync whitelist`,
-                },
-              ]
-            : []),
-        ]);
-
+        outro(`Edit ${MANIFEST_FILENAME}, then run 'berm push --execute' to create the PR`);
         return;
       }
 
       // Step 3: ファイル選択
-      step({ current: currentStep++, total: totalSteps }, "Selecting files...");
-      log.newline();
+      log.step("Selecting files...");
 
       if (args.interactive && !args.force) {
-        pushableFiles = await promptSelectFilesWithDiff(pushableFiles);
+        pushableFiles = await selectPushFiles(pushableFiles);
         if (pushableFiles.length === 0 && !updatedModulesContent) {
           log.info("No files selected. Cancelled.");
           return;
         }
       } else if (!args.force) {
         // --no-interactive 時は従来の確認プロンプト
-        const confirmed = await promptPushConfirm(diff);
+        const confirmed = await confirmAction("Create PR with these changes?");
         if (!confirmed) {
           log.info("Cancelled");
           return;
@@ -701,16 +647,14 @@ export const pushCommand = defineCommand({
       // GitHub トークン取得
       let token = getGitHubToken();
       if (!token) {
-        log.newline();
-        token = await promptGitHubToken();
+        token = await inputGitHubToken();
       }
 
       // PR タイトル取得
-      log.newline();
-      const title = args.message || (await promptPrTitle());
+      const title = args.message || (await inputPrTitle());
 
       // PR 本文取得
-      const body = await promptPrBody();
+      const body = await inputPrBody();
 
       // README を更新（対象の場合のみ）
       const readmeResult = await detectAndUpdateReadme(targetDir, templateDir);
@@ -738,7 +682,7 @@ export const pushCommand = defineCommand({
       }
 
       // Step 4: PR を作成
-      step({ current: currentStep++, total: totalSteps }, "Creating pull request...");
+      log.step("Creating pull request...");
 
       const result = await withSpinner("Creating PR on GitHub...", () =>
         createPullRequest(token, {
@@ -752,17 +696,15 @@ export const pushCommand = defineCommand({
       );
 
       // 成功メッセージ
-      box("Pull request created!", "success");
-
-      console.log(`  ${pc.bold("URL:")}    ${pc.cyan(result.url)}`);
-      console.log(`  ${pc.bold("Branch:")} ${result.branch}`);
-      log.newline();
-
-      showNextSteps([
-        {
-          description: `Review and merge the PR at ${result.url}`,
-        },
-      ]);
+      log.success("Pull request created!");
+      log.message(
+        [
+          `URL:    ${pc.cyan(result.url)}`,
+          `Branch: ${result.branch}`,
+          `Files:  ${files.length} files included`,
+        ].join("\n"),
+      );
+      outro(`Review and merge the PR at ${result.url}`);
     } finally {
       // 一時ディレクトリを削除
       if (existsSync(tempDir)) {

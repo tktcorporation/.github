@@ -12,7 +12,8 @@ import type {
 } from "../modules/schemas";
 import { filterByGitignore, loadMergedGitignore } from "./gitignore";
 import { getEffectivePatterns, resolvePatterns } from "./patterns";
-import { log, pc } from "./ui";
+import pc from "picocolors";
+import { log } from "../ui/renderer";
 
 export interface DiffOptions {
   targetDir: string;

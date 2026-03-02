@@ -1,6 +1,7 @@
 import { copyFileSync, existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
-import { confirm } from "@inquirer/prompts";
+import * as p from "@clack/prompts";
 import { downloadTemplate } from "giget";
+import pc from "picocolors";
 import { dirname, join } from "pathe";
 import { match } from "ts-pattern";
 import { getModuleById } from "../modules/index";
@@ -10,9 +11,9 @@ import type {
   OverwriteStrategy,
   TemplateModule,
 } from "../modules/schemas";
+import { log } from "../ui/renderer";
 import { loadMergedGitignore, separateByGitignore } from "./gitignore";
 import { getEffectivePatterns, resolvePatterns } from "./patterns";
-import { log, logFileResult, pc } from "./ui";
 
 export const TEMPLATE_SOURCE = "gh:tktcorporation/.github";
 
@@ -102,15 +103,15 @@ export async function writeFileWithStrategy(
       return { action: "skipped" as const, path: relativePath };
     })
     .with("prompt", async () => {
-      const shouldOverwrite = await confirm({
-        message: `${relativePath} は既に存在します。上書きしますか?`,
-        default: false,
+      const shouldOverwrite = await p.confirm({
+        message: `${relativePath} already exists. Overwrite?`,
+        initialValue: false,
       });
-      if (shouldOverwrite) {
-        writeFileSync(destPath, content);
-        return { action: "overwritten" as const, path: relativePath };
+      if (p.isCancel(shouldOverwrite) || !shouldOverwrite) {
+        return { action: "skipped" as const, path: relativePath };
       }
-      return { action: "skipped" as const, path: relativePath };
+      writeFileSync(destPath, content);
+      return { action: "overwritten" as const, path: relativePath };
     })
     .exhaustive();
 }
@@ -175,7 +176,6 @@ export async function fetchTemplates(options: DownloadOptions): Promise<FileOper
         const destPath = join(targetDir, relativePath);
 
         const result = await copyFile(srcPath, destPath, overwriteStrategy, relativePath);
-        logResult(result);
         allResults.push(result);
       }
 
@@ -244,20 +244,15 @@ export async function copyFile(
       return { action: "skipped", path: relativePath };
 
     case "prompt": {
-      const shouldOverwrite = await confirm({
-        message: `${relativePath} は既に存在します。上書きしますか?`,
-        default: false,
+      const shouldOverwrite = await p.confirm({
+        message: `${relativePath} already exists. Overwrite?`,
+        initialValue: false,
       });
-
-      if (shouldOverwrite) {
-        copyFileSync(srcPath, destPath);
-        return { action: "overwritten", path: relativePath };
+      if (p.isCancel(shouldOverwrite) || !shouldOverwrite) {
+        return { action: "skipped", path: relativePath };
       }
-      return { action: "skipped", path: relativePath };
+      copyFileSync(srcPath, destPath);
+      return { action: "overwritten", path: relativePath };
     }
   }
-}
-
-export function logResult(result: FileOperationResult): void {
-  logFileResult(result);
 }

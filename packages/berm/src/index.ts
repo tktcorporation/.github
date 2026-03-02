@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { select } from "@inquirer/prompts";
+import * as p from "@clack/prompts";
 import { defineCommand, runMain } from "citty";
 import { version } from "../package.json";
 import { aiDocsCommand } from "./commands/ai-docs";
@@ -7,7 +7,8 @@ import { diffCommand } from "./commands/diff";
 import { initCommand } from "./commands/init";
 import { pushCommand } from "./commands/push";
 import { trackCommand } from "./commands/track";
-import { log, pc, showHeader } from "./utils/ui";
+import { BermError } from "./errors";
+import { intro, logBermError, outro, pc } from "./ui/renderer";
 
 const main = defineCommand({
   meta: {
@@ -33,62 +34,81 @@ const commandMap: Record<"init" | "push" | "diff", CommandType> = {
 };
 
 /**
- * AI エージェント向けのヒントを表示
- */
-function showAiHint(): void {
-  log.newline();
-  console.log(pc.dim("─".repeat(40)));
-  console.log(
-    `${pc.dim("🤖 Are you an AI agent?")} Run ${pc.cyan("npx @tktco/berm ai-docs")} for non-interactive usage guide.`,
-  );
-  console.log(pc.dim("─".repeat(40)));
-  log.newline();
-}
-
-/**
  * コマンド選択プロンプト
+ *
+ * 背景: 引数なしで実行された場合に、ユーザーにコマンドを選択してもらう。
+ * @inquirer/prompts の select を @clack/prompts に置き換え。
  */
 async function promptCommand(): Promise<void> {
-  showHeader("berm", version);
-  showAiHint();
+  intro();
 
-  log.info("Select a command to run:");
-  log.newline();
+  p.log.message(
+    pc.dim(
+      `Are you an AI agent? Run ${pc.cyan("npx @tktco/berm ai-docs")} for non-interactive usage guide.`,
+    ),
+  );
 
-  const command = await select({
-    message: "Command",
-    choices: [
+  const command = await p.select({
+    message: "What would you like to do?",
+    options: [
       {
-        name: `${pc.cyan("init")}   ${pc.dim("→")} Apply template to your project`,
         value: "init" as const,
+        label: "init",
+        hint: "Apply template to your project",
       },
       {
-        name: `${pc.cyan("push")}   ${pc.dim("→")} Push local changes as a PR`,
         value: "push" as const,
+        label: "push",
+        hint: "Push local changes as a PR",
       },
       {
-        name: `${pc.cyan("diff")}   ${pc.dim("→")} Show differences from template`,
         value: "diff" as const,
+        label: "diff",
+        hint: "Show differences from template",
       },
     ],
   });
 
+  if (p.isCancel(command)) {
+    p.cancel("Cancelled.");
+    process.exit(0);
+  }
+
   const selectedCommand = commandMap[command];
-  void runMain(selectedCommand as typeof diffCommand);
+  await runMain(selectedCommand as typeof diffCommand);
 }
 
-// サブコマンドなしで実行された場合の処理
-const args = process.argv.slice(2);
-const hasSubCommand =
-  args.length > 0 &&
-  ["init", "push", "diff", "track", "ai-docs", "--help", "-h", "--version", "-v"].includes(args[0]);
+/**
+ * トップレベルエラーハンドラ
+ *
+ * 背景: 各コマンドで throw された BermError をここでキャッチし、
+ * @clack/prompts で統一的に表示する。process.exit(1) はこの 1 箇所のみ。
+ */
+async function run(): Promise<void> {
+  try {
+    const args = process.argv.slice(2);
+    const hasSubCommand =
+      args.length > 0 &&
+      ["init", "push", "diff", "track", "ai-docs", "--help", "-h", "--version", "-v"].includes(
+        args[0],
+      );
 
-if (!hasSubCommand && args.length > 0 && !args[0].startsWith("-")) {
-  // npx @tktco/berm . のような形式は init コマンドとして実行
-  void runMain(initCommand);
-} else if (!hasSubCommand && args.length === 0) {
-  // 引数なしの場合はコマンド選択プロンプトを表示
-  void promptCommand();
-} else {
-  void runMain(main);
+    if (!hasSubCommand && args.length > 0 && !args[0].startsWith("-")) {
+      // npx @tktco/berm . のような形式は init コマンドとして実行
+      await runMain(initCommand);
+    } else if (!hasSubCommand && args.length === 0) {
+      // 引数なしの場合はコマンド選択プロンプトを表示
+      await promptCommand();
+    } else {
+      await runMain(main);
+    }
+  } catch (error) {
+    if (error instanceof BermError) {
+      logBermError(error);
+      process.exit(1);
+    }
+    throw error;
+  }
 }
+
+void run();

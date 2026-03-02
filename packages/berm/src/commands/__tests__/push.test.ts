@@ -28,7 +28,6 @@ vi.mock("../../utils/template", () => ({
 // utils/diff をモック
 vi.mock("../../utils/diff", () => ({
   detectDiff: vi.fn(),
-  formatDiff: vi.fn(() => "formatted diff output"),
   getPushableFiles: vi.fn(() => []),
 }));
 
@@ -48,14 +47,13 @@ vi.mock("../../utils/untracked", () => ({
   detectUntrackedFiles: vi.fn(() => []),
 }));
 
-// prompts/push をモック
-vi.mock("../../prompts/push", () => ({
-  promptPushConfirm: vi.fn(),
-  promptGitHubToken: vi.fn(),
-  promptPrTitle: vi.fn(),
-  promptPrBody: vi.fn(),
-  promptSelectFilesWithDiff: vi.fn(),
-  promptAddUntrackedFiles: vi.fn(() => []),
+// ui/prompts をモック
+vi.mock("../../ui/prompts", () => ({
+  confirmAction: vi.fn(),
+  inputGitHubToken: vi.fn(),
+  inputPrTitle: vi.fn(),
+  inputPrBody: vi.fn(),
+  selectPushFiles: vi.fn(),
 }));
 
 // modules をモック
@@ -66,64 +64,48 @@ vi.mock("../../modules", () => ({
   addPatternToModulesFile: vi.fn(),
 }));
 
-// utils/ui をモック
-vi.mock("../../utils/ui", () => ({
-  showHeader: vi.fn(),
+// ui/renderer をモック
+vi.mock("../../ui/renderer", () => ({
+  intro: vi.fn(),
+  outro: vi.fn(),
   log: {
     info: vi.fn(),
     warn: vi.fn(),
-    dim: vi.fn(),
-    newline: vi.fn(),
     error: vi.fn(),
     success: vi.fn(),
+    step: vi.fn(),
+    message: vi.fn(),
   },
+  logDiffSummary: vi.fn(),
   pc: {
     cyan: (s: string) => s,
     bold: (s: string) => s,
     dim: (s: string) => s,
     green: (s: string) => s,
   },
-  step: vi.fn(),
   withSpinner: vi.fn(async (_text: string, fn: () => Promise<unknown>) => fn()),
-  diffHeader: vi.fn(),
-  box: vi.fn(),
-  showNextSteps: vi.fn(),
 }));
-
-// console.log をモック
-vi.spyOn(console, "log").mockImplementation(() => {});
-
-// process.exit をモック
-const mockExit = vi.spyOn(process, "exit").mockImplementation(() => {
-  throw new Error("process.exit called");
-});
 
 // モック後にインポート
 const { pushCommand } = await import("../push");
 const { downloadTemplate } = await import("giget");
 const { detectDiff, getPushableFiles } = await import("../../utils/diff");
 const { getGitHubToken, createPullRequest } = await import("../../utils/github");
-const {
-  promptPushConfirm,
-  promptGitHubToken,
-  promptPrTitle,
-  promptPrBody,
-  promptSelectFilesWithDiff,
-} = await import("../../prompts/push");
-const { log, box } = await import("../../utils/ui");
+const { confirmAction, inputGitHubToken, inputPrTitle, inputPrBody, selectPushFiles } =
+  await import("../../ui/prompts");
+const { log } = await import("../../ui/renderer");
 
 const mockDownloadTemplate = vi.mocked(downloadTemplate);
 const mockDetectDiff = vi.mocked(detectDiff);
 const mockGetPushableFiles = vi.mocked(getPushableFiles);
 const mockGetGitHubToken = vi.mocked(getGitHubToken);
 const mockCreatePullRequest = vi.mocked(createPullRequest);
-const mockPromptPushConfirm = vi.mocked(promptPushConfirm);
-const mockPromptGitHubToken = vi.mocked(promptGitHubToken);
-const mockPromptPrTitle = vi.mocked(promptPrTitle);
-const mockPromptPrBody = vi.mocked(promptPrBody);
-const mockPromptSelectFilesWithDiff = vi.mocked(promptSelectFilesWithDiff);
+const mockConfirmAction = vi.mocked(confirmAction);
+const mockInputGitHubToken = vi.mocked(inputGitHubToken);
+const mockInputPrTitle = vi.mocked(inputPrTitle);
+const mockInputPrBody = vi.mocked(inputPrBody);
+const mockSelectPushFiles = vi.mocked(selectPushFiles);
 const mockLog = vi.mocked(log);
-const mockBox = vi.mocked(box);
 
 const validConfig = {
   version: "0.1.0",
@@ -144,7 +126,6 @@ describe("pushCommand", () => {
   beforeEach(() => {
     vol.reset();
     vi.clearAllMocks();
-    mockExit.mockClear();
 
     // デフォルトのモック設定
     mockDownloadTemplate.mockResolvedValue({
@@ -198,11 +179,7 @@ describe("pushCommand", () => {
           rawArgs: [],
           cmd: pushCommand,
         }),
-      ).rejects.toThrow("process.exit called");
-
-      expect(mockLog.error).toHaveBeenCalledWith(
-        ".devenv.json not found. Run 'init' command first.",
-      );
+      ).rejects.toThrow(".devenv.json not found.");
     });
 
     it("無効な .devenv.json 形式の場合はエラー", async () => {
@@ -216,9 +193,7 @@ describe("pushCommand", () => {
           rawArgs: [],
           cmd: pushCommand,
         }),
-      ).rejects.toThrow("process.exit called");
-
-      expect(mockLog.error).toHaveBeenCalledWith("Invalid .devenv.json format");
+      ).rejects.toThrow("Invalid .devenv.json format");
     });
 
     it("modules が空の場合は警告", async () => {
@@ -273,7 +248,7 @@ describe("pushCommand", () => {
         cmd: pushCommand,
       });
 
-      expect(mockBox).toHaveBeenCalledWith("Dry run mode", "info");
+      expect(mockLog.info).toHaveBeenCalledWith("Dry run mode");
       expect(mockLog.info).toHaveBeenCalledWith("No PR was created (dry run)");
       expect(mockCreatePullRequest).not.toHaveBeenCalled();
     });
@@ -291,7 +266,7 @@ describe("pushCommand", () => {
         },
       ]);
 
-      mockPromptSelectFilesWithDiff.mockResolvedValueOnce([]);
+      mockSelectPushFiles.mockResolvedValueOnce([]);
 
       await (pushCommand.run as any)({
         args: { dir: "/test", dryRun: false, force: false, interactive: true },
@@ -316,7 +291,7 @@ describe("pushCommand", () => {
         },
       ]);
 
-      mockPromptPushConfirm.mockResolvedValueOnce(false);
+      mockConfirmAction.mockResolvedValueOnce(false);
 
       await (pushCommand.run as any)({
         args: { dir: "/test", dryRun: false, force: false, interactive: false },
@@ -340,10 +315,10 @@ describe("pushCommand", () => {
       };
 
       mockGetPushableFiles.mockReturnValue([pushableFile]);
-      mockPromptSelectFilesWithDiff.mockResolvedValueOnce([pushableFile]);
+      mockSelectPushFiles.mockResolvedValueOnce([pushableFile]);
       mockGetGitHubToken.mockReturnValue("ghp_token");
-      mockPromptPrTitle.mockResolvedValueOnce("feat: add new file");
-      mockPromptPrBody.mockResolvedValueOnce("PR description");
+      mockInputPrTitle.mockResolvedValueOnce("feat: add new file");
+      mockInputPrBody.mockResolvedValueOnce("PR description");
       mockCreatePullRequest.mockResolvedValueOnce({
         url: "https://github.com/owner/repo/pull/1",
         branch: "update-template-123",
@@ -356,7 +331,7 @@ describe("pushCommand", () => {
         cmd: pushCommand,
       });
 
-      expect(mockBox).toHaveBeenCalledWith("Pull request created!", "success");
+      expect(mockLog.success).toHaveBeenCalledWith("Pull request created!");
       expect(mockCreatePullRequest).toHaveBeenCalledWith(
         "ghp_token",
         expect.objectContaining({
@@ -380,11 +355,11 @@ describe("pushCommand", () => {
       };
 
       mockGetPushableFiles.mockReturnValue([pushableFile]);
-      mockPromptSelectFilesWithDiff.mockResolvedValueOnce([pushableFile]);
+      mockSelectPushFiles.mockResolvedValueOnce([pushableFile]);
       mockGetGitHubToken.mockReturnValue(undefined);
-      mockPromptGitHubToken.mockResolvedValueOnce("ghp_prompted_token");
-      mockPromptPrTitle.mockResolvedValueOnce("feat: add");
-      mockPromptPrBody.mockResolvedValueOnce(undefined);
+      mockInputGitHubToken.mockResolvedValueOnce("ghp_prompted_token");
+      mockInputPrTitle.mockResolvedValueOnce("feat: add");
+      mockInputPrBody.mockResolvedValueOnce(undefined);
       mockCreatePullRequest.mockResolvedValueOnce({
         url: "https://github.com/owner/repo/pull/1",
         branch: "update-template-123",
@@ -397,7 +372,7 @@ describe("pushCommand", () => {
         cmd: pushCommand,
       });
 
-      expect(mockPromptGitHubToken).toHaveBeenCalled();
+      expect(mockInputGitHubToken).toHaveBeenCalled();
       expect(mockCreatePullRequest).toHaveBeenCalledWith("ghp_prompted_token", expect.anything());
     });
 
@@ -413,9 +388,9 @@ describe("pushCommand", () => {
       };
 
       mockGetPushableFiles.mockReturnValue([pushableFile]);
-      mockPromptSelectFilesWithDiff.mockResolvedValueOnce([pushableFile]);
+      mockSelectPushFiles.mockResolvedValueOnce([pushableFile]);
       mockGetGitHubToken.mockReturnValue("ghp_token");
-      mockPromptPrBody.mockResolvedValueOnce(undefined);
+      mockInputPrBody.mockResolvedValueOnce(undefined);
       mockCreatePullRequest.mockResolvedValueOnce({
         url: "https://github.com/owner/repo/pull/1",
         branch: "update-template-123",
@@ -434,8 +409,8 @@ describe("pushCommand", () => {
         cmd: pushCommand,
       });
 
-      // promptPrTitle は呼ばれない
-      expect(mockPromptPrTitle).not.toHaveBeenCalled();
+      // inputPrTitle は呼ばれない
+      expect(mockInputPrTitle).not.toHaveBeenCalled();
       expect(mockCreatePullRequest).toHaveBeenCalledWith(
         "ghp_token",
         expect.objectContaining({
@@ -457,8 +432,8 @@ describe("pushCommand", () => {
 
       mockGetPushableFiles.mockReturnValue([pushableFile]);
       mockGetGitHubToken.mockReturnValue("ghp_token");
-      mockPromptPrTitle.mockResolvedValueOnce("feat: add");
-      mockPromptPrBody.mockResolvedValueOnce(undefined);
+      mockInputPrTitle.mockResolvedValueOnce("feat: add");
+      mockInputPrBody.mockResolvedValueOnce(undefined);
       mockCreatePullRequest.mockResolvedValueOnce({
         url: "https://github.com/owner/repo/pull/1",
         branch: "update-template-123",
@@ -472,8 +447,8 @@ describe("pushCommand", () => {
       });
 
       // ファイル選択プロンプトはスキップ
-      expect(mockPromptSelectFilesWithDiff).not.toHaveBeenCalled();
-      expect(mockPromptPushConfirm).not.toHaveBeenCalled();
+      expect(mockSelectPushFiles).not.toHaveBeenCalled();
+      expect(mockConfirmAction).not.toHaveBeenCalled();
       expect(mockCreatePullRequest).toHaveBeenCalled();
     });
   });
