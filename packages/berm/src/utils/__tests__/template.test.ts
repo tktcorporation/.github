@@ -9,26 +9,28 @@ vi.mock("node:fs", async () => {
   return memfs.fs;
 });
 
-// @inquirer/prompts をモック
-vi.mock("@inquirer/prompts", () => ({
+// @clack/prompts をモック
+vi.mock("@clack/prompts", () => ({
   confirm: vi.fn(),
+  isCancel: vi.fn(() => false),
 }));
 
-// consola をモック（ログ出力を抑制）
-vi.mock("consola", () => ({
-  consola: {
-    success: vi.fn(),
+// ui/renderer をモック
+vi.mock("../../ui/renderer", () => ({
+  log: {
     info: vi.fn(),
     warn: vi.fn(),
-    start: vi.fn(),
-    box: vi.fn(),
+    error: vi.fn(),
+    success: vi.fn(),
+    step: vi.fn(),
+    message: vi.fn(),
   },
 }));
 
 // モック後にインポート
 const { copyFile, writeFileWithStrategy } = await import("../template");
-const { confirm } = await import("@inquirer/prompts");
-const mockConfirm = vi.mocked(confirm);
+const clack = await import("@clack/prompts");
+const mockConfirm = vi.mocked(clack.confirm);
 
 describe("buildTemplateSource", () => {
   it("owner/repo から giget 形式の文字列を構築", () => {
@@ -114,7 +116,6 @@ describe("copyFile", () => {
         action: "skipped",
         path: "file.txt",
       });
-      // 元のファイルが保持されている
       expect(vol.readFileSync("/dest/file.txt", "utf8")).toBe("old content");
     });
   });
@@ -136,8 +137,8 @@ describe("copyFile", () => {
       });
       expect(vol.readFileSync("/dest/file.txt", "utf8")).toBe("new content");
       expect(mockConfirm).toHaveBeenCalledWith({
-        message: "file.txt は既に存在します。上書きしますか?",
-        default: false,
+        message: "file.txt already exists. Overwrite?",
+        initialValue: false,
       });
     });
 
@@ -237,7 +238,6 @@ describe("writeFileWithStrategy", () => {
         action: "skipped",
         path: "file.txt",
       });
-      // 元のファイルが保持されている
       expect(vol.readFileSync("/dest/file.txt", "utf8")).toBe("old content");
     });
   });
@@ -263,8 +263,8 @@ describe("writeFileWithStrategy", () => {
       });
       expect(vol.readFileSync("/dest/file.txt", "utf8")).toBe("new content");
       expect(mockConfirm).toHaveBeenCalledWith({
-        message: "file.txt は既に存在します。上書きしますか?",
-        default: false,
+        message: "file.txt already exists. Overwrite?",
+        initialValue: false,
       });
     });
 

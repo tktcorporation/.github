@@ -14,7 +14,8 @@ import type {
   OverwriteStrategy,
   TemplateModule,
 } from "../modules/schemas";
-import { promptInit } from "../prompts/init";
+import { BermError } from "../errors";
+import { selectModules, selectOverwriteStrategy } from "../ui/prompts";
 import {
   DEFAULT_TEMPLATE_OWNER,
   DEFAULT_TEMPLATE_REPO,
@@ -27,18 +28,7 @@ import {
   fetchTemplates,
   writeFileWithStrategy,
 } from "../utils/template";
-import {
-  box,
-  calculateSummary,
-  log,
-  logFileResult,
-  pc,
-  showHeader,
-  showNextSteps,
-  showSummary,
-  step,
-  withSpinner,
-} from "../utils/ui";
+import { intro, log, logFileResults, outro, pc, withSpinner } from "../ui/renderer";
 
 // ビルド時に置換される定数
 declare const __VERSION__: string;
@@ -84,19 +74,18 @@ export const initCommand = defineCommand({
   },
   async run({ args }) {
     // ヘッダー表示
-    showHeader("berm", version);
+    intro();
 
     // "init" という引数は無視して現在のディレクトリを使用
     const dir = args.dir === "init" ? "." : args.dir;
     const targetDir = resolve(dir);
 
     log.info(`Target: ${pc.cyan(targetDir)}`);
-    log.newline();
 
     // ディレクトリ作成
     if (!existsSync(targetDir)) {
       mkdirSync(targetDir, { recursive: true });
-      log.dim(`Created directory: ${targetDir}`);
+      log.message(pc.dim(`Created directory: ${targetDir}`));
     }
 
     // テンプレートソースを解決
@@ -106,12 +95,9 @@ export const initCommand = defineCommand({
       repo: sourceRepo,
     });
     log.info(`Template: ${pc.cyan(`${sourceOwner}/${sourceRepo}`)}`);
-    log.newline();
-
-    const totalSteps = 3;
 
     // Step 1: テンプレートをダウンロード
-    step({ current: 1, total: totalSteps }, "Fetching template...");
+    log.step("Fetching template...");
 
     const { templateDir, cleanup } = await withSpinner("Downloading template from GitHub...", () =>
       downloadTemplateToTemp(targetDir, templateSourceStr),
@@ -128,8 +114,7 @@ export const initCommand = defineCommand({
       }
 
       // Step 2: モジュール選択
-      step({ current: 2, total: totalSteps }, "Selecting modules...");
-      log.newline();
+      log.step("Selecting modules...");
 
       let answers: Answers;
       const hasModulesArg = typeof args.modules === "string" && args.modules.length > 0;
@@ -144,10 +129,10 @@ export const initCommand = defineCommand({
           const validIds = moduleList.map((m) => m.id);
           const invalidIds = requestedIds.filter((id) => !validIds.includes(id));
           if (invalidIds.length > 0) {
-            log.error(
-              `Unknown module(s): ${invalidIds.join(", ")}. Available: ${validIds.join(", ")}`,
+            throw new BermError(
+              `Unknown module(s): ${invalidIds.join(", ")}`,
+              `Available modules: ${validIds.join(", ")}`,
             );
-            return;
           }
           selectedModules = requestedIds;
         } else {
@@ -159,10 +144,10 @@ export const initCommand = defineCommand({
         if (hasStrategyArg) {
           const strategy = args["overwrite-strategy"] as string;
           if (strategy !== "overwrite" && strategy !== "skip" && strategy !== "prompt") {
-            log.error(
-              `Invalid overwrite strategy: ${strategy}. Must be: overwrite, skip, or prompt`,
+            throw new BermError(
+              `Invalid overwrite strategy: ${strategy}`,
+              "Must be: overwrite, skip, or prompt",
             );
-            return;
           }
           overwriteStrategy = strategy;
         }
@@ -176,13 +161,18 @@ export const initCommand = defineCommand({
         // --overwrite-strategy のみ指定：モジュール選択はインタラクティブ
         const strategy = args["overwrite-strategy"] as string;
         if (strategy !== "overwrite" && strategy !== "skip" && strategy !== "prompt") {
-          log.error(`Invalid overwrite strategy: ${strategy}. Must be: overwrite, skip, or prompt`);
-          return;
+          throw new BermError(
+            `Invalid overwrite strategy: ${strategy}`,
+            "Must be: overwrite, skip, or prompt",
+          );
         }
-        answers = await promptInit(moduleList);
-        answers.overwriteStrategy = strategy;
+        const selectedModules = await selectModules(moduleList);
+        const overwriteStrategy = strategy;
+        answers = { modules: selectedModules, overwriteStrategy };
       } else {
-        answers = await promptInit(moduleList);
+        const selectedModules = await selectModules(moduleList);
+        const overwriteStrategy = await selectOverwriteStrategy();
+        answers = { modules: selectedModules, overwriteStrategy };
       }
 
       if (answers.modules.length === 0) {
@@ -190,11 +180,8 @@ export const initCommand = defineCommand({
         return;
       }
 
-      log.newline();
-
       // Step 3: ファイルをコピー
-      step({ current: 3, total: totalSteps }, "Applying templates...");
-      log.newline();
+      log.step("Applying templates...");
 
       const effectiveStrategy: OverwriteStrategy = args.force
         ? "overwrite"
@@ -228,14 +215,8 @@ export const initCommand = defineCommand({
       });
       allResults.push(configResult);
 
-      // ファイル操作結果を表示
-      for (const result of allResults) {
-        logFileResult(result);
-      }
-
-      // サマリー表示
-      const summary = calculateSummary(allResults);
-      showSummary(summary);
+      // ファイル操作結果を表示（サマリー含む）
+      const summary = logFileResults(allResults);
 
       // 変更がない場合
       if (summary.added === 0 && summary.updated === 0) {
@@ -243,23 +224,21 @@ export const initCommand = defineCommand({
         return;
       }
 
-      // 成功メッセージ
-      box("Setup complete!", "success");
-
       // モジュール別の説明を表示
       displayModuleDescriptions(answers.modules, allResults, moduleList);
 
-      // 次のステップ
-      showNextSteps([
-        {
-          command: "git add . && git commit -m 'chore: add devenv config'",
-          description: "Commit the changes",
-        },
-        {
-          command: "npx @tktco/berm diff",
-          description: "Check for updates from upstream",
-        },
-      ]);
+      // 成功メッセージと次のステップ
+      outro(
+        [
+          "Setup complete!",
+          "",
+          `${pc.bold("Next steps:")}`,
+          `  ${pc.cyan("git add . && git commit -m 'chore: add devenv config'")}`,
+          `  ${pc.dim("Commit the changes")}`,
+          `  ${pc.cyan("npx @tktco/berm diff")}`,
+          `  ${pc.dim("Check for updates from upstream")}`,
+        ].join("\n"),
+      );
     } finally {
       cleanup();
     }
@@ -338,6 +317,9 @@ async function copyModulesJsonc(
 
 /**
  * モジュール別の説明を表示
+ *
+ * 背景: 選択されたモジュールが実際に変更を加えた場合のみ、
+ * 各モジュールの名前と説明を一覧表示する。ユーザーが何がインストールされたかを確認できる。
  */
 function displayModuleDescriptions(
   selectedModules: string[],
@@ -353,17 +335,20 @@ function displayModuleDescriptions(
   }
 
   log.info(pc.bold("Installed modules:"));
-  log.newline();
 
+  const lines: string[] = [];
   for (const moduleId of selectedModules) {
     const mod = getModuleById(moduleId, moduleList);
     if (mod) {
       const description = mod.setupDescription || mod.description;
-      console.log(`  ${pc.cyan("◆")} ${pc.bold(mod.name)}`);
+      lines.push(`  ${pc.cyan("\u25C6")} ${pc.bold(mod.name)}`);
       if (description) {
-        console.log(`    ${pc.dim(description)}`);
+        lines.push(`    ${pc.dim(description)}`);
       }
     }
+  }
+  if (lines.length > 0) {
+    log.message(lines.join("\n"));
   }
 }
 
@@ -382,10 +367,10 @@ function resolveTemplateSource(from: string | undefined): {
   if (from) {
     const slashIndex = from.indexOf("/");
     if (slashIndex === -1 || slashIndex === 0 || slashIndex === from.length - 1) {
-      log.error(
-        `Invalid --from format: "${from}". Expected: owner/repo (e.g., my-org/my-templates)`,
+      throw new BermError(
+        `Invalid --from format: "${from}"`,
+        "Expected: owner/repo (e.g., my-org/my-templates)",
       );
-      process.exit(1);
     }
     return {
       sourceOwner: from.slice(0, slashIndex),

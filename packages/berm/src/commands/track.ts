@@ -1,5 +1,6 @@
 import { defineCommand } from "citty";
 import { resolve } from "pathe";
+import { BermError } from "../errors";
 import {
   addPatternToModulesFileWithCreate,
   loadModulesFile,
@@ -7,7 +8,7 @@ import {
   saveModulesFile,
 } from "../modules";
 import { getModuleIdFromPath } from "../utils/untracked";
-import { box, log, pc, showHeader } from "../utils/ui";
+import { intro, log, outro, pc } from "../ui/renderer";
 
 /**
  * パターン文字列からモジュール ID を推定
@@ -59,33 +60,34 @@ export const trackCommand = defineCommand({
     },
   },
   async run({ args }) {
-    showHeader("berm track");
+    intro("track");
 
     const targetDir = resolve(args.dir);
 
     // modules.jsonc の存在確認
     if (!modulesFileExists(targetDir)) {
-      log.error(".devenv/modules.jsonc not found.");
-      log.dim("Run 'berm init' first to set up the project.");
-      process.exit(1);
+      throw new BermError(
+        ".devenv/modules.jsonc not found.",
+        "Run 'berm init' first to set up the project.",
+      );
     }
 
     // --list モード: 現在の追跡パターンを表示
     if (args.list) {
       const { modules } = await loadModulesFile(targetDir);
-      log.newline();
-      log.info(pc.bold("Tracked modules and patterns:"));
-      log.newline();
+      log.info("Tracked modules and patterns:");
       for (const mod of modules) {
-        console.log(`  ${pc.cyan(mod.id)} ${pc.dim(`(${mod.name})`)}`);
+        const lines: string[] = [];
+        lines.push(`${pc.cyan(mod.id)} ${pc.dim(`(${mod.name})`)}`);
         if (mod.description) {
-          console.log(`    ${pc.dim(mod.description)}`);
+          lines.push(`  ${pc.dim(mod.description)}`);
         }
         for (const pattern of mod.patterns) {
-          console.log(`    ${pc.dim("→")} ${pattern}`);
+          lines.push(`  ${pc.dim("→")} ${pattern}`);
         }
-        log.newline();
+        log.message(lines.join("\n"));
       }
+      outro("Done.");
       return;
     }
 
@@ -124,10 +126,10 @@ export const trackCommand = defineCommand({
     }
 
     if (patterns.length === 0) {
-      log.error("No patterns specified.");
-      log.dim("Usage: berm track <patterns...> [--module <id>]");
-      log.dim("Example: berm track '.cloud/rules/*.md' '.cloud/config.json'");
-      process.exit(1);
+      throw new BermError(
+        "No patterns specified.",
+        "Usage: berm track <patterns...> [--module <id>]\nExample: berm track '.cloud/rules/*.md' '.cloud/config.json'",
+      );
     }
 
     // モジュール ID の決定
@@ -143,7 +145,6 @@ export const trackCommand = defineCommand({
     });
 
     if (updatedContent === rawContent) {
-      log.newline();
       log.info("All patterns are already tracked. No changes needed.");
       return;
     }
@@ -152,17 +153,13 @@ export const trackCommand = defineCommand({
     await saveModulesFile(targetDir, updatedContent);
 
     // 結果表示
-    log.newline();
-    box("Patterns added!", "success");
-    log.newline();
-
-    console.log(`  ${pc.bold("Module:")} ${pc.cyan(moduleId)}`);
-    console.log(`  ${pc.bold("Added:")}`);
-    for (const pattern of patterns) {
-      console.log(`    ${pc.green("+")} ${pattern}`);
-    }
-    log.newline();
-    log.dim(`Updated .devenv/modules.jsonc`);
-    log.newline();
+    log.success("Patterns added!");
+    const details = [
+      `Module: ${pc.cyan(moduleId)}`,
+      "Added:",
+      ...patterns.map((p) => `  ${pc.green("+")} ${p}`),
+    ];
+    log.message(details.join("\n"));
+    outro("Updated .devenv/modules.jsonc");
   },
 });

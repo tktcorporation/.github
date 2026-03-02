@@ -3,22 +3,14 @@ import { readFile, rm } from "node:fs/promises";
 import { defineCommand } from "citty";
 import { downloadTemplate } from "giget";
 import { join, resolve } from "pathe";
+import { BermError } from "../errors";
 import { defaultModules, loadModulesFile, modulesFileExists } from "../modules";
 import type { DevEnvConfig, TemplateModule } from "../modules/schemas";
 import { configSchema } from "../modules/schemas";
-import { detectDiff, formatDiff, hasDiff } from "../utils/diff";
+import { intro, log, logDiffSummary, outro, pc, withSpinner } from "../ui/renderer";
+import { detectDiff, hasDiff } from "../utils/diff";
 import { buildTemplateSource } from "../utils/template";
 import { detectUntrackedFiles, getTotalUntrackedCount } from "../utils/untracked";
-import {
-  box,
-  diffHeader,
-  log,
-  pc,
-  showHeader,
-  showNextSteps,
-  step,
-  withSpinner,
-} from "../utils/ui";
 
 export const diffCommand = defineCommand({
   meta: {
@@ -39,15 +31,14 @@ export const diffCommand = defineCommand({
     },
   },
   async run({ args }) {
-    showHeader("berm diff");
+    intro("diff");
 
     const targetDir = resolve(args.dir);
     const configPath = join(targetDir, ".devenv.json");
 
     // .devenv.json の存在確認
     if (!existsSync(configPath)) {
-      log.error(".devenv.json not found. Run 'init' command first.");
-      process.exit(1);
+      throw new BermError(".devenv.json not found.", "Run 'berm init' first.");
     }
 
     // 設定読み込み
@@ -56,9 +47,7 @@ export const diffCommand = defineCommand({
     const parseResult = configSchema.safeParse(configData);
 
     if (!parseResult.success) {
-      log.error("Invalid .devenv.json format");
-      log.dim(parseResult.error.message);
-      process.exit(1);
+      throw new BermError("Invalid .devenv.json format", parseResult.error.message);
     }
 
     const config: DevEnvConfig = parseResult.data;
@@ -68,10 +57,8 @@ export const diffCommand = defineCommand({
       return;
     }
 
-    const totalSteps = 2;
-
     // Step 1: テンプレートをダウンロード
-    step({ current: 1, total: totalSteps }, "Fetching template...");
+    log.step("Fetching template...");
 
     // テンプレートを一時ディレクトリにダウンロード
     const templateSource = buildTemplateSource(config.source);
@@ -95,7 +82,7 @@ export const diffCommand = defineCommand({
       }
 
       // Step 2: 差分を検出
-      step({ current: 2, total: totalSteps }, "Detecting changes...");
+      log.step("Detecting changes...");
 
       const diff = await withSpinner("Analyzing differences...", () =>
         detectDiff({
@@ -117,70 +104,41 @@ export const diffCommand = defineCommand({
       const untrackedCount = getTotalUntrackedCount(untrackedByFolder);
 
       // 結果表示
-      log.newline();
-
       if (hasDiff(diff)) {
-        diffHeader("Changes detected:");
-        console.log(formatDiff(diff, args.verbose));
+        logDiffSummary(diff.files);
 
         // 未トラックファイルがあればヒントを表示
         if (untrackedCount > 0) {
-          log.newline();
           log.warn(`${untrackedCount} untracked file(s) found outside the sync whitelist:`);
-          for (const group of untrackedByFolder) {
-            for (const file of group.files) {
-              console.log(`  ${pc.dim("•")} ${file.path}`);
-            }
-          }
-          log.newline();
+          const untrackedLines = untrackedByFolder.flatMap((group) =>
+            group.files.map((file) => `  ${pc.dim("•")} ${file.path}`),
+          );
+          log.message(untrackedLines.join("\n"));
           log.info(
             `To include these files in sync, add them to tracking with the ${pc.cyan("track")} command:`,
           );
-          log.dim(`  npx @tktco/berm track "<pattern>"`);
-          log.dim(
-            `  Example: npx @tktco/berm track "${untrackedByFolder[0]?.files[0]?.path || ".cloud/rules/*.md"}"`,
+          log.message(pc.dim(`  npx @tktco/berm track "<pattern>"`));
+          log.message(
+            pc.dim(
+              `  Example: npx @tktco/berm track "${untrackedByFolder[0]?.files[0]?.path || ".cloud/rules/*.md"}"`,
+            ),
           );
         }
 
-        log.newline();
-
-        const nextSteps = [
-          {
-            command: "npx @tktco/berm push",
-            description: "Push your local changes to the template repository",
-          },
-          {
-            command: "npx @tktco/berm diff --verbose",
-            description: "Show detailed diff output",
-          },
-        ];
-        if (untrackedCount > 0) {
-          nextSteps.push({
-            command: "npx @tktco/berm track <pattern>",
-            description: "Add untracked files to the sync whitelist so they can be pushed",
-          });
-        }
-
-        showNextSteps(nextSteps);
+        outro("Run 'berm push' to push changes.");
       } else if (untrackedCount > 0) {
-        box("No tracked changes", "success");
-        log.info("Your tracked files are in sync with the template.");
-        log.newline();
+        log.success("Tracked files are in sync.");
         log.warn(`However, ${untrackedCount} untracked file(s) exist outside the sync whitelist:`);
-        for (const group of untrackedByFolder) {
-          for (const file of group.files) {
-            console.log(`  ${pc.dim("•")} ${file.path}`);
-          }
-        }
-        log.newline();
+        const untrackedLines = untrackedByFolder.flatMap((group) =>
+          group.files.map((file) => `  ${pc.dim("•")} ${file.path}`),
+        );
+        log.message(untrackedLines.join("\n"));
         log.info(
           `Use ${pc.cyan("npx @tktco/berm track <pattern>")} to add them, then ${pc.cyan("push")} to sync.`,
         );
-        log.newline();
+        outro("Tracked files are in sync, but untracked files exist.");
       } else {
-        box("No changes", "success");
-        log.info("Your local files are in sync with the template");
-        log.newline();
+        outro("No changes — in sync with template.");
       }
     } finally {
       // 一時ディレクトリを削除

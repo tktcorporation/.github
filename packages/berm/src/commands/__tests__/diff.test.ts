@@ -28,46 +28,55 @@ vi.mock("../../utils/template", () => ({
 // utils/diff をモック
 vi.mock("../../utils/diff", () => ({
   detectDiff: vi.fn(),
-  formatDiff: vi.fn(() => "formatted diff output"),
   hasDiff: vi.fn(),
 }));
 
-// utils/ui をモック
-vi.mock("../../utils/ui", () => ({
-  showHeader: vi.fn(),
-  log: {
-    info: vi.fn(),
-    warn: vi.fn(),
-    dim: vi.fn(),
-    newline: vi.fn(),
-    error: vi.fn(),
-  },
-  step: vi.fn(),
-  withSpinner: vi.fn(async (_text: string, fn: () => Promise<unknown>) => fn()),
-  diffHeader: vi.fn(),
-  box: vi.fn(),
-  showNextSteps: vi.fn(),
+// utils/untracked をモック
+vi.mock("../../utils/untracked", () => ({
+  detectUntrackedFiles: vi.fn().mockResolvedValue([]),
+  getTotalUntrackedCount: vi.fn().mockReturnValue(0),
 }));
 
-// console.log をモック
-vi.spyOn(console, "log").mockImplementation(() => {});
+// modules をモック
+vi.mock("../../modules", () => ({
+  defaultModules: [],
+  loadModulesFile: vi.fn(),
+  modulesFileExists: vi.fn().mockReturnValue(false),
+}));
 
-// process.exit をモック
-const mockExit = vi.spyOn(process, "exit").mockImplementation(() => {
-  throw new Error("process.exit called");
-});
+// ui/renderer をモック
+vi.mock("../../ui/renderer", () => ({
+  intro: vi.fn(),
+  outro: vi.fn(),
+  log: {
+    info: vi.fn(),
+    success: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    step: vi.fn(),
+    message: vi.fn(),
+  },
+  logDiffSummary: vi.fn(),
+  withSpinner: vi.fn(async (_text: string, fn: () => Promise<unknown>) => fn()),
+  pc: {
+    cyan: vi.fn((s: string) => s),
+    dim: vi.fn((s: string) => s),
+  },
+}));
 
 // モック後にインポート
 const { diffCommand } = await import("../diff");
 const { downloadTemplate } = await import("giget");
 const { detectDiff, hasDiff } = await import("../../utils/diff");
-const { log, box } = await import("../../utils/ui");
+const { log, outro, logDiffSummary } = await import("../../ui/renderer");
+import { BermError } from "../../errors";
 
 const mockDownloadTemplate = vi.mocked(downloadTemplate);
 const mockDetectDiff = vi.mocked(detectDiff);
 const mockHasDiff = vi.mocked(hasDiff);
 const mockLog = vi.mocked(log);
-const mockBox = vi.mocked(box);
+const mockOutro = vi.mocked(outro);
+const mockLogDiffSummary = vi.mocked(logDiffSummary);
 
 const validConfig = {
   version: "0.1.0",
@@ -88,7 +97,6 @@ describe("diffCommand", () => {
   beforeEach(() => {
     vol.reset();
     vi.clearAllMocks();
-    mockExit.mockClear();
 
     // デフォルトのモック設定
     mockDownloadTemplate.mockResolvedValue({
@@ -99,7 +107,6 @@ describe("diffCommand", () => {
 
   describe("meta", () => {
     it("コマンドメタデータが正しい", () => {
-      // citty の型は Resolvable なので直接アクセスできる
       expect((diffCommand.meta as { name: string }).name).toBe("diff");
       expect((diffCommand.meta as { description: string }).description).toBe(
         "Show differences between local and template",
@@ -120,7 +127,7 @@ describe("diffCommand", () => {
   });
 
   describe("run", () => {
-    it(".devenv.json が存在しない場合はエラー", async () => {
+    it(".devenv.json が存在しない場合は BermError をスロー", async () => {
       vol.fromJSON({
         "/test": null,
       });
@@ -131,14 +138,10 @@ describe("diffCommand", () => {
           rawArgs: [],
           cmd: diffCommand,
         }),
-      ).rejects.toThrow("process.exit called");
-
-      expect(mockLog.error).toHaveBeenCalledWith(
-        ".devenv.json not found. Run 'init' command first.",
-      );
+      ).rejects.toThrow(BermError);
     });
 
-    it("無効な .devenv.json 形式の場合はエラー", async () => {
+    it("無効な .devenv.json 形式の場合は BermError をスロー", async () => {
       vol.fromJSON({
         "/test/.devenv.json": JSON.stringify({ invalid: "format" }),
       });
@@ -149,9 +152,7 @@ describe("diffCommand", () => {
           rawArgs: [],
           cmd: diffCommand,
         }),
-      ).rejects.toThrow("process.exit called");
-
-      expect(mockLog.error).toHaveBeenCalledWith("Invalid .devenv.json format");
+      ).rejects.toThrow(BermError);
     });
 
     it("modules が空の場合は警告", async () => {
@@ -171,7 +172,7 @@ describe("diffCommand", () => {
       expect(mockLog.warn).toHaveBeenCalledWith("No modules installed");
     });
 
-    it("差分がない場合は成功メッセージ", async () => {
+    it("差分がない場合は outro で完了メッセージ", async () => {
       vol.fromJSON({
         "/test/.devenv.json": JSON.stringify(validConfig),
       });
@@ -185,11 +186,10 @@ describe("diffCommand", () => {
         cmd: diffCommand,
       });
 
-      expect(mockBox).toHaveBeenCalledWith("No changes", "success");
-      expect(mockLog.info).toHaveBeenCalledWith("Your local files are in sync with the template");
+      expect(mockOutro).toHaveBeenCalledWith("No changes — in sync with template.");
     });
 
-    it("差分がある場合は差分を表示", async () => {
+    it("差分がある場合は logDiffSummary を呼ぶ", async () => {
       vol.fromJSON({
         "/test/.devenv.json": JSON.stringify(validConfig),
       });
@@ -214,7 +214,8 @@ describe("diffCommand", () => {
         cmd: diffCommand,
       });
 
-      expect(mockBox).not.toHaveBeenCalledWith("No changes", "success");
+      expect(mockLogDiffSummary).toHaveBeenCalledWith(diffWithChanges.files);
+      expect(mockOutro).toHaveBeenCalledWith("Run 'berm push' to push changes.");
     });
 
     it("一時ディレクトリを削除", async () => {

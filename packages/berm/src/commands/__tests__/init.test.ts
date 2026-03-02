@@ -1,5 +1,6 @@
 import { vol } from "memfs";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { BermError } from "../../errors";
 
 // fs モジュールをモック
 vi.mock("node:fs", async () => {
@@ -29,32 +30,29 @@ vi.mock("../../utils/template", () => ({
   copyFile: vi.fn(),
 }));
 
-vi.mock("../../prompts/init", () => ({
-  promptInit: vi.fn(),
+vi.mock("../../ui/prompts", () => ({
+  selectModules: vi.fn(),
+  selectOverwriteStrategy: vi.fn(),
 }));
 
-vi.mock("../../utils/ui", () => ({
-  showHeader: vi.fn(),
+vi.mock("../../ui/renderer", () => ({
+  intro: vi.fn(),
+  outro: vi.fn(),
   log: {
     info: vi.fn(),
     warn: vi.fn(),
-    dim: vi.fn(),
-    newline: vi.fn(),
-    success: vi.fn(),
     error: vi.fn(),
+    success: vi.fn(),
+    step: vi.fn(),
+    message: vi.fn(),
   },
   pc: {
     cyan: (s: string) => s,
     bold: (s: string) => s,
     dim: (s: string) => s,
   },
-  step: vi.fn(),
   withSpinner: vi.fn(async (_text: string, fn: () => Promise<unknown>) => fn()),
-  logFileResult: vi.fn(),
-  calculateSummary: vi.fn(() => ({ added: 1, updated: 0, skipped: 0 })),
-  showSummary: vi.fn(),
-  box: vi.fn(),
-  showNextSteps: vi.fn(),
+  logFileResults: vi.fn(() => ({ added: 1, updated: 0, skipped: 0 })),
 }));
 
 vi.mock("../../modules/index", async (importOriginal) => {
@@ -71,15 +69,16 @@ const { initCommand } = await import("../init");
 const { downloadTemplateToTemp, fetchTemplates, writeFileWithStrategy, copyFile } =
   await import("../../utils/template");
 const { detectGitHubOwner } = await import("../../utils/git-remote");
-const { promptInit } = await import("../../prompts/init");
-const { log } = await import("../../utils/ui");
+const { selectModules, selectOverwriteStrategy } = await import("../../ui/prompts");
+const { log } = await import("../../ui/renderer");
 
 const mockDownloadTemplateToTemp = vi.mocked(downloadTemplateToTemp);
 const mockFetchTemplates = vi.mocked(fetchTemplates);
 const mockWriteFileWithStrategy = vi.mocked(writeFileWithStrategy);
 const mockCopyFile = vi.mocked(copyFile);
 const mockDetectGitHubOwner = vi.mocked(detectGitHubOwner);
-const mockPromptInit = vi.mocked(promptInit);
+const mockSelectModules = vi.mocked(selectModules);
+const mockSelectOverwriteStrategy = vi.mocked(selectOverwriteStrategy);
 const mockLog = vi.mocked(log);
 
 describe("initCommand", () => {
@@ -135,10 +134,7 @@ describe("initCommand", () => {
         "/test": null,
       });
 
-      mockPromptInit.mockResolvedValueOnce({
-        modules: [],
-        overwriteStrategy: "prompt",
-      });
+      mockSelectModules.mockResolvedValueOnce([]);
 
       await (initCommand.run as any)({
         args: { dir: "/test", force: false, yes: false },
@@ -162,8 +158,8 @@ describe("initCommand", () => {
         cmd: initCommand,
       });
 
-      // promptInit は呼ばれない
-      expect(mockPromptInit).not.toHaveBeenCalled();
+      // selectModules は呼ばれない
+      expect(mockSelectModules).not.toHaveBeenCalled();
       // fetchTemplates は呼ばれる
       expect(mockFetchTemplates).toHaveBeenCalled();
     });
@@ -171,10 +167,8 @@ describe("initCommand", () => {
     it("ターゲットディレクトリが存在しない場合は作成", async () => {
       vol.fromJSON({});
 
-      mockPromptInit.mockResolvedValueOnce({
-        modules: ["root"],
-        overwriteStrategy: "prompt",
-      });
+      mockSelectModules.mockResolvedValueOnce(["root"]);
+      mockSelectOverwriteStrategy.mockResolvedValueOnce("prompt");
 
       mockFetchTemplates.mockResolvedValue([{ action: "copied", path: ".mcp.json" }]);
 
@@ -192,10 +186,8 @@ describe("initCommand", () => {
         "/test": null,
       });
 
-      mockPromptInit.mockResolvedValueOnce({
-        modules: ["devcontainer"],
-        overwriteStrategy: "prompt",
-      });
+      mockSelectModules.mockResolvedValueOnce(["devcontainer"]);
+      mockSelectOverwriteStrategy.mockResolvedValueOnce("prompt");
 
       mockFetchTemplates.mockResolvedValue([]);
 
@@ -218,10 +210,8 @@ describe("initCommand", () => {
         "/test": null,
       });
 
-      mockPromptInit.mockResolvedValueOnce({
-        modules: ["root"],
-        overwriteStrategy: "prompt", // prompt を選択しても
-      });
+      mockSelectModules.mockResolvedValueOnce(["root"]);
+      mockSelectOverwriteStrategy.mockResolvedValueOnce("prompt");
 
       mockFetchTemplates.mockResolvedValue([]);
 
@@ -250,10 +240,8 @@ describe("initCommand", () => {
         cleanup: mockCleanup,
       });
 
-      mockPromptInit.mockResolvedValueOnce({
-        modules: ["root"],
-        overwriteStrategy: "prompt",
-      });
+      mockSelectModules.mockResolvedValueOnce(["root"]);
+      mockSelectOverwriteStrategy.mockResolvedValueOnce("prompt");
 
       mockFetchTemplates.mockResolvedValue([]);
 
@@ -272,10 +260,8 @@ describe("initCommand", () => {
         "/tmp/template/.devenv/modules.jsonc": '{"modules":[]}',
       });
 
-      mockPromptInit.mockResolvedValueOnce({
-        modules: ["root"],
-        overwriteStrategy: "prompt",
-      });
+      mockSelectModules.mockResolvedValueOnce(["root"]);
+      mockSelectOverwriteStrategy.mockResolvedValueOnce("prompt");
 
       mockFetchTemplates.mockResolvedValue([]);
       mockCopyFile.mockResolvedValue({
@@ -309,7 +295,7 @@ describe("initCommand", () => {
         cleanup: mockCleanup,
       });
 
-      mockPromptInit.mockRejectedValueOnce(new Error("User cancelled"));
+      mockSelectModules.mockRejectedValueOnce(new Error("User cancelled"));
 
       await expect(
         (initCommand.run as any)({
@@ -330,13 +316,18 @@ describe("initCommand", () => {
       mockFetchTemplates.mockResolvedValue([{ action: "copied", path: ".mcp.json" }]);
 
       await (initCommand.run as any)({
-        args: { dir: "/test", force: false, yes: false, modules: "." },
+        args: {
+          dir: "/test",
+          force: false,
+          yes: false,
+          modules: ".",
+        },
         rawArgs: [],
         cmd: initCommand,
       });
 
-      // promptInit は呼ばれない（非インタラクティブ）
-      expect(mockPromptInit).not.toHaveBeenCalled();
+      // selectModules は呼ばれない（非インタラクティブ）
+      expect(mockSelectModules).not.toHaveBeenCalled();
       // fetchTemplates は指定モジュールで呼ばれる
       expect(mockFetchTemplates).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -353,12 +344,17 @@ describe("initCommand", () => {
       mockFetchTemplates.mockResolvedValue([]);
 
       await (initCommand.run as any)({
-        args: { dir: "/test", force: false, yes: false, modules: ".,.github" },
+        args: {
+          dir: "/test",
+          force: false,
+          yes: false,
+          modules: ".,.github",
+        },
         rawArgs: [],
         cmd: initCommand,
       });
 
-      expect(mockPromptInit).not.toHaveBeenCalled();
+      expect(mockSelectModules).not.toHaveBeenCalled();
       expect(mockFetchTemplates).toHaveBeenCalledWith(
         expect.objectContaining({
           modules: [".", ".github"],
@@ -371,13 +367,19 @@ describe("initCommand", () => {
         "/test": null,
       });
 
-      await (initCommand.run as any)({
-        args: { dir: "/test", force: false, yes: false, modules: "invalid-module" },
-        rawArgs: [],
-        cmd: initCommand,
-      });
+      await expect(
+        (initCommand.run as any)({
+          args: {
+            dir: "/test",
+            force: false,
+            yes: false,
+            modules: "invalid-module",
+          },
+          rawArgs: [],
+          cmd: initCommand,
+        }),
+      ).rejects.toThrow(BermError);
 
-      expect(mockLog.error).toHaveBeenCalledWith(expect.stringContaining("Unknown module(s)"));
       expect(mockFetchTemplates).not.toHaveBeenCalled();
     });
 
@@ -425,7 +427,7 @@ describe("initCommand", () => {
         cmd: initCommand,
       });
 
-      expect(mockPromptInit).not.toHaveBeenCalled();
+      expect(mockSelectModules).not.toHaveBeenCalled();
       expect(mockFetchTemplates).toHaveBeenCalledWith(
         expect.objectContaining({
           modules: ["."],
@@ -439,20 +441,19 @@ describe("initCommand", () => {
         "/test": null,
       });
 
-      await (initCommand.run as any)({
-        args: {
-          dir: "/test",
-          force: false,
-          yes: true,
-          "overwrite-strategy": "invalid",
-        },
-        rawArgs: [],
-        cmd: initCommand,
-      });
+      await expect(
+        (initCommand.run as any)({
+          args: {
+            dir: "/test",
+            force: false,
+            yes: true,
+            "overwrite-strategy": "invalid",
+          },
+          rawArgs: [],
+          cmd: initCommand,
+        }),
+      ).rejects.toThrow(BermError);
 
-      expect(mockLog.error).toHaveBeenCalledWith(
-        expect.stringContaining("Invalid overwrite strategy"),
-      );
       expect(mockFetchTemplates).not.toHaveBeenCalled();
     });
 
@@ -461,10 +462,7 @@ describe("initCommand", () => {
         "/test": null,
       });
 
-      mockPromptInit.mockResolvedValueOnce({
-        modules: ["."],
-        overwriteStrategy: "prompt",
-      });
+      mockSelectModules.mockResolvedValueOnce(["."]);
 
       mockFetchTemplates.mockResolvedValue([]);
 
@@ -480,7 +478,7 @@ describe("initCommand", () => {
       });
 
       // モジュール選択はインタラクティブ
-      expect(mockPromptInit).toHaveBeenCalled();
+      expect(mockSelectModules).toHaveBeenCalled();
       // 戦略は --overwrite-strategy で上書き
       expect(mockFetchTemplates).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -494,10 +492,7 @@ describe("initCommand", () => {
         ".": null,
       });
 
-      mockPromptInit.mockResolvedValueOnce({
-        modules: [],
-        overwriteStrategy: "prompt",
-      });
+      mockSelectModules.mockResolvedValueOnce([]);
 
       await (initCommand.run as any)({
         args: { dir: "init", force: false, yes: false },
@@ -514,15 +509,18 @@ describe("initCommand", () => {
         "/test": null,
       });
 
-      mockPromptInit.mockResolvedValueOnce({
-        modules: ["."],
-        overwriteStrategy: "prompt",
-      });
+      mockSelectModules.mockResolvedValueOnce(["."]);
+      mockSelectOverwriteStrategy.mockResolvedValueOnce("prompt");
 
       mockFetchTemplates.mockResolvedValue([]);
 
       await (initCommand.run as any)({
-        args: { dir: "/test", force: false, yes: false, from: "my-org/my-templates" },
+        args: {
+          dir: "/test",
+          force: false,
+          yes: false,
+          from: "my-org/my-templates",
+        },
         rawArgs: [],
         cmd: initCommand,
       });
@@ -541,10 +539,8 @@ describe("initCommand", () => {
 
       mockDetectGitHubOwner.mockReturnValueOnce("detected-org");
 
-      mockPromptInit.mockResolvedValueOnce({
-        modules: ["."],
-        overwriteStrategy: "prompt",
-      });
+      mockSelectModules.mockResolvedValueOnce(["."]);
+      mockSelectOverwriteStrategy.mockResolvedValueOnce("prompt");
 
       mockFetchTemplates.mockResolvedValue([]);
 
@@ -568,10 +564,8 @@ describe("initCommand", () => {
 
       mockDetectGitHubOwner.mockReturnValueOnce(null);
 
-      mockPromptInit.mockResolvedValueOnce({
-        modules: ["."],
-        overwriteStrategy: "prompt",
-      });
+      mockSelectModules.mockResolvedValueOnce(["."]);
+      mockSelectOverwriteStrategy.mockResolvedValueOnce("prompt");
 
       mockFetchTemplates.mockResolvedValue([]);
 
