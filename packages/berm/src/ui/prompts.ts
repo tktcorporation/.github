@@ -88,7 +88,7 @@ export async function inputPrTitle(defaultTitle?: string): Promise<string> {
     message: "PR title",
     placeholder: defaultTitle || "feat: update template config",
     validate: (value) => {
-      if (!value.trim()) return "Title is required";
+      if (!value?.trim()) return "Title is required";
     },
   });
   handleCancel(title);
@@ -127,7 +127,7 @@ export async function inputGitHubToken(): Promise<string> {
   const token = await p.password({
     message: "GitHub Personal Access Token",
     validate: (value) => {
-      if (!value.trim()) return "Token is required";
+      if (!value?.trim()) return "Token is required";
       if (
         !value.startsWith("ghp_") &&
         !value.startsWith("gho_") &&

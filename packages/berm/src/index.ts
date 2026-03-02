@@ -8,7 +8,7 @@ import { initCommand } from "./commands/init";
 import { pushCommand } from "./commands/push";
 import { trackCommand } from "./commands/track";
 import { BermError } from "./errors";
-import { intro, logBermError, outro, pc } from "./ui/renderer";
+import { intro, logBermError, pc } from "./ui/renderer";
 
 const main = defineCommand({
   meta: {

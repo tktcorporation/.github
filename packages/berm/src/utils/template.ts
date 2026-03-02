@@ -193,12 +193,10 @@ export async function fetchTemplates(options: DownloadOptions): Promise<FileOper
             action: "skipped_ignored",
             path: relativePath,
           };
-          logResult(result);
           allResults.push(result);
         } else {
           // ローカルにない → 通常通りコピー
           const result = await copyFile(srcPath, destPath, overwriteStrategy, relativePath);
-          logResult(result);
           allResults.push(result);
         }
       }

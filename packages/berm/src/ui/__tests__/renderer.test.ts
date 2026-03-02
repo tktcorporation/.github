@@ -76,7 +76,15 @@ describe("renderer", () => {
 
   describe("withSpinner", () => {
     it("should start and stop spinner on success", async () => {
-      const mockSpinner = { start: vi.fn(), stop: vi.fn() };
+      const mockSpinner = {
+        start: vi.fn(),
+        stop: vi.fn(),
+        cancel: vi.fn(),
+        error: vi.fn(),
+        message: vi.fn(),
+        clear: vi.fn(),
+        isCancelled: false,
+      };
       vi.mocked(p.spinner).mockReturnValue(mockSpinner);
 
       const result = await withSpinner("loading...", async () => 42);
@@ -87,7 +95,15 @@ describe("renderer", () => {
     });
 
     it("should stop spinner on error", async () => {
-      const mockSpinner = { start: vi.fn(), stop: vi.fn() };
+      const mockSpinner = {
+        start: vi.fn(),
+        stop: vi.fn(),
+        cancel: vi.fn(),
+        error: vi.fn(),
+        message: vi.fn(),
+        clear: vi.fn(),
+        isCancelled: false,
+      };
       vi.mocked(p.spinner).mockReturnValue(mockSpinner);
 
       await expect(
