@@ -519,6 +519,10 @@ export const pushCommand = defineCommand({
         }
       }
 
+      // 3-way マージで解決されたファイルの内容を保持する
+      // PR 作成時に localContent の代わりにマージ済み内容を使う
+      const mergedContents = new Map<string, string>();
+
       // コンフリクト検出（baseHashes が存在する場合のみ）
       if (config.baseHashes) {
         const { hashFiles } = await import("../utils/hash");
@@ -546,26 +550,88 @@ export const pushCommand = defineCommand({
         });
 
         if (classification.conflicts.length > 0) {
+          const { threeWayMerge } = await import("../utils/merge");
+
           log.warn(
-            `Template has also changed ${classification.conflicts.length} file(s) since last pull/init:`,
-          );
-          for (const file of classification.conflicts) {
-            log.message(`  ⚠ ${file}`);
-          }
-          log.message(
-            pc.dim(
-              "Your PR will include your local version. The reviewer can compare with upstream.",
-            ),
+            `Template has also changed ${classification.conflicts.length} file(s) since last pull/init. Attempting auto-merge...`,
           );
 
-          if (!args.force) {
-            const proceed = await confirmAction("Continue with push?", {
-              initialValue: true,
-            });
-            if (!proceed) {
-              log.info("Run `berm pull` first to sync template changes, then push again.");
-              return;
+          // baseRef が存在すれば、ベースバージョンを再ダウンロードして 3-way マージ
+          let baseTemplateDir: string | undefined;
+          let baseCleanup: (() => void) | undefined;
+
+          if (config.baseRef) {
+            try {
+              log.info(`Downloading base version (${config.baseRef.slice(0, 7)}...) for merge...`);
+              const { downloadTemplateToTemp: downloadBase } = await import("../utils/template");
+              const baseSource = `gh:${config.source.owner}/${config.source.repo}#${config.baseRef}`;
+              const baseResult = await downloadBase(targetDir, baseSource);
+              baseTemplateDir = baseResult.templateDir;
+              baseCleanup = baseResult.cleanup;
+            } catch {
+              log.warn(
+                "Could not download base version. Falling back to local content for conflicts.",
+              );
             }
+          }
+
+          try {
+            const autoMerged: string[] = [];
+            const unresolved: string[] = [];
+
+            for (const file of classification.conflicts) {
+              const localContent = await readFile(join(targetDir, file), "utf-8");
+              const templateContent = await readFile(join(templateDir, file), "utf-8");
+
+              // baseRef のテンプレートからベース内容を読む
+              let baseContent: string | undefined;
+              if (baseTemplateDir && existsSync(join(baseTemplateDir, file))) {
+                baseContent = await readFile(join(baseTemplateDir, file), "utf-8");
+              }
+
+              if (baseContent) {
+                // 3-way マージ: base→local の変更を template に適用
+                // 結果: template + ユーザーの変更 = PR に含めるべき内容
+                const result = threeWayMerge(baseContent, templateContent, localContent);
+                if (!result.hasConflicts) {
+                  mergedContents.set(file, result.content);
+                  autoMerged.push(file);
+                  continue;
+                }
+              }
+              unresolved.push(file);
+            }
+
+            if (autoMerged.length > 0) {
+              log.success(`Auto-merged ${autoMerged.length} file(s):`);
+              for (const file of autoMerged) {
+                log.message(`  ${pc.green("✓")} ${file}`);
+              }
+            }
+
+            if (unresolved.length > 0) {
+              log.warn(`${unresolved.length} file(s) could not be auto-merged:`);
+              for (const file of unresolved) {
+                log.message(`  ${pc.yellow("⚠")} ${file}`);
+              }
+              log.message(
+                pc.dim(
+                  "Your PR will include your local version for these files. The reviewer can compare with upstream.",
+                ),
+              );
+
+              if (!args.force) {
+                const proceed = await confirmAction("Continue with push?", {
+                  initialValue: true,
+                });
+                if (!proceed) {
+                  log.info("Run `berm pull` first to sync template changes, then push again.");
+                  return;
+                }
+              }
+            }
+          } finally {
+            baseCleanup?.();
           }
         }
       }
@@ -721,10 +787,10 @@ export const pushCommand = defineCommand({
       // README を更新（対象の場合のみ）
       const readmeResult = await detectAndUpdateReadme(targetDir, templateDir);
 
-      // ファイル内容を準備
+      // ファイル内容を準備（3-way マージ済みの内容があればそちらを優先）
       const files = pushableFiles.map((f) => ({
         path: f.path,
-        content: f.localContent || "",
+        content: mergedContents.get(f.path) ?? f.localContent ?? "",
       }));
 
       // modules.jsonc の変更があれば追加

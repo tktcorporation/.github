@@ -23,6 +23,9 @@ vi.mock("../../utils/template", () => ({
     const base = `gh:${source.owner}/${source.repo}`;
     return source.ref ? `${base}#${source.ref}` : base;
   }),
+  downloadTemplateToTemp: vi.fn(() =>
+    Promise.resolve({ templateDir: "/tmp/base-template", cleanup: vi.fn() }),
+  ),
 }));
 
 // utils/diff をモック
@@ -62,6 +65,7 @@ vi.mock("../../utils/merge", () => ({
     deletedFiles: [],
     unchanged: [],
   })),
+  threeWayMerge: vi.fn(() => ({ content: "merged", hasConflicts: false })),
 }));
 
 // utils/patterns をモック
@@ -112,6 +116,7 @@ vi.mock("../../ui/renderer", () => ({
     bold: (s: string) => s,
     dim: (s: string) => s,
     green: (s: string) => s,
+    yellow: (s: string) => s,
   },
   withSpinner: vi.fn(async (_text: string, fn: () => Promise<unknown>) => fn()),
 }));
@@ -125,9 +130,11 @@ const { confirmAction, inputGitHubToken, inputPrTitle, inputPrBody, selectPushFi
   await import("../../ui/prompts");
 const { log } = await import("../../ui/renderer");
 const { hashFiles } = await import("../../utils/hash");
-const { classifyFiles } = await import("../../utils/merge");
+const { classifyFiles, threeWayMerge } = await import("../../utils/merge");
+const { downloadTemplateToTemp } = await import("../../utils/template");
 
 const mockDownloadTemplate = vi.mocked(downloadTemplate);
+const mockDownloadTemplateToTemp = vi.mocked(downloadTemplateToTemp);
 const mockDetectDiff = vi.mocked(detectDiff);
 const mockGetPushableFiles = vi.mocked(getPushableFiles);
 const mockGetGitHubToken = vi.mocked(getGitHubToken);
@@ -140,6 +147,7 @@ const mockSelectPushFiles = vi.mocked(selectPushFiles);
 const mockLog = vi.mocked(log);
 const mockHashFiles = vi.mocked(hashFiles);
 const mockClassifyFiles = vi.mocked(classifyFiles);
+const mockThreeWayMerge = vi.mocked(threeWayMerge);
 
 const validConfig = {
   version: "0.1.0",
@@ -494,7 +502,7 @@ describe("pushCommand", () => {
       expect(mockCreatePullRequest).toHaveBeenCalled();
     });
 
-    it("baseHashes が存在しコンフリクトがある場合は警告して確認を求める", async () => {
+    it("baseHashes が存在しコンフリクトがある場合は警告して確認を求める（baseRef なし）", async () => {
       const configWithBaseHashes = {
         ...validConfig,
         baseHashes: {
@@ -504,6 +512,8 @@ describe("pushCommand", () => {
 
       vol.fromJSON({
         "/test/.devenv.json": JSON.stringify(configWithBaseHashes),
+        "/test/file.txt": "local content",
+        "/tmp/template/file.txt": "template content",
       });
 
       // classifyFiles がコンフリクトを返す
@@ -516,6 +526,7 @@ describe("pushCommand", () => {
         unchanged: [],
       });
 
+      // baseRef がないので 3-way マージ不可 → unresolved として確認を求める
       // ユーザーが続行を拒否
       mockConfirmAction.mockResolvedValueOnce(false);
 
@@ -526,7 +537,7 @@ describe("pushCommand", () => {
       });
 
       expect(mockLog.warn).toHaveBeenCalledWith(
-        "Template has also changed 1 file(s) since last pull/init:",
+        "Template has also changed 1 file(s) since last pull/init. Attempting auto-merge...",
       );
       expect(mockLog.info).toHaveBeenCalledWith(
         "Run `berm pull` first to sync template changes, then push again.",
@@ -544,6 +555,8 @@ describe("pushCommand", () => {
 
       vol.fromJSON({
         "/test/.devenv.json": JSON.stringify(configWithBaseHashes),
+        "/test/file.txt": "local content",
+        "/tmp/template/file.txt": "template content",
       });
 
       mockClassifyFiles.mockReturnValueOnce({
@@ -563,7 +576,7 @@ describe("pushCommand", () => {
       };
 
       mockGetPushableFiles.mockReturnValue([pushableFile]);
-      // コンフリクト確認: 続行
+      // コンフリクト確認: 続行（baseRef なし → unresolved → 確認）
       mockConfirmAction.mockResolvedValueOnce(true);
       // PR作成確認: 続行
       mockConfirmAction.mockResolvedValueOnce(true);
@@ -582,6 +595,75 @@ describe("pushCommand", () => {
 
       expect(mockLog.warn).toHaveBeenCalled();
       expect(mockCreatePullRequest).toHaveBeenCalled();
+    });
+
+    it("baseRef + baseHashes がある場合に 3-way マージで自動解決", async () => {
+      const configWithBaseRef = {
+        ...validConfig,
+        baseRef: "abc123def456",
+        baseHashes: {
+          "file.txt": "abc123",
+        },
+      };
+
+      vol.fromJSON({
+        "/test/.devenv.json": JSON.stringify(configWithBaseRef),
+        "/test/file.txt": "local content",
+        "/tmp/template/file.txt": "template content",
+        // base テンプレートのファイル（downloadTemplateToTemp が /tmp/base-template を返す）
+        "/tmp/base-template/file.txt": "base content",
+      });
+
+      mockClassifyFiles.mockReturnValueOnce({
+        autoUpdate: [],
+        localOnly: [],
+        conflicts: ["file.txt"],
+        newFiles: [],
+        deletedFiles: [],
+        unchanged: [],
+      });
+
+      // threeWayMerge のモック（自動マージ成功）
+      mockThreeWayMerge.mockReturnValueOnce({
+        content: "merged content",
+        hasConflicts: false,
+      });
+
+      const pushableFile = {
+        path: "file.txt",
+        type: "modified" as const,
+        localContent: "local content",
+        templateContent: "template content",
+      };
+
+      mockGetPushableFiles.mockReturnValue([pushableFile]);
+      // 3-way マージ成功 → unresolved なし → 確認は PR 作成確認のみ
+      mockConfirmAction.mockResolvedValueOnce(true);
+      mockGetGitHubToken.mockReturnValue("ghp_token");
+      mockCreatePullRequest.mockResolvedValueOnce({
+        url: "https://github.com/owner/repo/pull/1",
+        branch: "update-template-123",
+        number: 1,
+      });
+
+      await (pushCommand.run as any)({
+        args: { dir: "/test", dryRun: false, force: false, select: false, edit: false },
+        rawArgs: [],
+        cmd: pushCommand,
+      });
+
+      expect(mockLog.success).toHaveBeenCalledWith("Auto-merged 1 file(s):");
+      expect(mockCreatePullRequest).toHaveBeenCalledWith(
+        "ghp_token",
+        expect.objectContaining({
+          files: expect.arrayContaining([
+            expect.objectContaining({
+              path: "file.txt",
+              content: "merged content",
+            }),
+          ]),
+        }),
+      );
     });
 
     it("baseHashes がない場合はコンフリクト検出をスキップ", async () => {

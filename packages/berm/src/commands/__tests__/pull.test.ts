@@ -34,6 +34,10 @@ vi.mock("../../utils/merge", () => ({
   threeWayMerge: vi.fn(),
 }));
 
+vi.mock("../../utils/github", () => ({
+  resolveLatestCommitSha: vi.fn(() => Promise.resolve("latest123")),
+}));
+
 vi.mock("../../utils/patterns", () => ({
   getEffectivePatterns: vi.fn((_id: string, patterns: string[]) => patterns),
 }));

@@ -22,6 +22,7 @@ import {
   DEFAULT_TEMPLATE_REPO,
   detectGitHubOwner,
 } from "../utils/git-remote";
+import { resolveLatestCommitSha } from "../utils/github";
 import { hashFiles } from "../utils/hash";
 import {
   buildTemplateSource,
@@ -216,11 +217,15 @@ export const initCommand = defineCommand({
       const patterns = getPatternsByModuleIds(answers.modules, moduleList);
       const baseHashes = await hashFiles(templateDir, patterns);
 
+      // テンプレートリポジトリの最新コミット SHA を取得（3-way マージのベース用）
+      const baseRef = await resolveLatestCommitSha(sourceOwner, sourceRepo);
+
       // 設定ファイル生成（常に更新）
       const configResult = await createDevEnvConfig(targetDir, answers.modules, {
         owner: sourceOwner,
         repo: sourceRepo,
         baseHashes,
+        baseRef,
       });
       allResults.push(configResult);
 
@@ -290,7 +295,12 @@ async function createEnvExample(
 async function createDevEnvConfig(
   targetDir: string,
   selectedModules: string[],
-  source: { owner: string; repo: string; baseHashes?: Record<string, string> },
+  source: {
+    owner: string;
+    repo: string;
+    baseHashes?: Record<string, string>;
+    baseRef?: string;
+  },
 ): Promise<FileOperationResult> {
   const config: Record<string, unknown> = {
     version: "0.1.0",
@@ -298,6 +308,10 @@ async function createDevEnvConfig(
     modules: selectedModules,
     source: { owner: source.owner, repo: source.repo },
   };
+
+  if (source.baseRef) {
+    config.baseRef = source.baseRef;
+  }
 
   if (source.baseHashes && Object.keys(source.baseHashes).length > 0) {
     config.baseHashes = source.baseHashes;

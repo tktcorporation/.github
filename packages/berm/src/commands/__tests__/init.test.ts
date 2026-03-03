@@ -34,6 +34,10 @@ vi.mock("../../utils/hash", () => ({
   hashFiles: vi.fn(),
 }));
 
+vi.mock("../../utils/github", () => ({
+  resolveLatestCommitSha: vi.fn(() => Promise.resolve("abc123def456")),
+}));
+
 vi.mock("../../ui/prompts", () => ({
   selectModules: vi.fn(),
   selectOverwriteStrategy: vi.fn(),

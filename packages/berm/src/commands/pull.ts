@@ -12,6 +12,7 @@ import {
 import type { TemplateModule } from "../modules/schemas";
 import { intro, log, outro, pc, withSpinner } from "../ui/renderer";
 import { loadConfig, saveConfig } from "../utils/config";
+import { resolveLatestCommitSha } from "../utils/github";
 import { hashFiles } from "../utils/hash";
 import { classifyFiles, threeWayMerge } from "../utils/merge";
 import { downloadTemplateToTemp } from "../utils/template";
@@ -140,33 +141,55 @@ export const pullCommand = defineCommand({
       // Step 8: コンフリクト解決
       let hasUnresolvedConflicts = false;
       if (classification.conflicts.length > 0) {
-        for (const file of classification.conflicts) {
-          const localContent = await readFile(join(targetDir, file), "utf-8");
-          const templateContent = await readFile(join(templateDir, file), "utf-8");
+        // baseRef が存在する場合、ベースバージョンを再ダウンロードして 3-way マージ
+        let baseTemplateDir: string | undefined;
+        let baseCleanup: (() => void) | undefined;
 
-          const baseContent = baseHashes[file]
-            ? await readBaseContent(file, baseHashes, targetDir, config)
-            : undefined;
-
-          if (baseContent !== undefined) {
-            // 3-way マージ
-            const result = threeWayMerge(baseContent, localContent, templateContent);
-            await writeFile(join(targetDir, file), result.content, "utf-8");
-            if (result.hasConflicts) {
-              hasUnresolvedConflicts = true;
-              log.warn(`Conflict in ${pc.cyan(file)} — manual resolution needed`);
-            }
-          } else {
-            // base がない場合は 2-way コンフリクトマーカー
-            const content = `<<<<<<< LOCAL\n${localContent}\n=======\n${templateContent}\n>>>>>>> TEMPLATE`;
-            await writeFile(join(targetDir, file), content, "utf-8");
-            hasUnresolvedConflicts = true;
-            log.warn(`Conflict in ${pc.cyan(file)} — manual resolution needed`);
+        if (config.baseRef) {
+          try {
+            log.info(`Downloading base version (${config.baseRef.slice(0, 7)}...) for merge...`);
+            const baseSource = `gh:${config.source.owner}/${config.source.repo}#${config.baseRef}`;
+            const baseResult = await downloadTemplateToTemp(targetDir, baseSource);
+            baseTemplateDir = baseResult.templateDir;
+            baseCleanup = baseResult.cleanup;
+          } catch {
+            log.warn("Could not download base version. Falling back to 2-way conflict markers.");
           }
         }
 
-        if (hasUnresolvedConflicts) {
-          log.warn("Some files have conflicts. Please resolve them manually.");
+        try {
+          for (const file of classification.conflicts) {
+            const localContent = await readFile(join(targetDir, file), "utf-8");
+            const templateContent = await readFile(join(templateDir, file), "utf-8");
+
+            // baseRef のテンプレートからベース内容を読む
+            let baseContent: string | undefined;
+            if (baseTemplateDir && existsSync(join(baseTemplateDir, file))) {
+              baseContent = await readFile(join(baseTemplateDir, file), "utf-8");
+            }
+
+            if (baseContent !== undefined) {
+              // 3-way マージ
+              const result = threeWayMerge(baseContent, localContent, templateContent);
+              await writeFile(join(targetDir, file), result.content, "utf-8");
+              if (result.hasConflicts) {
+                hasUnresolvedConflicts = true;
+                log.warn(`Conflict in ${pc.cyan(file)} — manual resolution needed`);
+              }
+            } else {
+              // base がない場合は 2-way コンフリクトマーカー
+              const content = `<<<<<<< LOCAL\n${localContent}\n=======\n${templateContent}\n>>>>>>> TEMPLATE`;
+              await writeFile(join(targetDir, file), content, "utf-8");
+              hasUnresolvedConflicts = true;
+              log.warn(`Conflict in ${pc.cyan(file)} — manual resolution needed`);
+            }
+          }
+
+          if (hasUnresolvedConflicts) {
+            log.warn("Some files have conflicts. Please resolve them manually.");
+          }
+        } finally {
+          baseCleanup?.();
         }
       }
 
@@ -178,10 +201,13 @@ export const pullCommand = defineCommand({
         }
       }
 
-      // Step 10: 設定を更新（baseHashes を新しいテンプレートのハッシュに更新）
+      // Step 10: 設定を更新（baseRef + baseHashes）
+      const latestRef = await resolveLatestCommitSha(config.source.owner, config.source.repo);
+
       const updatedConfig = {
         ...config,
         baseHashes: templateHashes,
+        ...(latestRef ? { baseRef: latestRef } : {}),
       };
       await saveConfig(targetDir, updatedConfig);
 
@@ -210,26 +236,6 @@ function getInstalledModulePatterns(
     patterns.push(...getEffectivePatterns(moduleId, mod.patterns, config as any));
   }
   return patterns;
-}
-
-/**
- * base の内容を取得する。
- *
- * 背景: 3-way マージには base（前回 pull/init 時点の内容）が必要。
- * baseRef がある場合はそのリビジョンのテンプレートをダウンロードして取得するが、
- * 現状は base のファイル内容自体を保持していないため、
- * ローカルファイルと baseHash の比較で base として使えるかを判定する。
- * ローカルが base から変更されていない場合はローカルの内容を base として使用する。
- */
-async function readBaseContent(
-  _file: string,
-  _baseHashes: Record<string, string>,
-  _targetDir: string,
-  _config: { baseRef?: string },
-): Promise<string | undefined> {
-  // base のファイル内容は保持していないため undefined を返す。
-  // 将来的に baseRef を使ったテンプレートダウンロードで取得可能。
-  return undefined;
 }
 
 /**
