@@ -391,11 +391,16 @@ export const pushCommand = defineCommand({
       description: "Skip confirmation prompts",
       default: false,
     },
-    interactive: {
+    select: {
       type: "boolean",
-      alias: "i",
-      description: "Select files while reviewing diffs (enabled by default)",
-      default: true,
+      alias: "s",
+      description: "Interactively select files to include in PR",
+      default: false,
+    },
+    edit: {
+      type: "boolean",
+      description: "Edit PR title and description before creating",
+      default: false,
     },
     prepare: {
       type: "boolean",
@@ -426,10 +431,10 @@ export const pushCommand = defineCommand({
       log.warn("--dry-run is ignored with --prepare (--prepare doesn't create a PR).");
     }
 
-    // --execute と --interactive の組み合わせは警告（executeは非インタラクティブ）
-    if (args.execute && args.interactive) {
+    // --execute と --select/--edit の組み合わせは無視（executeはマニフェストベース）
+    if (args.execute && (args.select || args.edit)) {
       log.message(
-        pc.dim("Note: --execute mode is non-interactive. File selection is based on the manifest."),
+        pc.dim("Note: --select and --edit are ignored in --execute mode (uses manifest)."),
       );
     }
 
@@ -542,17 +547,26 @@ export const pushCommand = defineCommand({
 
         if (classification.conflicts.length > 0) {
           log.warn(
-            `Template has also changed ${classification.conflicts.length} file(s) since last pull/init.`,
+            `Template has also changed ${classification.conflicts.length} file(s) since last pull/init:`,
           );
-          log.info("Resolve conflicts before pushing.");
           for (const file of classification.conflicts) {
             log.message(`  ⚠ ${file}`);
           }
-          log.info("Run `berm pull` first to resolve template changes.");
-          throw new BermError(
-            "Template has upstream changes",
-            "Run `berm pull` to sync before pushing",
+          log.message(
+            pc.dim(
+              "Your PR will include your local version. The reviewer can compare with upstream.",
+            ),
           );
+
+          if (!args.force) {
+            const proceed = await confirmAction("Continue with push?", {
+              initialValue: true,
+            });
+            if (!proceed) {
+              log.info("Run `berm pull` first to sync template changes, then push again.");
+              return;
+            }
+          }
         }
       }
 
@@ -670,22 +684,12 @@ export const pushCommand = defineCommand({
         return;
       }
 
-      // Step 3: ファイル選択
-      log.step("Selecting files...");
-
-      if (args.interactive && !args.force) {
+      // Step 3: ファイル選択（--select 時のみインタラクティブ、デフォルトは全ファイル）
+      if (args.select) {
+        log.step("Selecting files...");
         pushableFiles = await selectPushFiles(pushableFiles);
         if (pushableFiles.length === 0 && !updatedModulesContent) {
           log.info("No files selected. Cancelled.");
-          return;
-        }
-      } else if (!args.force) {
-        // --no-interactive 時は確認プロンプト（既にファイル一覧を見ているので Yes をデフォルトに）
-        const confirmed = await confirmAction("Create PR with these changes?", {
-          initialValue: true,
-        });
-        if (!confirmed) {
-          log.info("Cancelled");
           return;
         }
       }
@@ -696,13 +700,23 @@ export const pushCommand = defineCommand({
         token = await inputGitHubToken();
       }
 
-      // PR タイトル取得（変更内容から自動生成したタイトルをデフォルトとして提案）
+      // PR タイトル・本文（自動生成がデフォルト、--edit 時のみ編集プロンプト）
       const suggestedTitle = generatePrTitle(pushableFiles);
-      const title = args.message || (await inputPrTitle(suggestedTitle));
-
-      // PR 本文取得（変更一覧から自動生成したデフォルトを提案）
       const suggestedBody = generatePrBody(pushableFiles);
-      const body = await inputPrBody(suggestedBody);
+
+      let title: string;
+      let body: string | undefined;
+
+      if (args.message) {
+        title = args.message;
+        body = suggestedBody;
+      } else if (args.edit) {
+        title = await inputPrTitle(suggestedTitle);
+        body = await inputPrBody(suggestedBody);
+      } else {
+        title = suggestedTitle;
+        body = suggestedBody;
+      }
 
       // README を更新（対象の場合のみ）
       const readmeResult = await detectAndUpdateReadme(targetDir, templateDir);
@@ -729,7 +743,26 @@ export const pushCommand = defineCommand({
         });
       }
 
-      // Step 4: PR を作成
+      // Step 4: サマリー表示 + 確認
+      log.step("Push summary");
+      const fileIcons = files.map((f) => `  ${pc.dim("•")} ${f.path}`);
+      log.message(
+        [
+          `${pc.bold("Title:")} ${title}`,
+          `${pc.bold("Files:")} ${files.length} file(s)`,
+          ...fileIcons,
+        ].join("\n"),
+      );
+
+      if (!args.force) {
+        const confirmed = await confirmAction("Create PR?", { initialValue: true });
+        if (!confirmed) {
+          log.info("Cancelled. Use --edit to customize title/body, or --select to pick files.");
+          return;
+        }
+      }
+
+      // Step 5: PR を作成
       log.step("Creating pull request...");
 
       const result = await withSpinner("Creating PR on GitHub...", () =>
