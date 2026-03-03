@@ -15,6 +15,8 @@ import type { DevEnvConfig, TemplateModule } from "../modules/schemas";
 import { configSchema } from "../modules/schemas";
 import {
   confirmAction,
+  generatePrBody,
+  generatePrTitle,
   inputGitHubToken,
   inputPrBody,
   inputPrTitle,
@@ -636,8 +638,10 @@ export const pushCommand = defineCommand({
           return;
         }
       } else if (!args.force) {
-        // --no-interactive 時は従来の確認プロンプト
-        const confirmed = await confirmAction("Create PR with these changes?");
+        // --no-interactive 時は確認プロンプト（既にファイル一覧を見ているので Yes をデフォルトに）
+        const confirmed = await confirmAction("Create PR with these changes?", {
+          initialValue: true,
+        });
         if (!confirmed) {
           log.info("Cancelled");
           return;
@@ -650,11 +654,13 @@ export const pushCommand = defineCommand({
         token = await inputGitHubToken();
       }
 
-      // PR タイトル取得
-      const title = args.message || (await inputPrTitle());
+      // PR タイトル取得（変更内容から自動生成したタイトルをデフォルトとして提案）
+      const suggestedTitle = generatePrTitle(pushableFiles);
+      const title = args.message || (await inputPrTitle(suggestedTitle));
 
-      // PR 本文取得
-      const body = await inputPrBody();
+      // PR 本文取得（変更一覧から自動生成したデフォルトを提案）
+      const suggestedBody = generatePrBody(pushableFiles);
+      const body = await inputPrBody(suggestedBody);
 
       // README を更新（対象の場合のみ）
       const readmeResult = await detectAndUpdateReadme(targetDir, templateDir);

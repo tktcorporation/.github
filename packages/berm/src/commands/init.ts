@@ -171,7 +171,9 @@ export const initCommand = defineCommand({
         answers = { modules: selectedModules, overwriteStrategy };
       } else {
         const selectedModules = await selectModules(moduleList);
-        const overwriteStrategy = await selectOverwriteStrategy();
+        // .devenv.json が既に存在する場合は再実行と判断し、skip をデフォルトに推奨する
+        const configExists = existsSync(resolve(targetDir, ".devenv.json"));
+        const overwriteStrategy = await selectOverwriteStrategy({ isReinit: configExists });
         answers = { modules: selectedModules, overwriteStrategy };
       }
 

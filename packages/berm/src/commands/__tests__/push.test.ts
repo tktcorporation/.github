@@ -50,6 +50,8 @@ vi.mock("../../utils/untracked", () => ({
 // ui/prompts をモック
 vi.mock("../../ui/prompts", () => ({
   confirmAction: vi.fn(),
+  generatePrTitle: vi.fn(() => "feat: add file.txt config"),
+  generatePrBody: vi.fn(() => "## Changes\n\n**Added:**\n- `file.txt`"),
   inputGitHubToken: vi.fn(),
   inputPrTitle: vi.fn(),
   inputPrBody: vi.fn(),

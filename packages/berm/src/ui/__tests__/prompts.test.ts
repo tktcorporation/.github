@@ -15,8 +15,11 @@ vi.mock("@clack/prompts", () => ({
 }));
 
 import * as p from "@clack/prompts";
+import type { FileDiff } from "../../modules/schemas";
 import {
   confirmAction,
+  generatePrBody,
+  generatePrTitle,
   inputGitHubToken,
   inputPrBody,
   inputPrTitle,
@@ -69,6 +72,27 @@ describe("prompts", () => {
       const result = await selectOverwriteStrategy();
       expect(result).toBe("overwrite");
     });
+
+    it("should default to overwrite for new projects", async () => {
+      vi.mocked(p.select).mockResolvedValue("overwrite");
+      await selectOverwriteStrategy();
+      expect(p.select).toHaveBeenCalledWith(
+        expect.objectContaining({
+          initialValue: "overwrite",
+        }),
+      );
+    });
+
+    it("should default to skip for re-init projects", async () => {
+      vi.mocked(p.select).mockResolvedValue("skip");
+      await selectOverwriteStrategy({ isReinit: true });
+      expect(p.select).toHaveBeenCalledWith(
+        expect.objectContaining({
+          initialValue: "skip",
+          message: expect.stringContaining("re-init"),
+        }),
+      );
+    });
   });
 
   describe("selectPushFiles", () => {
@@ -98,27 +122,110 @@ describe("prompts", () => {
       expect(result).toBe("feat: add config");
     });
 
-    it("should use default title as placeholder", async () => {
-      vi.mocked(p.text).mockResolvedValue("custom title");
+    it("should use default title as defaultValue", async () => {
+      vi.mocked(p.text).mockResolvedValue("default title");
       await inputPrTitle("default title");
       expect(p.text).toHaveBeenCalledWith(
-        expect.objectContaining({ placeholder: "default title" }),
+        expect.objectContaining({ defaultValue: "default title" }),
+      );
+    });
+
+    it("should use placeholder when no default title provided", async () => {
+      vi.mocked(p.text).mockResolvedValue("custom title");
+      await inputPrTitle();
+      expect(p.text).toHaveBeenCalledWith(
+        expect.objectContaining({
+          placeholder: "feat: update template config",
+          defaultValue: undefined,
+        }),
       );
     });
   });
 
+  describe("generatePrTitle", () => {
+    it("should generate feat prefix for added-only files", () => {
+      const files: FileDiff[] = [{ path: ".devcontainer/devcontainer.json", type: "added" }];
+      expect(generatePrTitle(files)).toBe("feat: add .devcontainer config");
+    });
+
+    it("should generate chore prefix for modified files", () => {
+      const files: FileDiff[] = [{ path: ".github/workflows/ci.yml", type: "modified" }];
+      expect(generatePrTitle(files)).toBe("chore: update .github config");
+    });
+
+    it("should generate chore prefix for mixed changes", () => {
+      const files: FileDiff[] = [
+        { path: ".devcontainer/devcontainer.json", type: "added" },
+        { path: ".github/workflows/ci.yml", type: "modified" },
+      ];
+      expect(generatePrTitle(files)).toBe("chore: update .devcontainer, .github config");
+    });
+
+    it("should use generic title for many modules", () => {
+      const files: FileDiff[] = [
+        { path: ".devcontainer/a.json", type: "added" },
+        { path: ".github/b.yml", type: "added" },
+        { path: ".claude/c.md", type: "added" },
+        { path: ".mcp/d.json", type: "added" },
+      ];
+      expect(generatePrTitle(files)).toBe("feat: update template configuration");
+    });
+
+    it("should handle root-level files", () => {
+      const files: FileDiff[] = [{ path: ".mcp.json", type: "modified" }];
+      expect(generatePrTitle(files)).toBe("chore: update .mcp.json config");
+    });
+  });
+
   describe("inputPrBody", () => {
-    it("should return undefined if declined", async () => {
-      vi.mocked(p.confirm).mockResolvedValue(false);
+    it("should return undefined for empty input", async () => {
+      vi.mocked(p.text).mockResolvedValue("");
       const result = await inputPrBody();
       expect(result).toBeUndefined();
     });
 
-    it("should return body if accepted", async () => {
-      vi.mocked(p.confirm).mockResolvedValue(true);
+    it("should return body text", async () => {
       vi.mocked(p.text).mockResolvedValue("description");
       const result = await inputPrBody();
       expect(result).toBe("description");
+    });
+
+    it("should pass defaultBody as defaultValue", async () => {
+      vi.mocked(p.text).mockResolvedValue("auto body");
+      await inputPrBody("auto body");
+      expect(p.text).toHaveBeenCalledWith(expect.objectContaining({ defaultValue: "auto body" }));
+    });
+  });
+
+  describe("generatePrBody", () => {
+    it("should list added files", () => {
+      const files: FileDiff[] = [{ path: ".devcontainer/devcontainer.json", type: "added" }];
+      const body = generatePrBody(files);
+      expect(body).toContain("**Added:**");
+      expect(body).toContain("`.devcontainer/devcontainer.json`");
+    });
+
+    it("should list modified files", () => {
+      const files: FileDiff[] = [{ path: ".github/workflows/ci.yml", type: "modified" }];
+      const body = generatePrBody(files);
+      expect(body).toContain("**Modified:**");
+      expect(body).toContain("`.github/workflows/ci.yml`");
+    });
+
+    it("should list both added and modified", () => {
+      const files: FileDiff[] = [
+        { path: "a.json", type: "added" },
+        { path: "b.yml", type: "modified" },
+      ];
+      const body = generatePrBody(files);
+      expect(body).toContain("**Added:**");
+      expect(body).toContain("**Modified:**");
+    });
+
+    it("should include berm attribution", () => {
+      const files: FileDiff[] = [{ path: "a.json", type: "added" }];
+      const body = generatePrBody(files);
+      expect(body).toContain("@tktco/berm");
     });
   });
 
@@ -147,6 +254,18 @@ describe("prompts", () => {
       vi.mocked(p.confirm).mockResolvedValue(false);
       const result = await confirmAction("Proceed?");
       expect(result).toBe(false);
+    });
+
+    it("should default to false without options", async () => {
+      vi.mocked(p.confirm).mockResolvedValue(false);
+      await confirmAction("Proceed?");
+      expect(p.confirm).toHaveBeenCalledWith(expect.objectContaining({ initialValue: false }));
+    });
+
+    it("should use custom initialValue when provided", async () => {
+      vi.mocked(p.confirm).mockResolvedValue(true);
+      await confirmAction("Proceed?", { initialValue: true });
+      expect(p.confirm).toHaveBeenCalledWith(expect.objectContaining({ initialValue: true }));
     });
   });
 });
