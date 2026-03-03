@@ -5,6 +5,7 @@ import { version } from "../package.json";
 import { aiDocsCommand } from "./commands/ai-docs";
 import { diffCommand } from "./commands/diff";
 import { initCommand } from "./commands/init";
+import { pullCommand } from "./commands/pull";
 import { pushCommand } from "./commands/push";
 import { trackCommand } from "./commands/track";
 import { BermError } from "./errors";
@@ -19,17 +20,23 @@ const main = defineCommand({
   subCommands: {
     init: initCommand,
     push: pushCommand,
+    pull: pullCommand,
     diff: diffCommand,
     track: trackCommand,
     "ai-docs": aiDocsCommand,
   },
 });
 
-type CommandType = typeof initCommand | typeof pushCommand | typeof diffCommand;
+type CommandType =
+  | typeof initCommand
+  | typeof pushCommand
+  | typeof pullCommand
+  | typeof diffCommand;
 
-const commandMap: Record<"init" | "push" | "diff", CommandType> = {
+const commandMap: Record<"init" | "push" | "pull" | "diff", CommandType> = {
   init: initCommand,
   push: pushCommand,
+  pull: pullCommand,
   diff: diffCommand,
 };
 
@@ -62,6 +69,11 @@ async function promptCommand(): Promise<void> {
         hint: "Push local changes as a PR",
       },
       {
+        value: "pull" as const,
+        label: "pull",
+        hint: "Pull latest template updates",
+      },
+      {
         value: "diff" as const,
         label: "diff",
         hint: "Show differences from template",
@@ -89,9 +101,18 @@ async function run(): Promise<void> {
     const args = process.argv.slice(2);
     const hasSubCommand =
       args.length > 0 &&
-      ["init", "push", "diff", "track", "ai-docs", "--help", "-h", "--version", "-v"].includes(
-        args[0],
-      );
+      [
+        "init",
+        "push",
+        "pull",
+        "diff",
+        "track",
+        "ai-docs",
+        "--help",
+        "-h",
+        "--version",
+        "-v",
+      ].includes(args[0]);
 
     if (!hasSubCommand && args.length > 0 && !args[0].startsWith("-")) {
       // npx @tktco/berm . のような形式は init コマンドとして実行

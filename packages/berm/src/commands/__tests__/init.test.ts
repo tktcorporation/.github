@@ -30,6 +30,10 @@ vi.mock("../../utils/template", () => ({
   copyFile: vi.fn(),
 }));
 
+vi.mock("../../utils/hash", () => ({
+  hashFiles: vi.fn(),
+}));
+
 vi.mock("../../ui/prompts", () => ({
   selectModules: vi.fn(),
   selectOverwriteStrategy: vi.fn(),
@@ -71,6 +75,7 @@ const { downloadTemplateToTemp, fetchTemplates, writeFileWithStrategy, copyFile 
 const { detectGitHubOwner } = await import("../../utils/git-remote");
 const { selectModules, selectOverwriteStrategy } = await import("../../ui/prompts");
 const { log } = await import("../../ui/renderer");
+const { hashFiles } = await import("../../utils/hash");
 
 const mockDownloadTemplateToTemp = vi.mocked(downloadTemplateToTemp);
 const mockFetchTemplates = vi.mocked(fetchTemplates);
@@ -80,6 +85,7 @@ const mockDetectGitHubOwner = vi.mocked(detectGitHubOwner);
 const mockSelectModules = vi.mocked(selectModules);
 const mockSelectOverwriteStrategy = vi.mocked(selectOverwriteStrategy);
 const mockLog = vi.mocked(log);
+const mockHashFiles = vi.mocked(hashFiles);
 
 describe("initCommand", () => {
   beforeEach(() => {
@@ -100,6 +106,7 @@ describe("initCommand", () => {
       action: "skipped",
       path: ".devenv/modules.jsonc",
     });
+    mockHashFiles.mockResolvedValue({});
   });
 
   describe("meta", () => {
@@ -579,6 +586,62 @@ describe("initCommand", () => {
         expect.any(String),
         "gh:tktcorporation/.github",
       );
+    });
+
+    it(".devenv.json に baseHashes が含まれる", async () => {
+      vol.fromJSON({
+        "/test": null,
+      });
+
+      const expectedHashes = {
+        ".mcp.json": "abc123hash",
+        ".mise.toml": "def456hash",
+      };
+      mockHashFiles.mockResolvedValueOnce(expectedHashes);
+
+      mockFetchTemplates.mockResolvedValue([{ action: "copied", path: ".mcp.json" }]);
+
+      await (initCommand.run as any)({
+        args: { dir: "/test", force: false, yes: true },
+        rawArgs: [],
+        cmd: initCommand,
+      });
+
+      // hashFiles がテンプレートディレクトリとモジュールパターンで呼ばれる
+      expect(mockHashFiles).toHaveBeenCalledWith("/tmp/template", expect.any(Array));
+
+      // writeFileWithStrategy に baseHashes が含まれた JSON が渡される
+      const configCall = mockWriteFileWithStrategy.mock.calls.find(
+        (call) => call[0].relativePath === ".devenv.json",
+      );
+      expect(configCall).toBeDefined();
+      const configContent = JSON.parse(configCall![0].content);
+      expect(configContent.baseHashes).toEqual(expectedHashes);
+    });
+
+    it("テンプレートにマッチするファイルがない場合は baseHashes が省略される", async () => {
+      vol.fromJSON({
+        "/test": null,
+      });
+
+      // 空のハッシュマップを返す（パターンにマッチするファイルがない場合）
+      mockHashFiles.mockResolvedValueOnce({});
+
+      mockFetchTemplates.mockResolvedValue([{ action: "copied", path: ".mcp.json" }]);
+
+      await (initCommand.run as any)({
+        args: { dir: "/test", force: false, yes: true },
+        rawArgs: [],
+        cmd: initCommand,
+      });
+
+      const configCall = mockWriteFileWithStrategy.mock.calls.find(
+        (call) => call[0].relativePath === ".devenv.json",
+      );
+      expect(configCall).toBeDefined();
+      const configContent = JSON.parse(configCall![0].content);
+      // 空のハッシュマップの場合は baseHashes キーが省略される
+      expect(configContent.baseHashes).toBeUndefined();
     });
   });
 });

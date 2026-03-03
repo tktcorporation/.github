@@ -15,6 +15,8 @@ import type { DevEnvConfig, TemplateModule } from "../modules/schemas";
 import { configSchema } from "../modules/schemas";
 import {
   confirmAction,
+  generatePrBody,
+  generatePrTitle,
   inputGitHubToken,
   inputPrBody,
   inputPrTitle,
@@ -512,6 +514,48 @@ export const pushCommand = defineCommand({
         }
       }
 
+      // コンフリクト検出（baseHashes が存在する場合のみ）
+      if (config.baseHashes) {
+        const { hashFiles } = await import("../utils/hash");
+        const { classifyFiles } = await import("../utils/merge");
+        const { getModuleById } = await import("../modules");
+        const { getEffectivePatterns } = await import("../utils/patterns");
+
+        // 全モジュールの有効パターンを収集
+        const allPatterns: string[] = [];
+        for (const moduleId of effectiveModuleIds) {
+          const mod = getModuleById(moduleId, moduleList);
+          if (mod) {
+            const patterns = getEffectivePatterns(moduleId, mod.patterns, config);
+            allPatterns.push(...patterns);
+          }
+        }
+
+        const templateHashes = await hashFiles(templateDir, allPatterns);
+        const localHashes = await hashFiles(targetDir, allPatterns);
+
+        const classification = classifyFiles({
+          baseHashes: config.baseHashes,
+          localHashes,
+          templateHashes,
+        });
+
+        if (classification.conflicts.length > 0) {
+          log.warn(
+            `Template has also changed ${classification.conflicts.length} file(s) since last pull/init.`,
+          );
+          log.info("Resolve conflicts before pushing.");
+          for (const file of classification.conflicts) {
+            log.message(`  ⚠ ${file}`);
+          }
+          log.info("Run `berm pull` first to resolve template changes.");
+          throw new BermError(
+            "Template has upstream changes",
+            "Run `berm pull` to sync before pushing",
+          );
+        }
+      }
+
       // ホワイトリスト外ファイルの検出と情報表示
       if (!args.force && !args.prepare && modulesRawContent) {
         const untrackedByFolder = await detectUntrackedFiles({
@@ -636,8 +680,10 @@ export const pushCommand = defineCommand({
           return;
         }
       } else if (!args.force) {
-        // --no-interactive 時は従来の確認プロンプト
-        const confirmed = await confirmAction("Create PR with these changes?");
+        // --no-interactive 時は確認プロンプト（既にファイル一覧を見ているので Yes をデフォルトに）
+        const confirmed = await confirmAction("Create PR with these changes?", {
+          initialValue: true,
+        });
         if (!confirmed) {
           log.info("Cancelled");
           return;
@@ -650,11 +696,13 @@ export const pushCommand = defineCommand({
         token = await inputGitHubToken();
       }
 
-      // PR タイトル取得
-      const title = args.message || (await inputPrTitle());
+      // PR タイトル取得（変更内容から自動生成したタイトルをデフォルトとして提案）
+      const suggestedTitle = generatePrTitle(pushableFiles);
+      const title = args.message || (await inputPrTitle(suggestedTitle));
 
-      // PR 本文取得
-      const body = await inputPrBody();
+      // PR 本文取得（変更一覧から自動生成したデフォルトを提案）
+      const suggestedBody = generatePrBody(pushableFiles);
+      const body = await inputPrBody(suggestedBody);
 
       // README を更新（対象の場合のみ）
       const readmeResult = await detectAndUpdateReadme(targetDir, templateDir);
