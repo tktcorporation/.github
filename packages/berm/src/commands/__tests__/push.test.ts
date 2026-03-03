@@ -47,6 +47,28 @@ vi.mock("../../utils/untracked", () => ({
   detectUntrackedFiles: vi.fn(() => []),
 }));
 
+// utils/hash をモック
+vi.mock("../../utils/hash", () => ({
+  hashFiles: vi.fn(() => ({})),
+}));
+
+// utils/merge をモック
+vi.mock("../../utils/merge", () => ({
+  classifyFiles: vi.fn(() => ({
+    autoUpdate: [],
+    localOnly: [],
+    conflicts: [],
+    newFiles: [],
+    deletedFiles: [],
+    unchanged: [],
+  })),
+}));
+
+// utils/patterns をモック
+vi.mock("../../utils/patterns", () => ({
+  getEffectivePatterns: vi.fn((_moduleId: string, patterns: string[]) => patterns),
+}));
+
 // ui/prompts をモック
 vi.mock("../../ui/prompts", () => ({
   confirmAction: vi.fn(),
@@ -64,6 +86,12 @@ vi.mock("../../modules", () => ({
   modulesFileExists: vi.fn(() => false),
   loadModulesFile: vi.fn(),
   addPatternToModulesFile: vi.fn(),
+  getModuleById: vi.fn((id: string) => ({
+    id,
+    name: id,
+    description: `${id} module`,
+    patterns: [`.${id}/**`],
+  })),
 }));
 
 // ui/renderer をモック
@@ -96,6 +124,8 @@ const { getGitHubToken, createPullRequest } = await import("../../utils/github")
 const { confirmAction, inputGitHubToken, inputPrTitle, inputPrBody, selectPushFiles } =
   await import("../../ui/prompts");
 const { log } = await import("../../ui/renderer");
+const { hashFiles } = await import("../../utils/hash");
+const { classifyFiles } = await import("../../utils/merge");
 
 const mockDownloadTemplate = vi.mocked(downloadTemplate);
 const mockDetectDiff = vi.mocked(detectDiff);
@@ -108,6 +138,8 @@ const mockInputPrTitle = vi.mocked(inputPrTitle);
 const mockInputPrBody = vi.mocked(inputPrBody);
 const mockSelectPushFiles = vi.mocked(selectPushFiles);
 const mockLog = vi.mocked(log);
+const mockHashFiles = vi.mocked(hashFiles);
+const mockClassifyFiles = vi.mocked(classifyFiles);
 
 const validConfig = {
   version: "0.1.0",
@@ -452,6 +484,100 @@ describe("pushCommand", () => {
       expect(mockSelectPushFiles).not.toHaveBeenCalled();
       expect(mockConfirmAction).not.toHaveBeenCalled();
       expect(mockCreatePullRequest).toHaveBeenCalled();
+    });
+
+    it("baseHashes が存在しコンフリクトがある場合はエラーで pull を促す", async () => {
+      const configWithBaseHashes = {
+        ...validConfig,
+        baseHashes: {
+          "file.txt": "abc123",
+        },
+      };
+
+      vol.fromJSON({
+        "/test/.devenv.json": JSON.stringify(configWithBaseHashes),
+      });
+
+      // classifyFiles がコンフリクトを返す
+      mockClassifyFiles.mockReturnValueOnce({
+        autoUpdate: [],
+        localOnly: [],
+        conflicts: ["file.txt"],
+        newFiles: [],
+        deletedFiles: [],
+        unchanged: [],
+      });
+
+      await expect(
+        (pushCommand.run as any)({
+          args: { dir: "/test", dryRun: false, force: false, interactive: true },
+          rawArgs: [],
+          cmd: pushCommand,
+        }),
+      ).rejects.toThrow("Template has upstream changes");
+
+      expect(mockLog.warn).toHaveBeenCalledWith(
+        "Template has also changed 1 file(s) since last pull/init.",
+      );
+      expect(mockLog.info).toHaveBeenCalledWith(
+        "Run `berm pull` first to resolve template changes.",
+      );
+      expect(mockCreatePullRequest).not.toHaveBeenCalled();
+    });
+
+    it("baseHashes がない場合はコンフリクト検出をスキップ", async () => {
+      vol.fromJSON({
+        "/test/.devenv.json": JSON.stringify(validConfig),
+      });
+
+      mockGetPushableFiles.mockReturnValue([]);
+
+      await (pushCommand.run as any)({
+        args: { dir: "/test", dryRun: false, force: false, interactive: true },
+        rawArgs: [],
+        cmd: pushCommand,
+      });
+
+      // hashFiles と classifyFiles は呼ばれない
+      expect(mockHashFiles).not.toHaveBeenCalled();
+      expect(mockClassifyFiles).not.toHaveBeenCalled();
+    });
+
+    it("baseHashes が存在しコンフリクトがない場合は正常に続行", async () => {
+      const configWithBaseHashes = {
+        ...validConfig,
+        baseHashes: {
+          "file.txt": "abc123",
+        },
+      };
+
+      vol.fromJSON({
+        "/test/.devenv.json": JSON.stringify(configWithBaseHashes),
+      });
+
+      // コンフリクトなし
+      mockClassifyFiles.mockReturnValueOnce({
+        autoUpdate: ["file.txt"],
+        localOnly: [],
+        conflicts: [],
+        newFiles: [],
+        deletedFiles: [],
+        unchanged: [],
+      });
+
+      mockGetPushableFiles.mockReturnValue([]);
+
+      await (pushCommand.run as any)({
+        args: { dir: "/test", dryRun: false, force: false, interactive: true },
+        rawArgs: [],
+        cmd: pushCommand,
+      });
+
+      // コンフリクト検出は実行されたが、エラーにはならない
+      expect(mockHashFiles).toHaveBeenCalled();
+      expect(mockClassifyFiles).toHaveBeenCalled();
+      // "No changes to push" に到達
+      expect(mockLog.info).toHaveBeenCalledWith("No changes to push");
     });
   });
 });

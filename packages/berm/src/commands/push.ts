@@ -514,6 +514,48 @@ export const pushCommand = defineCommand({
         }
       }
 
+      // コンフリクト検出（baseHashes が存在する場合のみ）
+      if (config.baseHashes) {
+        const { hashFiles } = await import("../utils/hash");
+        const { classifyFiles } = await import("../utils/merge");
+        const { getModuleById } = await import("../modules");
+        const { getEffectivePatterns } = await import("../utils/patterns");
+
+        // 全モジュールの有効パターンを収集
+        const allPatterns: string[] = [];
+        for (const moduleId of effectiveModuleIds) {
+          const mod = getModuleById(moduleId, moduleList);
+          if (mod) {
+            const patterns = getEffectivePatterns(moduleId, mod.patterns, config);
+            allPatterns.push(...patterns);
+          }
+        }
+
+        const templateHashes = await hashFiles(templateDir, allPatterns);
+        const localHashes = await hashFiles(targetDir, allPatterns);
+
+        const classification = classifyFiles({
+          baseHashes: config.baseHashes,
+          localHashes,
+          templateHashes,
+        });
+
+        if (classification.conflicts.length > 0) {
+          log.warn(
+            `Template has also changed ${classification.conflicts.length} file(s) since last pull/init.`,
+          );
+          log.info("Resolve conflicts before pushing.");
+          for (const file of classification.conflicts) {
+            log.message(`  ⚠ ${file}`);
+          }
+          log.info("Run `berm pull` first to resolve template changes.");
+          throw new BermError(
+            "Template has upstream changes",
+            "Run `berm pull` to sync before pushing",
+          );
+        }
+      }
+
       // ホワイトリスト外ファイルの検出と情報表示
       if (!args.force && !args.prepare && modulesRawContent) {
         const untrackedByFolder = await detectUntrackedFiles({

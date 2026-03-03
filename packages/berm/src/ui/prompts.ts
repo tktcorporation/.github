@@ -7,6 +7,7 @@
  *
  * 全プロンプトは Ctrl+C でキャンセル可能。handleCancel() で統一処理。
  */
+import { execSync } from "node:child_process";
 import * as p from "@clack/prompts";
 import pc from "picocolors";
 import type { FileDiff, OverwriteStrategy, TemplateModule } from "../modules/schemas";
@@ -246,4 +247,57 @@ export async function confirmAction(
   });
   handleCancel(confirmed);
   return confirmed as boolean;
+}
+
+// ─── pull (conflict resolution) ──────────────────────────────
+
+/**
+ * コンフリクトマーカーが残っている場合にリトライを確認する。
+ * 背景: pull 時の 3-way マージでコンフリクトが自動解決できなかった場合、
+ * ユーザーにエディタで再解決するか、スキップするかを選ばせる。
+ */
+export async function confirmRetryConflictResolution(): Promise<boolean> {
+  const result = await p.confirm({
+    message: "Conflict markers remain. Open editor again?",
+    initialValue: true,
+  });
+  if (p.isCancel(result)) {
+    p.cancel("Operation cancelled.");
+    process.exit(0);
+  }
+  return result;
+}
+
+/**
+ * テンプレートで削除されたファイルの中から、ローカルでも削除するものを選択する。
+ * 背景: テンプレートから削除されたファイルを自動削除すると意図しないデータ損失の
+ * リスクがあるため、ユーザーに明示的に選ばせる。
+ */
+export async function selectDeletedFiles(files: string[]): Promise<string[]> {
+  const result = await p.multiselect({
+    message: "These files were deleted in template. Select to delete locally:",
+    options: files.map((f) => ({ value: f, label: f })),
+    required: false,
+  });
+  if (p.isCancel(result)) {
+    p.cancel("Operation cancelled.");
+    process.exit(0);
+  }
+  return result as string[];
+}
+
+/**
+ * コンフリクトのあるファイルを $EDITOR で開く。
+ * 背景: 3-way マージでコンフリクトが発生した場合、ユーザーが手動で解決する必要がある。
+ * $VISUAL → $EDITOR → vi の優先順でエディタを選択する。
+ */
+export function openEditorForConflicts(filePaths: string[]): void {
+  const editor = process.env.VISUAL || process.env.EDITOR || "vi";
+  for (const filePath of filePaths) {
+    try {
+      execSync(`${editor} ${filePath}`, { stdio: "inherit" });
+    } catch {
+      // エディタが見つからない場合はスキップ
+    }
+  }
 }

@@ -14,15 +14,23 @@ vi.mock("@clack/prompts", () => ({
   },
 }));
 
+vi.mock("node:child_process", () => ({
+  execSync: vi.fn(),
+}));
+
+import { execSync } from "node:child_process";
 import * as p from "@clack/prompts";
 import type { FileDiff } from "../../modules/schemas";
 import {
   confirmAction,
+  confirmRetryConflictResolution,
   generatePrBody,
   generatePrTitle,
   inputGitHubToken,
   inputPrBody,
   inputPrTitle,
+  openEditorForConflicts,
+  selectDeletedFiles,
   selectModules,
   selectOverwriteStrategy,
   selectPushFiles,
@@ -266,6 +274,104 @@ describe("prompts", () => {
       vi.mocked(p.confirm).mockResolvedValue(true);
       await confirmAction("Proceed?", { initialValue: true });
       expect(p.confirm).toHaveBeenCalledWith(expect.objectContaining({ initialValue: true }));
+    });
+  });
+
+  describe("confirmRetryConflictResolution", () => {
+    it("should call clack.confirm with initialValue true", async () => {
+      vi.mocked(p.confirm).mockResolvedValue(true);
+      const result = await confirmRetryConflictResolution();
+      expect(result).toBe(true);
+      expect(p.confirm).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: "Conflict markers remain. Open editor again?",
+          initialValue: true,
+        }),
+      );
+    });
+
+    it("should return false when user declines", async () => {
+      vi.mocked(p.confirm).mockResolvedValue(false);
+      const result = await confirmRetryConflictResolution();
+      expect(result).toBe(false);
+    });
+  });
+
+  describe("selectDeletedFiles", () => {
+    it("should call clack.multiselect with file options", async () => {
+      const files = ["a.ts", "b.ts"];
+      vi.mocked(p.multiselect).mockResolvedValue(["a.ts"]);
+      const result = await selectDeletedFiles(files);
+      expect(result).toEqual(["a.ts"]);
+      expect(p.multiselect).toHaveBeenCalledWith(
+        expect.objectContaining({
+          options: [
+            { value: "a.ts", label: "a.ts" },
+            { value: "b.ts", label: "b.ts" },
+          ],
+          required: false,
+        }),
+      );
+    });
+
+    it("should return empty array when nothing selected", async () => {
+      vi.mocked(p.multiselect).mockResolvedValue([]);
+      const result = await selectDeletedFiles(["a.ts"]);
+      expect(result).toEqual([]);
+    });
+  });
+
+  describe("openEditorForConflicts", () => {
+    it("should use $EDITOR env var", () => {
+      const originalEditor = process.env.EDITOR;
+      const originalVisual = process.env.VISUAL;
+      process.env.EDITOR = "nano";
+      delete process.env.VISUAL;
+
+      openEditorForConflicts(["file1.ts", "file2.ts"]);
+
+      expect(execSync).toHaveBeenCalledWith("nano file1.ts", { stdio: "inherit" });
+      expect(execSync).toHaveBeenCalledWith("nano file2.ts", { stdio: "inherit" });
+
+      process.env.EDITOR = originalEditor;
+      if (originalVisual !== undefined) {
+        process.env.VISUAL = originalVisual;
+      }
+    });
+
+    it("should prefer $VISUAL over $EDITOR", () => {
+      const originalEditor = process.env.EDITOR;
+      const originalVisual = process.env.VISUAL;
+      process.env.VISUAL = "code";
+      process.env.EDITOR = "nano";
+
+      openEditorForConflicts(["file1.ts"]);
+
+      expect(execSync).toHaveBeenCalledWith("code file1.ts", { stdio: "inherit" });
+
+      process.env.EDITOR = originalEditor;
+      if (originalVisual !== undefined) {
+        process.env.VISUAL = originalVisual;
+      } else {
+        delete process.env.VISUAL;
+      }
+    });
+
+    it("should skip when editor throws", () => {
+      const originalEditor = process.env.EDITOR;
+      const originalVisual = process.env.VISUAL;
+      delete process.env.VISUAL;
+      process.env.EDITOR = "nonexistent";
+      vi.mocked(execSync).mockImplementation(() => {
+        throw new Error("not found");
+      });
+
+      expect(() => openEditorForConflicts(["file1.ts"])).not.toThrow();
+
+      process.env.EDITOR = originalEditor;
+      if (originalVisual !== undefined) {
+        process.env.VISUAL = originalVisual;
+      }
     });
   });
 });

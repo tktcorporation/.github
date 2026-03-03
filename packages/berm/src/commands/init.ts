@@ -5,6 +5,7 @@ import {
   defaultModules,
   getModuleById,
   getModulesFilePath,
+  getPatternsByModuleIds,
   loadModulesFile,
   modulesFileExists,
 } from "../modules/index";
@@ -21,6 +22,7 @@ import {
   DEFAULT_TEMPLATE_REPO,
   detectGitHubOwner,
 } from "../utils/git-remote";
+import { hashFiles } from "../utils/hash";
 import {
   buildTemplateSource,
   copyFile,
@@ -210,10 +212,15 @@ export const initCommand = defineCommand({
       const modulesJsoncResult = await copyModulesJsonc(templateDir, targetDir, effectiveStrategy);
       allResults.push(modulesJsoncResult);
 
+      // テンプレートファイルのハッシュを計算（pull 時の差分検出用）
+      const patterns = getPatternsByModuleIds(answers.modules, moduleList);
+      const baseHashes = await hashFiles(templateDir, patterns);
+
       // 設定ファイル生成（常に更新）
       const configResult = await createDevEnvConfig(targetDir, answers.modules, {
         owner: sourceOwner,
         repo: sourceRepo,
+        baseHashes,
       });
       allResults.push(configResult);
 
@@ -275,19 +282,26 @@ async function createEnvExample(
 }
 
 /**
- * 設定ファイル生成（常に更新 - 特別枠）
+ * 設定ファイル (.devenv.json) を生成する。常に上書き。
+ *
+ * 背景: baseHashes を記録することで、pull 時に「ユーザーがローカルで変更したか」を
+ * ファイル全体のコピーを保持せずに判定できる。
  */
 async function createDevEnvConfig(
   targetDir: string,
   selectedModules: string[],
-  source: { owner: string; repo: string },
+  source: { owner: string; repo: string; baseHashes?: Record<string, string> },
 ): Promise<FileOperationResult> {
-  const config = {
+  const config: Record<string, unknown> = {
     version: "0.1.0",
     installedAt: new Date().toISOString(),
     modules: selectedModules,
-    source,
+    source: { owner: source.owner, repo: source.repo },
   };
+
+  if (source.baseHashes && Object.keys(source.baseHashes).length > 0) {
+    config.baseHashes = source.baseHashes;
+  }
 
   // .devenv.json は常に上書き（設定管理ファイルなので）
   return writeFileWithStrategy({

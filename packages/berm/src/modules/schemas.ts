@@ -59,6 +59,17 @@ export const configSchema = z.object({
     ref: z.string().optional(),
   }),
   excludePatterns: z.array(z.string()).optional(), // グローバル除外パターン
+  /**
+   * init/pull 時点のテンプレートリポジトリのコミット SHA。
+   * pull 時に baseRef〜最新間の差分を取得し、3-way merge のベースとして使用する。
+   */
+  baseRef: z.string().optional(),
+  /**
+   * init/pull 時点の各ファイルの SHA-256 ハッシュ（パス → ハッシュ）。
+   * ローカル変更の検出に使用する。ファイル全体のコピーを保持せずに
+   * 「ユーザーが変更したか」を判定できるようにするため。
+   */
+  baseHashes: z.record(z.string(), z.string()).optional(),
 });
 
 export type DevEnvConfig = z.infer<typeof configSchema>;
