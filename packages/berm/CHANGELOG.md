@@ -1,5 +1,29 @@
 # @tktco/berm
 
+## 0.14.0
+
+### Minor Changes
+
+- [#98](https://github.com/tktcorporation/.github/pull/98) [`1c04012`](https://github.com/tktcorporation/.github/commit/1c0401254f57691c852fbea2c1d6f84ad0546a21) Thanks [@tktcorporation](https://github.com/tktcorporation)! - feat(berm): add `berm pull` command with 3-way merge engine
+
+  テンプレートの最新変更をローカルに取り込む `berm pull` コマンドを追加。
+  3-way マージエンジンにより、ローカルの変更を保持しつつテンプレート更新を適用する。
+  コンフリクト時はマーカーを挿入し、ユーザーが手動解決できる。
+
+  - 新規: `berm pull` コマンド
+  - 新規: 3-way マージエンジン (`utils/merge.ts`)
+  - 新規: ファイルハッシュユーティリティ (`utils/hash.ts`)
+  - 改善: `berm init` が baseHashes を `.devenv.json` に記録
+  - 改善: `berm push` がテンプレート側の変更を検出し pull を促す
+  - 改善: DevEnvConfig スキーマに `baseRef` / `baseHashes` を追加
+
+- [#98](https://github.com/tktcorporation/.github/pull/98) [`3421f14`](https://github.com/tktcorporation/.github/commit/3421f147d32668920665607f83c13916f897da6a) Thanks [@tktcorporation](https://github.com/tktcorporation)! - UX 改善: コマンドがコンテキストに応じたスマートなデフォルトを提案するように
+
+  - init: 上書き戦略にスマートデフォルト（新規 →overwrite, 再実行 →skip）
+  - push: 変更内容から PR タイトル・本文を自動生成してデフォルト表示
+  - push: `gh auth token` からトークンを自動取得（環境変数不要に）
+  - push: ファイル選択後の確認プロンプトのデフォルトを Yes に変更
+
 ## 0.13.0
 
 ### Minor Changes
