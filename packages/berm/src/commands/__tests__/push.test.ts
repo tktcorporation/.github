@@ -32,6 +32,8 @@ vi.mock("../../utils/template", () => ({
 vi.mock("../../utils/diff", () => ({
   detectDiff: vi.fn(),
   getPushableFiles: vi.fn(() => []),
+  generateUnifiedDiff: vi.fn(() => ""),
+  colorizeUnifiedDiff: vi.fn((s: string) => s),
 }));
 
 // utils/github をモック
