@@ -592,7 +592,7 @@ export const pushCommand = defineCommand({
               if (baseContent) {
                 // 3-way マージ: base→local の変更を template に適用
                 // 結果: template + ユーザーの変更 = PR に含めるべき内容
-                const result = threeWayMerge(baseContent, templateContent, localContent);
+                const result = threeWayMerge(baseContent, templateContent, localContent, file);
                 if (!result.hasConflicts) {
                   mergedContents.set(file, result.content);
                   autoMerged.push(file);

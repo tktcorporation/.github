@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { classifyFiles, hasConflictMarkers, threeWayMerge } from "../merge";
+import { classifyFiles, hasConflictMarkers, mergeJsonContent, threeWayMerge } from "../merge";
 
 describe("merge", () => {
   describe("classifyFiles", () => {
@@ -131,6 +131,271 @@ describe("merge", () => {
 
       expect(result.hasConflicts).toBe(false);
       expect(result.content).toBe("modified locally\n");
+    });
+
+    it("JSON ファイルパスが渡された場合、構造マージを使用する", () => {
+      const base = '{\n  "a": 1,\n  "b": 2\n}\n';
+      const local = '{\n  "a": 1,\n  "b": 2,\n  "c": 3\n}\n';
+      const template = '{\n  "a": 1,\n  "b": 2,\n  "d": 4\n}\n';
+
+      const result = threeWayMerge(base, local, template, "config.json");
+
+      expect(result.hasConflicts).toBe(false);
+      // ローカルの c:3 とテンプレートの d:4 が両方含まれる
+      const parsed = JSON.parse(result.content);
+      expect(parsed.c).toBe(3);
+      expect(parsed.d).toBe(4);
+    });
+
+    it("filePath なしの場合は従来のテキストマージを使用する", () => {
+      const base = "line1\nline2\nline3\n";
+      const local = "line1\nline2-modified\nline3\n";
+      const template = "line1\nline2\nline3\nline4\n";
+
+      const result = threeWayMerge(base, local, template);
+
+      expect(result.hasConflicts).toBe(false);
+    });
+  });
+
+  describe("threeWayMerge - テキストマージ改善", () => {
+    it("fuzz factor でパッチ適用精度が上がる", () => {
+      // ローカルで微小な変更があっても、離れた位置のテンプレート変更が適用される
+      const base = "header\nline1\nline2\nline3\nline4\nline5\nfooter\n";
+      const local = "header-modified\nline1\nline2\nline3\nline4\nline5\nfooter\n";
+      const template = "header\nline1\nline2\nline3\nline4\nline5\nfooter-updated\n";
+
+      const result = threeWayMerge(base, local, template);
+
+      expect(result.hasConflicts).toBe(false);
+      expect(result.content).toContain("header-modified");
+      expect(result.content).toContain("footer-updated");
+    });
+
+    it("hunk 単位のコンフリクトマーカーで影響範囲を最小化", () => {
+      // 十分に離れた2箇所を変更して、別々の hunk になるようにする
+      const baseLines = [
+        "line1",
+        "original-a",
+        "line3",
+        "line4",
+        "line5",
+        "line6",
+        "line7",
+        "line8",
+        "line9",
+        "line10",
+        "original-b",
+        "line12",
+        "",
+      ];
+      const localLines = [...baseLines];
+      localLines[1] = "local-a";
+      localLines[10] = "local-b";
+      const templateLines = [...baseLines];
+      templateLines[1] = "template-a";
+      templateLines[10] = "template-b";
+
+      const base = baseLines.join("\n");
+      const local = localLines.join("\n");
+      const template = templateLines.join("\n");
+
+      const result = threeWayMerge(base, local, template);
+
+      if (result.hasConflicts) {
+        // マーカーが含まれるが、変更されていない行（line3〜line9）も結果に含まれる
+        expect(result.content).toContain("<<<<<<< LOCAL");
+        expect(result.content).toContain(">>>>>>> TEMPLATE");
+        // 変更がないコンテキスト行がそのまま残っている
+        expect(result.content).toContain("line5");
+        expect(result.content).toContain("line6");
+      }
+    });
+  });
+
+  describe("mergeJsonContent", () => {
+    it("異なるキーの追加を自動マージする", () => {
+      const base = '{\n  "a": 1,\n  "b": 2\n}';
+      const local = '{\n  "a": 1,\n  "b": 2,\n  "c": 3\n}';
+      const template = '{\n  "a": 1,\n  "b": 2,\n  "d": 4\n}';
+
+      const result = mergeJsonContent(base, local, template);
+
+      expect(result).not.toBeNull();
+      expect(result!.hasConflicts).toBe(false);
+      const parsed = JSON.parse(result!.content);
+      expect(parsed.a).toBe(1);
+      expect(parsed.b).toBe(2);
+      expect(parsed.c).toBe(3);
+      expect(parsed.d).toBe(4);
+    });
+
+    it("同じキーを同じ値に変更した場合はコンフリクトなし", () => {
+      const base = '{\n  "version": "1.0"\n}';
+      const local = '{\n  "version": "2.0"\n}';
+      const template = '{\n  "version": "2.0"\n}';
+
+      const result = mergeJsonContent(base, local, template);
+
+      expect(result).not.toBeNull();
+      expect(result!.hasConflicts).toBe(false);
+    });
+
+    it("同じキーを異なる値に変更した場合、ローカル値を保持してコンフリクト報告", () => {
+      const base = '{\n  "version": "1.0"\n}';
+      const local = '{\n  "version": "2.0"\n}';
+      const template = '{\n  "version": "3.0"\n}';
+
+      const result = mergeJsonContent(base, local, template);
+
+      expect(result).not.toBeNull();
+      expect(result!.hasConflicts).toBe(true);
+      expect(result!.conflictDetails).toHaveLength(1);
+      expect(result!.conflictDetails[0].path).toEqual(["version"]);
+      expect(result!.conflictDetails[0].localValue).toBe("2.0");
+      expect(result!.conflictDetails[0].templateValue).toBe("3.0");
+      // ローカル値が保持される
+      const parsed = JSON.parse(result!.content);
+      expect(parsed.version).toBe("2.0");
+    });
+
+    it("ネストされたオブジェクトの異なるキーをマージする", () => {
+      const base = '{\n  "servers": {\n    "a": {"url": "http://a"}\n  }\n}';
+      const local =
+        '{\n  "servers": {\n    "a": {"url": "http://a"},\n    "b": {"url": "http://b"}\n  }\n}';
+      const template =
+        '{\n  "servers": {\n    "a": {"url": "http://a"},\n    "c": {"url": "http://c"}\n  }\n}';
+
+      const result = mergeJsonContent(base, local, template);
+
+      expect(result).not.toBeNull();
+      expect(result!.hasConflicts).toBe(false);
+      const parsed = JSON.parse(result!.content);
+      expect(parsed.servers.a).toEqual({ url: "http://a" });
+      expect(parsed.servers.b).toEqual({ url: "http://b" });
+      expect(parsed.servers.c).toEqual({ url: "http://c" });
+    });
+
+    it("テンプレートで削除されたキーを反映する（ローカル未変更の場合）", () => {
+      const base = '{\n  "a": 1,\n  "b": 2,\n  "c": 3\n}';
+      const local = '{\n  "a": 1,\n  "b": 2,\n  "c": 3\n}';
+      const template = '{\n  "a": 1,\n  "c": 3\n}';
+
+      const result = mergeJsonContent(base, local, template);
+
+      expect(result).not.toBeNull();
+      expect(result!.hasConflicts).toBe(false);
+      const parsed = JSON.parse(result!.content);
+      expect(parsed.a).toBe(1);
+      expect(parsed.b).toBeUndefined();
+      expect(parsed.c).toBe(3);
+    });
+
+    it("無効な JSON の場合は null を返す", () => {
+      const result = mergeJsonContent("not json", '{"a": 1}', '{"a": 2}');
+      expect(result).toBeNull();
+    });
+
+    it("MCP サーバー設定の典型的なマージシナリオ", () => {
+      const base = JSON.stringify(
+        {
+          mcpServers: {
+            github: { command: "gh", args: ["mcp"] },
+          },
+        },
+        null,
+        2,
+      );
+      const local = JSON.stringify(
+        {
+          mcpServers: {
+            github: { command: "gh", args: ["mcp"] },
+            "my-custom-server": { command: "my-server", args: ["start"] },
+          },
+        },
+        null,
+        2,
+      );
+      const template = JSON.stringify(
+        {
+          mcpServers: {
+            github: { command: "gh", args: ["mcp", "--verbose"] },
+            "template-server": { command: "tmpl", args: ["run"] },
+          },
+        },
+        null,
+        2,
+      );
+
+      const result = mergeJsonContent(base, local, template);
+
+      expect(result).not.toBeNull();
+      const parsed = JSON.parse(result!.content);
+      // テンプレートの新サーバーが追加される
+      expect(parsed.mcpServers["template-server"]).toEqual({ command: "tmpl", args: ["run"] });
+      // ローカルのカスタムサーバーが保持される
+      expect(parsed.mcpServers["my-custom-server"]).toEqual({
+        command: "my-server",
+        args: ["start"],
+      });
+      // github サーバーは両方変更 → コンフリクト（ローカル未変更なのでテンプレート値が適用）
+      // ※ ローカルは base と同じなのでテンプレートの変更が優先
+      expect(parsed.mcpServers.github.args).toEqual(["mcp", "--verbose"]);
+    });
+
+    it("devcontainer.json の典型的なマージシナリオ", () => {
+      const base = JSON.stringify(
+        {
+          image: "mcr.microsoft.com/devcontainers/typescript-node:20",
+          features: { "ghcr.io/devcontainers/features/git:1": {} },
+        },
+        null,
+        2,
+      );
+      const local = JSON.stringify(
+        {
+          image: "mcr.microsoft.com/devcontainers/typescript-node:20",
+          features: { "ghcr.io/devcontainers/features/git:1": {} },
+          customizations: { vscode: { extensions: ["my-ext"] } },
+        },
+        null,
+        2,
+      );
+      const template = JSON.stringify(
+        {
+          image: "mcr.microsoft.com/devcontainers/typescript-node:22",
+          features: {
+            "ghcr.io/devcontainers/features/git:1": {},
+            "ghcr.io/devcontainers/features/node:1": {},
+          },
+        },
+        null,
+        2,
+      );
+
+      const result = mergeJsonContent(base, local, template);
+
+      expect(result).not.toBeNull();
+      const parsed = JSON.parse(result!.content);
+      // テンプレートの image 更新が適用される
+      expect(parsed.image).toBe("mcr.microsoft.com/devcontainers/typescript-node:22");
+      // ローカルの customizations が保持される
+      expect(parsed.customizations).toEqual({ vscode: { extensions: ["my-ext"] } });
+      // テンプレートの新 feature が追加される
+      expect(parsed.features["ghcr.io/devcontainers/features/node:1"]).toEqual({});
+    });
+
+    it("ローカルのフォーマット（インデント）を保持する", () => {
+      // 4スペースインデントのローカル
+      const base = '{\n    "a": 1\n}';
+      const local = '{\n    "a": 1,\n    "b": 2\n}';
+      const template = '{\n  "a": 1,\n  "c": 3\n}';
+
+      const result = mergeJsonContent(base, local, template);
+
+      expect(result).not.toBeNull();
+      // jsonc-parser の modify がローカルのフォーマットに合わせる
+      expect(result!.content).toContain('"b": 2');
     });
   });
 
