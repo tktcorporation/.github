@@ -5,6 +5,41 @@
       "command": "bash",
       "args": [".devcontainer/run-chrome-devtools-mcp.sh"],
       "env": {}
+    },
+    "context7": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@upstash/context7-mcp"],
+      "env": {}
+    },
+    "ide": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@anthropic-ai/ide-mcp@latest"],
+      "env": {}
     }
-  }
+  },
+      "issue-search": {
+      "type": "stdio",
+      "command": "bun",
+      "args": [
+        "run",
+        "repo/command-center/tools/issue-search-mcp/src/server.ts"
+      ],
+      "env": {
+        "DB_PATH": "./repo/command-center/tools/issue-search-mcp/data/issues.lancedb"
+      }
+    },
+    "slack-mention": {
+      "type": "stdio",
+      "command": "bun",
+      "args": [
+        "run",
+        "repo/command-center/tools/slack-mention-mcp/src/server.ts"
+      ],
+      "env": {
+        "SLACK_USER_TOKEN": "${SLACK_USER_TOKEN}",
+        "ISSUES_DIR": "./repo/command-center/issues"
+      }
+    }
 }
