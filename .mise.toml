@@ -1,35 +1,151 @@
+# ============================================
+# mise configuration for LAPRAS Workspace
+# ============================================
+
 [tools]
-node = ["22", "24"]
+# Language Runtimes
+node = ["22", "24", "20"]
+python = "3.12"
+rust = "latest"
+
+# Package Managers
 uv = "latest"
-python = "3.14"
-pnpm = "10"
+"cargo:cargo-binstall" = "latest"
+
+# DevOps
+kubectl = "latest"
 jj = "latest"
 
+# AI/LLM CLI Tools
 "npm:@anthropic-ai/claude-code" = "latest"
 "npm:@openai/codex" = "latest"
 "npm:@google/gemini-cli" = "latest"
 
+# Development Utilities
 "npm:@antfu/ni" = "latest"
-
-# Browser automation
 "npm:playwright" = "latest"
+"npm:typescript-language-server" = "latest"
+"pipx:sqlfluff" = "latest"
+bun = "latest"
+deno = "latest"
+"npm:typescript" = "latest"
 
 
 [settings]
 experimental = true
-# .nvmrcファイルを自動的に読み込む設定
-legacy_version_file = true
-# ディレクトリ移動時に自動的にツールをインストール
-auto_install = true
+legacy_version_file = true  # Auto-read .nvmrc, .python-version, etc.
+auto_install = true         # Auto-install tools on directory change
+pipx.uvx = true             # Use uvx for pipx backend (faster)
 
-# pipx バックエンドで uvx を使う設定
-pipx.uvx = true
+
+[task_config]
+dir = "{{config_root}}"     # Default working directory for tasks
+
+
+# ============================================
+# Tasks: SQL Linting (sqlfluff)
+# ============================================
+
+[tasks.lint-sql]
+run = "sqlfluff lint redash/**/*.sql --dialect postgres"
+sources = ["redash/**/*.sql", ".sqlfluff"]
+description = "Lint all SQL files"
+
+[tasks.fix-sql]
+run = "sqlfluff fix redash/**/*.sql --dialect postgres --force"
+sources = ["redash/**/*.sql"]
+description = "Auto-fix all SQL files"
+
+[tasks.lint-sql-file]
+run = "sqlfluff lint {{arg(name='file')}} --dialect postgres"
+description = "Lint a specific SQL file"
+
+[tasks.fix-sql-file]
+run = "sqlfluff fix {{arg(name='file')}} --dialect postgres --force"
+description = "Auto-fix a specific SQL file"
+
+[tasks.check-sql]
+run = "sqlfluff lint redash/**/*.sql --dialect postgres --format github-annotation"
+description = "Check SQL files (CI/CD format)"
+
+
+# ============================================
+# Tasks: PGlite SQL Validation
+# ============================================
+
+[tasks.pglite]
+dir = "redash/scripts/pglite-cli"
+run = "npx tsx pglite-cli.ts"
+description = "PGlite CLI"
+
+[tasks.sql-setup]
+dir = "redash/scripts/pglite-cli"
+run = "npx tsx pglite-cli.ts setup"
+description = "Setup PGlite schema"
+
+[tasks.sql-validate]
+dir = "redash/scripts/pglite-cli"
+run = "npx tsx pglite-cli.ts validate"
+description = "Validate SQL syntax"
+
+[tasks.sql-validate-file]
+dir = "redash/scripts/pglite-cli"
+run = "npx tsx pglite-cli.ts validate {{arg(name='file')}}"
+description = "Validate a specific SQL file"
+
+[tasks.sql-check]
+depends = ["sql-setup"]
+dir = "redash/scripts/pglite-cli"
+run = "npx tsx pglite-cli.ts check {{arg(name='file')}}"
+description = "Check SQL (validate + lint)"
+
+[tasks.sql-lint]
+dir = "redash/scripts/pglite-cli"
+run = "npx tsx pglite-cli.ts lint {{arg(name='file')}}"
+description = "Lint SQL via PGlite"
+
+[tasks.sql-execute]
+dir = "redash/scripts/pglite-cli"
+run = "npx tsx pglite-cli.ts execute {{arg(name='file')}}"
+description = "Execute SQL with sample data"
+
+
+# ============================================
+# Tasks: Browser Automation
+# ============================================
+
+[tasks.playwright-install]
+run = "npx playwright install chromium"
+description = "Install Chromium via Playwright"
 
 [tasks.chromium-path]
 run = "ls ~/.cache/ms-playwright/chromium-*/chrome-linux/chrome | head -1"
-description = "Get Playwright Chromium executable path"
+description = "Get Chromium executable path"
 
-[tasks.berm]
-run = "npx @tktco/berm@latest"
-description = "Run berm CLI"
 
+# ============================================
+# Tasks: Composite Tasks
+# ============================================
+
+[tasks.lint-all]
+description = "Run all linting tasks"
+run = [
+    { tasks = ["lint-sql", "sql-validate"] }
+]
+
+[tasks.default]
+description = "Default: lint all SQL files"
+depends = ["lint-sql"]
+
+
+# ============================================
+# Tasks: Git Hooks
+# ============================================
+
+[tasks.pre-push-lapras]
+description = "Pre-push lint check for lapras"
+run = "./scripts/lint-lapras.sh --fail-fast --skip-tsc"
+
+[tasks.pre-push-scouty]
+description = "Pre-push lint check for scouty"
+run = "./scripts/lint-scouty.sh"
