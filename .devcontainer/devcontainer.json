@@ -11,11 +11,11 @@
   ],
 
   "features": {
-    // "ghcr.io/devcontainers/features/docker-in-docker:2": {
-    //   "version": "latest",
-    //   "enableNonRootDocker": "true",
-    //   "moby": "true"
-    // },
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {
+      "version": "latest",
+      "enableNonRootDocker": "true",
+      "moby": "true"
+    },
     "ghcr.io/devcontainers/features/aws-cli:1": {},
     "ghcr.io/devcontainers/features/github-cli:1": {},
     "ghcr.io/devcontainers-extra/features/mise:1": {}
@@ -24,11 +24,28 @@
   "customizations": {
     "vscode": {
       "extensions": [
+        "ms-azuretools.vscode-docker",
         "GitHub.copilot",
+        "donjayamanne.githistory",
+        "eamodio.gitlens",
         "mhutchie.git-graph",
         "steoates.autoimport",
+        "Atishay-Jain.All-Autocomplete",
+        "usernamehw.errorlens",
+        "dbaeumer.vscode-eslint",
+        "mgmcdermott.vscode-language-babel",
+        "pflannery.vscode-versionlens",
         "editorconfig.editorconfig",
         "WakaTime.vscode-wakatime",
+        "esbenp.prettier-vscode",
+        "ms-python.python",
+        "kawamataryo.copy-python-dotted-path",
+        "zxh404.vscode-proto3",
+        "Vue.volar",
+        "ms-python.flake8",
+        "ms-python.mypy-type-checker",
+        "ms-python.isort",
+        "ms-python.autopep8",
         "nemesv.copy-file-name"
       ],
       "settings": {
@@ -39,15 +56,25 @@
           "**/node_modules/**": true,
           "**/.pnpm/**": true,
           "**/.pnpm-store/**": true,
-          "**/.turbo/**": true
+          "**/.turbo/**": true,
+          "**/dist/**": true,
+          "**/.next/**": true,
+          "**/__pycache__/**": true,
+          "**/.pytest_cache/**": true,
+          "**/venv/**": true,
+          "**/.venv/**": true
         },
         "search.exclude": {
           "**/node_modules": true,
+          "**/dist": true,
           "**/.pnpm": true,
           "**/.pnpm-store": true,
           "**/.git": true,
-          "**/.turbo": true
-        }
+          "**/.turbo": true,
+          "**/.next": true,
+          "**/coverage": true
+        },
+        "git.detectSubmodulesLimit": 0
       }
     }
   },
@@ -69,7 +96,11 @@
   },
   "postCreateCommand": {
     "mise-install": "mise install",
-    "fix-pnpm-store-permissions": ["bash", "-lc", "sudo chown -R $(whoami) .pnpm-store"]
+    "git-performance": "git config status.submoduleSummary false && git config diff.ignoreSubmodules all && git config fetch.recurseSubmodules false && git config submodule.recurse false",
+    "setup-git-hooks-lapras": "mise generate git-pre-commit -C repo/lapras --hook=pre-push --task=pre-push-lapras --write",
+    "setup-git-hooks-scouty": "mise generate git-pre-commit -C repo/scouty --hook=pre-push --task=pre-push-scouty --write",
+    "install-gh-extensions": "gh extension install agbiotech/gh-sub-issue 2>/dev/null || true",
+    "symlink-claude-memory": "mkdir -p /home/vscode/.claude/projects/-workspaces-ai-pdm-workspace-tkt && ln -sfn /workspaces/ai-pdm-workspace-tkt/.claude/memory/auto /home/vscode/.claude/projects/-workspaces-ai-pdm-workspace-tkt/memory"
   },
   "postStartCommand": {
     "setup-chrome-devtools-mcp": ["bash", "-lc", ".devcontainer/setup-chrome-devtools-mcp.sh"],
