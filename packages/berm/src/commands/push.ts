@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { existsSync, rmSync } from "node:fs";
 import { readFile, rm } from "node:fs/promises";
 import { defineCommand } from "citty";
 import { downloadTemplate } from "giget";
@@ -23,7 +23,12 @@ import {
   selectPushFiles,
 } from "../ui/prompts";
 import { intro, log, logDiffSummary, outro, pc, withSpinner } from "../ui/renderer";
-import { detectDiff, getPushableFiles } from "../utils/diff";
+import {
+  colorizeUnifiedDiff,
+  detectDiff,
+  generateUnifiedDiff,
+  getPushableFiles,
+} from "../utils/diff";
 import { createPullRequest, getGitHubToken } from "../utils/github";
 import {
   deleteManifest,
@@ -37,6 +42,31 @@ import {
 import { detectAndUpdateReadme } from "../utils/readme";
 import { buildTemplateSource } from "../utils/template";
 import { detectUntrackedFiles } from "../utils/untracked";
+
+/**
+ * process.exit() でも確実に一時ディレクトリを削除するための同期クリーンアップを登録する。
+ *
+ * 背景: handleCancel() が process.exit(0) を呼ぶため async finally ブロックが
+ * スキップされ、.devenv-temp が残る問題への対策。process.on('exit') は
+ * process.exit() でも発火するが同期処理のみ実行可能なため rmSync を使用。
+ *
+ * 削除条件: handleCancel() が process.exit() を使わなくなった場合。
+ */
+function registerSyncCleanup(tempDir: string): () => void {
+  const cleanup = () => {
+    try {
+      if (existsSync(tempDir)) {
+        rmSync(tempDir, { recursive: true, force: true });
+      }
+    } catch {
+      // プロセス終了中のエラーは無視（ベストエフォート）
+    }
+  };
+  process.on("exit", cleanup);
+  return () => {
+    process.removeListener("exit", cleanup);
+  };
+}
 
 const MODULES_FILE_PATH = ".devenv/modules.jsonc";
 const README_PATH = "README.md";
@@ -175,6 +205,7 @@ async function runExecuteMode(
 
   const templateSource = buildTemplateSource(config.source);
   const tempDir = join(targetDir, ".devenv-temp");
+  const unregisterCleanup = registerSyncCleanup(tempDir);
 
   try {
     const { dir: templateDir } = await withSpinner("Downloading template from GitHub...", () =>
@@ -356,6 +387,7 @@ async function runExecuteMode(
     log.message(pc.dim(`Cleaned up ${MANIFEST_FILENAME}`));
     outro(`Review and merge the PR at ${result.url}`);
   } finally {
+    unregisterCleanup();
     // 一時ディレクトリを削除
     if (existsSync(tempDir)) {
       await rm(tempDir, { recursive: true, force: true });
@@ -474,6 +506,7 @@ export const pushCommand = defineCommand({
     // テンプレートを一時ディレクトリにダウンロード
     const templateSource = buildTemplateSource(config.source);
     const tempDir = join(targetDir, ".devenv-temp");
+    const unregisterCleanup = registerSyncCleanup(tempDir);
 
     try {
       const { dir: templateDir } = await withSpinner("Downloading template from GitHub...", () =>
@@ -820,6 +853,18 @@ export const pushCommand = defineCommand({
         ].join("\n"),
       );
 
+      // ファイルごとの差分プレビューを表示
+      // 確認前に変更内容を把握できるようにする
+      log.step("Changes");
+      for (const pf of pushableFiles) {
+        // files に含まれるもの（選択済み or 全ファイル）のみ表示
+        if (!files.some((f) => f.path === pf.path)) continue;
+        const unifiedDiff = generateUnifiedDiff(pf);
+        if (unifiedDiff) {
+          log.message(colorizeUnifiedDiff(unifiedDiff));
+        }
+      }
+
       if (!args.force) {
         const confirmed = await confirmAction("Create PR?", { initialValue: true });
         if (!confirmed) {
@@ -853,6 +898,7 @@ export const pushCommand = defineCommand({
       );
       outro(`Review and merge the PR at ${result.url}`);
     } finally {
+      unregisterCleanup();
       // 一時ディレクトリを削除
       if (existsSync(tempDir)) {
         await rm(tempDir, { recursive: true, force: true });
