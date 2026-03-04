@@ -168,6 +168,30 @@ export function getGhCliToken(): string | undefined {
 }
 
 /**
+ * テンプレートリポジトリの最新コミット SHA を取得する。
+ *
+ * 背景: init/pull 時に baseRef として保存し、後で 3-way マージのベース取得に使用する。
+ * GitHub API の `Accept: application/vnd.github.sha` を使い、SHA 文字列のみを取得する。
+ * 認証不要（公開リポジトリの場合）。
+ */
+export async function resolveLatestCommitSha(
+  owner: string,
+  repo: string,
+  ref = "main",
+): Promise<string | undefined> {
+  try {
+    const url = `https://api.github.com/repos/${owner}/${repo}/commits/${ref}`;
+    const res = await fetch(url, {
+      headers: { Accept: "application/vnd.github.sha" },
+    });
+    if (!res.ok) return undefined;
+    return (await res.text()).trim();
+  } catch {
+    return undefined;
+  }
+}
+
+/**
  * sleep utility
  */
 function sleep(ms: number): Promise<void> {

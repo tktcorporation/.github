@@ -23,6 +23,9 @@ vi.mock("../../utils/template", () => ({
     const base = `gh:${source.owner}/${source.repo}`;
     return source.ref ? `${base}#${source.ref}` : base;
   }),
+  downloadTemplateToTemp: vi.fn(() =>
+    Promise.resolve({ templateDir: "/tmp/base-template", cleanup: vi.fn() }),
+  ),
 }));
 
 // utils/diff をモック
@@ -62,6 +65,7 @@ vi.mock("../../utils/merge", () => ({
     deletedFiles: [],
     unchanged: [],
   })),
+  threeWayMerge: vi.fn(() => ({ content: "merged", hasConflicts: false })),
 }));
 
 // utils/patterns をモック
@@ -112,6 +116,7 @@ vi.mock("../../ui/renderer", () => ({
     bold: (s: string) => s,
     dim: (s: string) => s,
     green: (s: string) => s,
+    yellow: (s: string) => s,
   },
   withSpinner: vi.fn(async (_text: string, fn: () => Promise<unknown>) => fn()),
 }));
@@ -125,9 +130,11 @@ const { confirmAction, inputGitHubToken, inputPrTitle, inputPrBody, selectPushFi
   await import("../../ui/prompts");
 const { log } = await import("../../ui/renderer");
 const { hashFiles } = await import("../../utils/hash");
-const { classifyFiles } = await import("../../utils/merge");
+const { classifyFiles, threeWayMerge } = await import("../../utils/merge");
+const { downloadTemplateToTemp } = await import("../../utils/template");
 
 const mockDownloadTemplate = vi.mocked(downloadTemplate);
+const mockDownloadTemplateToTemp = vi.mocked(downloadTemplateToTemp);
 const mockDetectDiff = vi.mocked(detectDiff);
 const mockGetPushableFiles = vi.mocked(getPushableFiles);
 const mockGetGitHubToken = vi.mocked(getGitHubToken);
@@ -140,6 +147,7 @@ const mockSelectPushFiles = vi.mocked(selectPushFiles);
 const mockLog = vi.mocked(log);
 const mockHashFiles = vi.mocked(hashFiles);
 const mockClassifyFiles = vi.mocked(classifyFiles);
+const mockThreeWayMerge = vi.mocked(threeWayMerge);
 
 const validConfig = {
   version: "0.1.0",
@@ -195,9 +203,14 @@ describe("pushCommand", () => {
       expect(args.force.default).toBe(false);
     });
 
-    it("interactive 引数のデフォルト値は true", () => {
-      const args = pushCommand.args as { interactive: { default: boolean } };
-      expect(args.interactive.default).toBe(true);
+    it("select 引数のデフォルト値は false", () => {
+      const args = pushCommand.args as { select: { default: boolean } };
+      expect(args.select.default).toBe(false);
+    });
+
+    it("edit 引数のデフォルト値は false", () => {
+      const args = pushCommand.args as { edit: { default: boolean } };
+      expect(args.edit.default).toBe(false);
     });
   });
 
@@ -209,7 +222,7 @@ describe("pushCommand", () => {
 
       await expect(
         (pushCommand.run as any)({
-          args: { dir: "/test", dryRun: false, force: false, interactive: true },
+          args: { dir: "/test", dryRun: false, force: false, select: false, edit: false },
           rawArgs: [],
           cmd: pushCommand,
         }),
@@ -223,7 +236,7 @@ describe("pushCommand", () => {
 
       await expect(
         (pushCommand.run as any)({
-          args: { dir: "/test", dryRun: false, force: false, interactive: true },
+          args: { dir: "/test", dryRun: false, force: false, select: false, edit: false },
           rawArgs: [],
           cmd: pushCommand,
         }),
@@ -239,7 +252,7 @@ describe("pushCommand", () => {
       });
 
       await (pushCommand.run as any)({
-        args: { dir: "/test", dryRun: false, force: false, interactive: true },
+        args: { dir: "/test", dryRun: false, force: false, select: false, edit: false },
         rawArgs: [],
         cmd: pushCommand,
       });
@@ -255,7 +268,7 @@ describe("pushCommand", () => {
       mockGetPushableFiles.mockReturnValue([]);
 
       await (pushCommand.run as any)({
-        args: { dir: "/test", dryRun: false, force: false, interactive: true },
+        args: { dir: "/test", dryRun: false, force: false, select: false, edit: false },
         rawArgs: [],
         cmd: pushCommand,
       });
@@ -277,7 +290,7 @@ describe("pushCommand", () => {
       ]);
 
       await (pushCommand.run as any)({
-        args: { dir: "/test", dryRun: true, force: false, interactive: true },
+        args: { dir: "/test", dryRun: true, force: false, select: false, edit: false },
         rawArgs: [],
         cmd: pushCommand,
       });
@@ -287,7 +300,7 @@ describe("pushCommand", () => {
       expect(mockCreatePullRequest).not.toHaveBeenCalled();
     });
 
-    it("インタラクティブモードでファイル選択をキャンセル", async () => {
+    it("--select モードでファイル選択をキャンセル", async () => {
       vol.fromJSON({
         "/test/.devenv.json": JSON.stringify(validConfig),
       });
@@ -303,7 +316,7 @@ describe("pushCommand", () => {
       mockSelectPushFiles.mockResolvedValueOnce([]);
 
       await (pushCommand.run as any)({
-        args: { dir: "/test", dryRun: false, force: false, interactive: true },
+        args: { dir: "/test", dryRun: false, force: false, select: true, edit: false },
         rawArgs: [],
         cmd: pushCommand,
       });
@@ -312,7 +325,7 @@ describe("pushCommand", () => {
       expect(mockCreatePullRequest).not.toHaveBeenCalled();
     });
 
-    it("--no-interactive モードで確認をキャンセル", async () => {
+    it("PR 作成前の確認でキャンセル", async () => {
       vol.fromJSON({
         "/test/.devenv.json": JSON.stringify(validConfig),
       });
@@ -325,19 +338,22 @@ describe("pushCommand", () => {
         },
       ]);
 
+      mockGetGitHubToken.mockReturnValue("ghp_token");
       mockConfirmAction.mockResolvedValueOnce(false);
 
       await (pushCommand.run as any)({
-        args: { dir: "/test", dryRun: false, force: false, interactive: false },
+        args: { dir: "/test", dryRun: false, force: false, select: false, edit: false },
         rawArgs: [],
         cmd: pushCommand,
       });
 
-      expect(mockLog.info).toHaveBeenCalledWith("Cancelled");
+      expect(mockLog.info).toHaveBeenCalledWith(
+        "Cancelled. Use --edit to customize title/body, or --select to pick files.",
+      );
       expect(mockCreatePullRequest).not.toHaveBeenCalled();
     });
 
-    it("PR 作成成功", async () => {
+    it("PR 作成成功（タイトル・本文は自動生成）", async () => {
       vol.fromJSON({
         "/test/.devenv.json": JSON.stringify(validConfig),
       });
@@ -349,10 +365,8 @@ describe("pushCommand", () => {
       };
 
       mockGetPushableFiles.mockReturnValue([pushableFile]);
-      mockSelectPushFiles.mockResolvedValueOnce([pushableFile]);
       mockGetGitHubToken.mockReturnValue("ghp_token");
-      mockInputPrTitle.mockResolvedValueOnce("feat: add new file");
-      mockInputPrBody.mockResolvedValueOnce("PR description");
+      mockConfirmAction.mockResolvedValueOnce(true);
       mockCreatePullRequest.mockResolvedValueOnce({
         url: "https://github.com/owner/repo/pull/1",
         branch: "update-template-123",
@@ -360,19 +374,23 @@ describe("pushCommand", () => {
       });
 
       await (pushCommand.run as any)({
-        args: { dir: "/test", dryRun: false, force: false, interactive: true },
+        args: { dir: "/test", dryRun: false, force: false, select: false, edit: false },
         rawArgs: [],
         cmd: pushCommand,
       });
 
       expect(mockLog.success).toHaveBeenCalledWith("Pull request created!");
+      // ファイル選択・タイトル入力・本文入力のプロンプトは呼ばれない
+      expect(mockSelectPushFiles).not.toHaveBeenCalled();
+      expect(mockInputPrTitle).not.toHaveBeenCalled();
+      expect(mockInputPrBody).not.toHaveBeenCalled();
       expect(mockCreatePullRequest).toHaveBeenCalledWith(
         "ghp_token",
         expect.objectContaining({
           owner: "tktcorporation",
           repo: ".github",
-          title: "feat: add new file",
-          body: "PR description",
+          title: "feat: add file.txt config",
+          body: "## Changes\n\n**Added:**\n- `file.txt`",
         }),
       );
     });
@@ -389,11 +407,9 @@ describe("pushCommand", () => {
       };
 
       mockGetPushableFiles.mockReturnValue([pushableFile]);
-      mockSelectPushFiles.mockResolvedValueOnce([pushableFile]);
       mockGetGitHubToken.mockReturnValue(undefined);
       mockInputGitHubToken.mockResolvedValueOnce("ghp_prompted_token");
-      mockInputPrTitle.mockResolvedValueOnce("feat: add");
-      mockInputPrBody.mockResolvedValueOnce(undefined);
+      mockConfirmAction.mockResolvedValueOnce(true);
       mockCreatePullRequest.mockResolvedValueOnce({
         url: "https://github.com/owner/repo/pull/1",
         branch: "update-template-123",
@@ -401,7 +417,7 @@ describe("pushCommand", () => {
       });
 
       await (pushCommand.run as any)({
-        args: { dir: "/test", dryRun: false, force: false, interactive: true },
+        args: { dir: "/test", dryRun: false, force: false, select: false, edit: false },
         rawArgs: [],
         cmd: pushCommand,
       });
@@ -422,9 +438,8 @@ describe("pushCommand", () => {
       };
 
       mockGetPushableFiles.mockReturnValue([pushableFile]);
-      mockSelectPushFiles.mockResolvedValueOnce([pushableFile]);
       mockGetGitHubToken.mockReturnValue("ghp_token");
-      mockInputPrBody.mockResolvedValueOnce(undefined);
+      mockConfirmAction.mockResolvedValueOnce(true);
       mockCreatePullRequest.mockResolvedValueOnce({
         url: "https://github.com/owner/repo/pull/1",
         branch: "update-template-123",
@@ -436,7 +451,8 @@ describe("pushCommand", () => {
           dir: "/test",
           dryRun: false,
           force: false,
-          interactive: true,
+          select: false,
+          edit: false,
           message: "Custom PR title",
         },
         rawArgs: [],
@@ -466,8 +482,6 @@ describe("pushCommand", () => {
 
       mockGetPushableFiles.mockReturnValue([pushableFile]);
       mockGetGitHubToken.mockReturnValue("ghp_token");
-      mockInputPrTitle.mockResolvedValueOnce("feat: add");
-      mockInputPrBody.mockResolvedValueOnce(undefined);
       mockCreatePullRequest.mockResolvedValueOnce({
         url: "https://github.com/owner/repo/pull/1",
         branch: "update-template-123",
@@ -475,18 +489,20 @@ describe("pushCommand", () => {
       });
 
       await (pushCommand.run as any)({
-        args: { dir: "/test", dryRun: false, force: true, interactive: true },
+        args: { dir: "/test", dryRun: false, force: true, select: false, edit: false },
         rawArgs: [],
         cmd: pushCommand,
       });
 
-      // ファイル選択プロンプトはスキップ
+      // --force: ファイル選択・タイトル入力・確認プロンプトすべてスキップ
       expect(mockSelectPushFiles).not.toHaveBeenCalled();
+      expect(mockInputPrTitle).not.toHaveBeenCalled();
+      expect(mockInputPrBody).not.toHaveBeenCalled();
       expect(mockConfirmAction).not.toHaveBeenCalled();
       expect(mockCreatePullRequest).toHaveBeenCalled();
     });
 
-    it("baseHashes が存在しコンフリクトがある場合はエラーで pull を促す", async () => {
+    it("baseHashes が存在しコンフリクトがある場合は警告して確認を求める（baseRef なし）", async () => {
       const configWithBaseHashes = {
         ...validConfig,
         baseHashes: {
@@ -496,6 +512,8 @@ describe("pushCommand", () => {
 
       vol.fromJSON({
         "/test/.devenv.json": JSON.stringify(configWithBaseHashes),
+        "/test/file.txt": "local content",
+        "/tmp/template/file.txt": "template content",
       });
 
       // classifyFiles がコンフリクトを返す
@@ -508,21 +526,144 @@ describe("pushCommand", () => {
         unchanged: [],
       });
 
-      await expect(
-        (pushCommand.run as any)({
-          args: { dir: "/test", dryRun: false, force: false, interactive: true },
-          rawArgs: [],
-          cmd: pushCommand,
-        }),
-      ).rejects.toThrow("Template has upstream changes");
+      // baseRef がないので 3-way マージ不可 → unresolved として確認を求める
+      // ユーザーが続行を拒否
+      mockConfirmAction.mockResolvedValueOnce(false);
+
+      await (pushCommand.run as any)({
+        args: { dir: "/test", dryRun: false, force: false, select: false, edit: false },
+        rawArgs: [],
+        cmd: pushCommand,
+      });
 
       expect(mockLog.warn).toHaveBeenCalledWith(
-        "Template has also changed 1 file(s) since last pull/init.",
+        "Template has also changed 1 file(s) since last pull/init. Attempting auto-merge...",
       );
       expect(mockLog.info).toHaveBeenCalledWith(
-        "Run `berm pull` first to resolve template changes.",
+        "Run `berm pull` first to sync template changes, then push again.",
       );
       expect(mockCreatePullRequest).not.toHaveBeenCalled();
+    });
+
+    it("コンフリクトがあっても確認で続行を選べばPRを作成", async () => {
+      const configWithBaseHashes = {
+        ...validConfig,
+        baseHashes: {
+          "file.txt": "abc123",
+        },
+      };
+
+      vol.fromJSON({
+        "/test/.devenv.json": JSON.stringify(configWithBaseHashes),
+        "/test/file.txt": "local content",
+        "/tmp/template/file.txt": "template content",
+      });
+
+      mockClassifyFiles.mockReturnValueOnce({
+        autoUpdate: [],
+        localOnly: [],
+        conflicts: ["file.txt"],
+        newFiles: [],
+        deletedFiles: [],
+        unchanged: [],
+      });
+
+      const pushableFile = {
+        path: "file.txt",
+        type: "modified" as const,
+        localContent: "new content",
+        templateContent: "old content",
+      };
+
+      mockGetPushableFiles.mockReturnValue([pushableFile]);
+      // コンフリクト確認: 続行（baseRef なし → unresolved → 確認）
+      mockConfirmAction.mockResolvedValueOnce(true);
+      // PR作成確認: 続行
+      mockConfirmAction.mockResolvedValueOnce(true);
+      mockGetGitHubToken.mockReturnValue("ghp_token");
+      mockCreatePullRequest.mockResolvedValueOnce({
+        url: "https://github.com/owner/repo/pull/1",
+        branch: "update-template-123",
+        number: 1,
+      });
+
+      await (pushCommand.run as any)({
+        args: { dir: "/test", dryRun: false, force: false, select: false, edit: false },
+        rawArgs: [],
+        cmd: pushCommand,
+      });
+
+      expect(mockLog.warn).toHaveBeenCalled();
+      expect(mockCreatePullRequest).toHaveBeenCalled();
+    });
+
+    it("baseRef + baseHashes がある場合に 3-way マージで自動解決", async () => {
+      const configWithBaseRef = {
+        ...validConfig,
+        baseRef: "abc123def456",
+        baseHashes: {
+          "file.txt": "abc123",
+        },
+      };
+
+      vol.fromJSON({
+        "/test/.devenv.json": JSON.stringify(configWithBaseRef),
+        "/test/file.txt": "local content",
+        "/tmp/template/file.txt": "template content",
+        // base テンプレートのファイル（downloadTemplateToTemp が /tmp/base-template を返す）
+        "/tmp/base-template/file.txt": "base content",
+      });
+
+      mockClassifyFiles.mockReturnValueOnce({
+        autoUpdate: [],
+        localOnly: [],
+        conflicts: ["file.txt"],
+        newFiles: [],
+        deletedFiles: [],
+        unchanged: [],
+      });
+
+      // threeWayMerge のモック（自動マージ成功）
+      mockThreeWayMerge.mockReturnValueOnce({
+        content: "merged content",
+        hasConflicts: false,
+      });
+
+      const pushableFile = {
+        path: "file.txt",
+        type: "modified" as const,
+        localContent: "local content",
+        templateContent: "template content",
+      };
+
+      mockGetPushableFiles.mockReturnValue([pushableFile]);
+      // 3-way マージ成功 → unresolved なし → 確認は PR 作成確認のみ
+      mockConfirmAction.mockResolvedValueOnce(true);
+      mockGetGitHubToken.mockReturnValue("ghp_token");
+      mockCreatePullRequest.mockResolvedValueOnce({
+        url: "https://github.com/owner/repo/pull/1",
+        branch: "update-template-123",
+        number: 1,
+      });
+
+      await (pushCommand.run as any)({
+        args: { dir: "/test", dryRun: false, force: false, select: false, edit: false },
+        rawArgs: [],
+        cmd: pushCommand,
+      });
+
+      expect(mockLog.success).toHaveBeenCalledWith("Auto-merged 1 file(s):");
+      expect(mockCreatePullRequest).toHaveBeenCalledWith(
+        "ghp_token",
+        expect.objectContaining({
+          files: expect.arrayContaining([
+            expect.objectContaining({
+              path: "file.txt",
+              content: "merged content",
+            }),
+          ]),
+        }),
+      );
     });
 
     it("baseHashes がない場合はコンフリクト検出をスキップ", async () => {
@@ -533,7 +674,7 @@ describe("pushCommand", () => {
       mockGetPushableFiles.mockReturnValue([]);
 
       await (pushCommand.run as any)({
-        args: { dir: "/test", dryRun: false, force: false, interactive: true },
+        args: { dir: "/test", dryRun: false, force: false, select: false, edit: false },
         rawArgs: [],
         cmd: pushCommand,
       });
@@ -568,7 +709,7 @@ describe("pushCommand", () => {
       mockGetPushableFiles.mockReturnValue([]);
 
       await (pushCommand.run as any)({
-        args: { dir: "/test", dryRun: false, force: false, interactive: true },
+        args: { dir: "/test", dryRun: false, force: false, select: false, edit: false },
         rawArgs: [],
         cmd: pushCommand,
       });
