@@ -228,6 +228,13 @@ describe("pullCommand", () => {
         unchanged: [],
       });
 
+      // base がない場合も threeWayMerge が呼ばれる（空文字列が base として渡される）
+      mockThreeWayMerge.mockReturnValueOnce({
+        content: "<<<<<<< LOCAL\nlocal content\n=======\ntemplate content\n>>>>>>> TEMPLATE",
+        hasConflicts: true,
+        conflictDetails: [],
+      });
+
       await (pullCommand.run as any)({
         args: { dir: "/test", force: false },
         rawArgs: [],
@@ -242,6 +249,13 @@ describe("pullCommand", () => {
       expect(content).toContain(">>>>>>> TEMPLATE");
       expect(mockLog.warn).toHaveBeenCalledWith(
         expect.stringContaining("manual resolution needed"),
+      );
+      // threeWayMerge にファイルパスが渡される
+      expect(mockThreeWayMerge).toHaveBeenCalledWith(
+        "",
+        "local content",
+        "template content",
+        ".mcp.json",
       );
     });
 

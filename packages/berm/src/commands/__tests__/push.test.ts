@@ -65,7 +65,7 @@ vi.mock("../../utils/merge", () => ({
     deletedFiles: [],
     unchanged: [],
   })),
-  threeWayMerge: vi.fn(() => ({ content: "merged", hasConflicts: false })),
+  threeWayMerge: vi.fn(() => ({ content: "merged", hasConflicts: false, conflictDetails: [] })),
 }));
 
 // utils/patterns をモック
@@ -627,6 +627,7 @@ describe("pushCommand", () => {
       mockThreeWayMerge.mockReturnValueOnce({
         content: "merged content",
         hasConflicts: false,
+        conflictDetails: [],
       });
 
       const pushableFile = {

@@ -169,19 +169,39 @@ export const pullCommand = defineCommand({
             }
 
             if (baseContent !== undefined) {
-              // 3-way マージ
-              const result = threeWayMerge(baseContent, localContent, templateContent);
+              // 3-way マージ（ファイルパスを渡して構造マージを有効化）
+              const result = threeWayMerge(baseContent, localContent, templateContent, file);
               await writeFile(join(targetDir, file), result.content, "utf-8");
               if (result.hasConflicts) {
                 hasUnresolvedConflicts = true;
-                log.warn(`Conflict in ${pc.cyan(file)} — manual resolution needed`);
+                if (result.conflictDetails.length > 0) {
+                  // 構造マージ: ファイルは壊れていないがキーレベルのコンフリクトあり
+                  log.warn(`Conflict in ${pc.cyan(file)} — review these keys:`);
+                  for (const detail of result.conflictDetails) {
+                    const pathStr = detail.path.join(".");
+                    log.message(`  ${pc.dim("•")} ${pc.yellow(pathStr)} — kept local value`);
+                  }
+                } else {
+                  log.warn(`Conflict in ${pc.cyan(file)} — manual resolution needed`);
+                }
               }
             } else {
-              // base がない場合は 2-way コンフリクトマーカー
-              const content = `<<<<<<< LOCAL\n${localContent}\n=======\n${templateContent}\n>>>>>>> TEMPLATE`;
-              await writeFile(join(targetDir, file), content, "utf-8");
-              hasUnresolvedConflicts = true;
-              log.warn(`Conflict in ${pc.cyan(file)} — manual resolution needed`);
+              // base がない場合も構造マージを試みる（JSON/JSONC の場合）
+              // base がないので空オブジェクトを仮の base として使用
+              const result = threeWayMerge("", localContent, templateContent, file);
+              await writeFile(join(targetDir, file), result.content, "utf-8");
+              if (result.hasConflicts) {
+                hasUnresolvedConflicts = true;
+                if (result.conflictDetails.length > 0) {
+                  log.warn(`Conflict in ${pc.cyan(file)} — review these keys:`);
+                  for (const detail of result.conflictDetails) {
+                    const pathStr = detail.path.join(".");
+                    log.message(`  ${pc.dim("•")} ${pc.yellow(pathStr)} — kept local value`);
+                  }
+                } else {
+                  log.warn(`Conflict in ${pc.cyan(file)} — manual resolution needed`);
+                }
+              }
             }
           }
 
