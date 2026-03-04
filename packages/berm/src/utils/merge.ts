@@ -205,12 +205,7 @@ export function mergeJsonContent(
   let result = local;
   const conflictDetails: ConflictDetail[] = [];
 
-  // ローカル変更パスをセットに格納（高速ルックアップ用）
-  const localChangedPaths = new Set(localDiffs.map((d) => d.path.join(".")));
-
   for (const diff of templateDiffs) {
-    const pathKey = diff.path.join(".");
-
     // ローカルも同じパスまたは祖先/子孫を変更しているかチェック
     const conflictsWithLocal = localDiffs.some((ld) => pathsOverlap(ld.path, diff.path));
 
