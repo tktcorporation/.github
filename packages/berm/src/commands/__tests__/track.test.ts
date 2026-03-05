@@ -32,6 +32,26 @@ vi.mock("../../utils/ui", () => ({
   box: vi.fn(),
 }));
 
+// ui/renderer をモック（track.ts が使用）
+vi.mock("../../ui/renderer", () => ({
+  intro: vi.fn(),
+  outro: vi.fn(),
+  log: {
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    success: vi.fn(),
+    step: vi.fn(),
+    message: vi.fn(),
+  },
+  pc: {
+    cyan: (s: string) => s,
+    bold: (s: string) => s,
+    dim: (s: string) => s,
+    green: (s: string) => s,
+  },
+}));
+
 // console.log をモック
 vi.spyOn(console, "log").mockImplementation(() => {});
 
@@ -139,5 +159,33 @@ describe("track command - core logic", () => {
       vol.fromJSON({});
       expect(modulesFileExists("/project")).toBe(false);
     });
+  });
+});
+
+// trackCommand の統合テスト
+// モック後にインポートする（既存パターンに従う）
+const { trackCommand } = await import("../track");
+
+describe("trackCommand", () => {
+  beforeEach(() => {
+    vol.reset();
+    vi.clearAllMocks();
+  });
+
+  it("--list のみで patterns なしでも動作する（required: false）", async () => {
+    vol.fromJSON({
+      "/project/.devenv/modules.jsonc": JSON.stringify({
+        modules: [{ id: ".", name: "Root", description: "Root", patterns: [".mcp.json"] }],
+      }),
+    });
+
+    // エラーなく完了することを確認
+    await expect(
+      (trackCommand.run as any)({
+        args: { dir: "/project", list: true, module: undefined, name: undefined, description: undefined },
+        rawArgs: ["--list"],
+        cmd: trackCommand,
+      }),
+    ).resolves.not.toThrow();
   });
 });
