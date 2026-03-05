@@ -42,6 +42,10 @@ vi.mock("../../utils/patterns", () => ({
   getEffectivePatterns: vi.fn((_id: string, patterns: string[]) => patterns),
 }));
 
+vi.mock("../../ui/prompts", () => ({
+  selectDeletedFiles: vi.fn(),
+}));
+
 vi.mock("../../ui/renderer", () => ({
   intro: vi.fn(),
   outro: vi.fn(),
@@ -75,6 +79,8 @@ vi.mock("../../modules/index", async (importOriginal) => {
 
 // モック後にインポート
 const { pullCommand } = await import("../pull");
+const { selectDeletedFiles } = await import("../../ui/prompts");
+const mockSelectDeletedFiles = vi.mocked(selectDeletedFiles);
 const { downloadTemplateToTemp } = await import("../../utils/template");
 const { loadConfig, saveConfig } = await import("../../utils/config");
 const { hashFiles } = await import("../../utils/hash");
@@ -259,7 +265,7 @@ describe("pullCommand", () => {
       );
     });
 
-    it("削除されたファイルの警告を表示", async () => {
+    it("削除ファイルがある場合に selectDeletedFiles プロンプトを表示", async () => {
       vol.fromJSON({ "/test": null });
 
       mockClassifyFiles.mockReturnValueOnce({
@@ -270,6 +276,7 @@ describe("pullCommand", () => {
         deletedFiles: [".old-file"],
         unchanged: [],
       });
+      mockSelectDeletedFiles.mockResolvedValueOnce([]);
 
       await (pullCommand.run as any)({
         args: { dir: "/test", force: false },
@@ -277,9 +284,7 @@ describe("pullCommand", () => {
         cmd: pullCommand,
       });
 
-      expect(mockLog.warn).toHaveBeenCalledWith(
-        expect.stringContaining("1 file(s) were deleted in template"),
-      );
+      expect(mockSelectDeletedFiles).toHaveBeenCalledWith([".old-file"]);
     });
 
     it("--force で削除警告をスキップ", async () => {
@@ -302,6 +307,78 @@ describe("pullCommand", () => {
 
       // 削除警告は出ない
       expect(mockLog.warn).not.toHaveBeenCalledWith(expect.stringContaining("deleted in template"));
+    });
+
+    it("削除ファイルがある場合に selectDeletedFiles を呼ぶ", async () => {
+      vol.fromJSON({ "/test": null });
+
+      mockClassifyFiles.mockReturnValueOnce({
+        autoUpdate: [],
+        localOnly: [],
+        conflicts: [],
+        newFiles: [],
+        deletedFiles: ["old-file.txt"],
+        unchanged: [],
+      });
+      mockSelectDeletedFiles.mockResolvedValueOnce([]);
+
+      await (pullCommand.run as any)({
+        args: { dir: "/test", force: false },
+        rawArgs: [],
+        cmd: pullCommand,
+      });
+
+      expect(mockSelectDeletedFiles).toHaveBeenCalledWith(["old-file.txt"]);
+    });
+
+    it("--force のとき selectDeletedFiles を呼ばずに全削除する", async () => {
+      vol.fromJSON({
+        "/test/old-file.txt": "old content",
+      });
+
+      mockClassifyFiles.mockReturnValueOnce({
+        autoUpdate: [],
+        localOnly: [],
+        conflicts: [],
+        newFiles: [],
+        deletedFiles: ["old-file.txt"],
+        unchanged: [],
+      });
+
+      await (pullCommand.run as any)({
+        args: { dir: "/test", force: true },
+        rawArgs: [],
+        cmd: pullCommand,
+      });
+
+      expect(mockSelectDeletedFiles).not.toHaveBeenCalled();
+      expect(vol.existsSync("/test/old-file.txt")).toBe(false);
+    });
+
+    it("selectDeletedFiles で選択したファイルのみ削除する", async () => {
+      vol.fromJSON({
+        "/test/a.txt": "aaa",
+        "/test/b.txt": "bbb",
+      });
+
+      mockClassifyFiles.mockReturnValueOnce({
+        autoUpdate: [],
+        localOnly: [],
+        conflicts: [],
+        newFiles: [],
+        deletedFiles: ["a.txt", "b.txt"],
+        unchanged: [],
+      });
+      mockSelectDeletedFiles.mockResolvedValueOnce(["a.txt"]);
+
+      await (pullCommand.run as any)({
+        args: { dir: "/test", force: false },
+        rawArgs: [],
+        cmd: pullCommand,
+      });
+
+      expect(vol.existsSync("/test/a.txt")).toBe(false);
+      expect(vol.existsSync("/test/b.txt")).toBe(true);
     });
 
     it("設定の baseHashes が更新される", async () => {
