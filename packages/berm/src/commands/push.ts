@@ -419,7 +419,7 @@ export const pushCommand = defineCommand({
     },
     yes: {
       type: "boolean",
-      alias: ["y", "f"],  // -f は後方互換のため残す
+      alias: ["y", "f"], // -f は後方互換のため残す
       description: "Skip confirmation prompts",
       default: false,
     },

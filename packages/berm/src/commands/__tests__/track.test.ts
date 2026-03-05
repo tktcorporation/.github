@@ -182,7 +182,13 @@ describe("trackCommand", () => {
     // エラーなく完了することを確認
     await expect(
       (trackCommand.run as any)({
-        args: { dir: "/project", list: true, module: undefined, name: undefined, description: undefined },
+        args: {
+          dir: "/project",
+          list: true,
+          module: undefined,
+          name: undefined,
+          description: undefined,
+        },
         rawArgs: ["--list"],
         cmd: trackCommand,
       }),

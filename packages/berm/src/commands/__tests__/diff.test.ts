@@ -292,9 +292,7 @@ describe("diffCommand", () => {
       });
 
       const diffWithChanges = {
-        files: [
-          { path: "new-file.txt", type: "added" as const, localContent: "content" },
-        ],
+        files: [{ path: "new-file.txt", type: "added" as const, localContent: "content" }],
         summary: { added: 1, modified: 0, deleted: 0, unchanged: 0 },
       };
 
@@ -316,9 +314,7 @@ describe("diffCommand", () => {
       });
 
       const diffWithChanges = {
-        files: [
-          { path: "new-file.txt", type: "added" as const, localContent: "content" },
-        ],
+        files: [{ path: "new-file.txt", type: "added" as const, localContent: "content" }],
         summary: { added: 1, modified: 0, deleted: 0, unchanged: 0 },
       };
 
@@ -339,9 +335,17 @@ describe("diffCommand", () => {
         "/test/.devenv.json": JSON.stringify(validConfig),
       });
 
-      const unchangedFile = { path: "unchanged.txt", type: "unchanged" as const, localContent: "same" };
+      const unchangedFile = {
+        path: "unchanged.txt",
+        type: "unchanged" as const,
+        localContent: "same",
+      };
       const addedFile = { path: "added.txt", type: "added" as const, localContent: "new" };
-      const modifiedFile = { path: "modified.txt", type: "modified" as const, localContent: "changed" };
+      const modifiedFile = {
+        path: "modified.txt",
+        type: "modified" as const,
+        localContent: "changed",
+      };
 
       const diffWithMixed = {
         files: [addedFile, unchangedFile, modifiedFile],

@@ -31,7 +31,7 @@ export const trackCommand = defineCommand({
     patterns: {
       type: "positional",
       description: "File paths or glob patterns to track (e.g., .cloud/rules/*.md)",
-      required: false,  // --list 時はパターン不要。パターンなし+--listなしはrun()内でBermError
+      required: false, // --list 時はパターン不要。パターンなし+--listなしはrun()内でBermError
     },
     dir: {
       type: "string",
