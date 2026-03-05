@@ -417,9 +417,9 @@ export const pushCommand = defineCommand({
       alias: "m",
       description: "PR title",
     },
-    force: {
+    yes: {
       type: "boolean",
-      alias: "f",
+      alias: ["y", "f"],  // -f は後方互換のため残す
       description: "Skip confirmation prompts",
       default: false,
     },
@@ -653,7 +653,7 @@ export const pushCommand = defineCommand({
                 ),
               );
 
-              if (!args.force) {
+              if (!args.yes) {
                 const proceed = await confirmAction("Continue with push?", {
                   initialValue: true,
                 });
@@ -670,7 +670,7 @@ export const pushCommand = defineCommand({
       }
 
       // ホワイトリスト外ファイルの検出と情報表示
-      if (!args.force && !args.prepare && modulesRawContent) {
+      if (!args.yes && !args.prepare && modulesRawContent) {
         const untrackedByFolder = await detectUntrackedFiles({
           targetDir,
           moduleIds: effectiveModuleIds,
@@ -724,7 +724,7 @@ export const pushCommand = defineCommand({
       // --prepare モード: マニフェストファイルを生成
       if (args.prepare) {
         const untrackedByFolder =
-          !args.force && modulesRawContent
+          !args.yes && modulesRawContent
             ? await detectUntrackedFiles({
                 targetDir,
                 moduleIds: effectiveModuleIds,
@@ -865,7 +865,7 @@ export const pushCommand = defineCommand({
         }
       }
 
-      if (!args.force) {
+      if (!args.yes) {
         const confirmed = await confirmAction("Create PR?", { initialValue: true });
         if (!confirmed) {
           log.info("Cancelled. Use --edit to customize title/body, or --select to pick files.");
