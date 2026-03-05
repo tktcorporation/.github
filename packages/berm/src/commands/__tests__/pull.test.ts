@@ -265,29 +265,7 @@ describe("pullCommand", () => {
       );
     });
 
-    it("削除ファイルがある場合に selectDeletedFiles プロンプトを表示", async () => {
-      vol.fromJSON({ "/test": null });
-
-      mockClassifyFiles.mockReturnValueOnce({
-        autoUpdate: [],
-        localOnly: [],
-        conflicts: [],
-        newFiles: [],
-        deletedFiles: [".old-file"],
-        unchanged: [],
-      });
-      mockSelectDeletedFiles.mockResolvedValueOnce([]);
-
-      await (pullCommand.run as any)({
-        args: { dir: "/test", force: false },
-        rawArgs: [],
-        cmd: pullCommand,
-      });
-
-      expect(mockSelectDeletedFiles).toHaveBeenCalledWith([".old-file"]);
-    });
-
-    it("--force で削除警告をスキップ", async () => {
+    it("--force で selectDeletedFiles プロンプトをスキップ", async () => {
       vol.fromJSON({ "/test": null });
 
       mockClassifyFiles.mockReturnValueOnce({
@@ -305,8 +283,8 @@ describe("pullCommand", () => {
         cmd: pullCommand,
       });
 
-      // 削除警告は出ない
-      expect(mockLog.warn).not.toHaveBeenCalledWith(expect.stringContaining("deleted in template"));
+      // --force パスではプロンプトを表示しない
+      expect(mockSelectDeletedFiles).not.toHaveBeenCalled();
     });
 
     it("削除ファイルがある場合に selectDeletedFiles を呼ぶ", async () => {
