@@ -44,6 +44,11 @@ vi.mock("../../modules", () => ({
   modulesFileExists: vi.fn().mockReturnValue(false),
 }));
 
+// ui/diff-view をモック
+vi.mock("../../ui/diff-view", () => ({
+  renderFileDiff: vi.fn(),
+}));
+
 // ui/renderer をモック
 vi.mock("../../ui/renderer", () => ({
   intro: vi.fn(),
@@ -277,6 +282,56 @@ describe("diffCommand", () => {
           cmd: diffCommand,
         }),
       ).rejects.toThrow("Diff error");
+    });
+
+    it("--verbose のとき renderFileDiff を各変更ファイルに対して呼ぶ", async () => {
+      vol.fromJSON({
+        "/test/.devenv.json": JSON.stringify(validConfig),
+      });
+
+      const diffWithChanges = {
+        files: [
+          { path: "new-file.txt", type: "added" as const, localContent: "content" },
+        ],
+        summary: { added: 1, modified: 0, deleted: 0, unchanged: 0 },
+      };
+
+      mockDetectDiff.mockResolvedValueOnce(diffWithChanges);
+      mockHasDiff.mockReturnValueOnce(true);
+
+      await (diffCommand.run as any)({
+        args: { dir: "/test", verbose: true },
+        rawArgs: [],
+        cmd: diffCommand,
+      });
+
+      const { renderFileDiff } = await import("../../ui/diff-view");
+      expect(vi.mocked(renderFileDiff)).toHaveBeenCalledWith(diffWithChanges.files[0]);
+    });
+
+    it("--verbose なしのとき renderFileDiff を呼ばない", async () => {
+      vol.fromJSON({
+        "/test/.devenv.json": JSON.stringify(validConfig),
+      });
+
+      const diffWithChanges = {
+        files: [
+          { path: "new-file.txt", type: "added" as const, localContent: "content" },
+        ],
+        summary: { added: 1, modified: 0, deleted: 0, unchanged: 0 },
+      };
+
+      mockDetectDiff.mockResolvedValueOnce(diffWithChanges);
+      mockHasDiff.mockReturnValueOnce(true);
+
+      await (diffCommand.run as any)({
+        args: { dir: "/test", verbose: false },
+        rawArgs: [],
+        cmd: diffCommand,
+      });
+
+      const { renderFileDiff } = await import("../../ui/diff-view");
+      expect(vi.mocked(renderFileDiff)).not.toHaveBeenCalled();
     });
   });
 });
