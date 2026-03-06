@@ -3,19 +3,15 @@ import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { defineCommand } from "citty";
 import { dirname, join, resolve } from "pathe";
 import { BermError } from "../errors";
-import {
-  defaultModules,
-  getPatternsByModuleIds,
-  loadModulesFile,
-  modulesFileExists,
-} from "../modules";
-import type { TemplateModule } from "../modules/schemas";
+import { defaultModules, loadModulesFile, modulesFileExists } from "../modules";
+import type { DevEnvConfig, TemplateModule } from "../modules/schemas";
 import { selectDeletedFiles } from "../ui/prompts";
 import { intro, log, outro, pc, withSpinner } from "../ui/renderer";
 import { loadConfig, saveConfig } from "../utils/config";
 import { resolveLatestCommitSha } from "../utils/github";
 import { hashFiles } from "../utils/hash";
-import { classifyFiles, threeWayMerge } from "../utils/merge";
+import { classifyFiles, hasConflictMarkers, threeWayMerge } from "../utils/merge";
+import type { MergeResult } from "../utils/merge";
 import { downloadTemplateToTemp } from "../utils/template";
 import { getEffectivePatterns } from "../utils/patterns";
 
@@ -174,46 +170,17 @@ export const pullCommand = defineCommand({
             const localContent = await readFile(join(targetDir, file), "utf-8");
             const templateContent = await readFile(join(templateDir, file), "utf-8");
 
-            // baseRef のテンプレートからベース内容を読む
-            let baseContent: string | undefined;
+            // base がない場合は "" をデフォルトとして使う（共通祖先が空 = 新規追加のマージ相当）
+            let baseContent = "";
             if (baseTemplateDir && existsSync(join(baseTemplateDir, file))) {
               baseContent = await readFile(join(baseTemplateDir, file), "utf-8");
             }
 
-            if (baseContent !== undefined) {
-              // 3-way マージ（ファイルパスを渡して構造マージを有効化）
-              const result = threeWayMerge(baseContent, localContent, templateContent, file);
-              await writeFile(join(targetDir, file), result.content, "utf-8");
-              if (result.hasConflicts) {
-                hasUnresolvedConflicts = true;
-                if (result.conflictDetails.length > 0) {
-                  // 構造マージ: ファイルは壊れていないがキーレベルのコンフリクトあり
-                  log.warn(`Conflict in ${pc.cyan(file)} — review these keys:`);
-                  for (const detail of result.conflictDetails) {
-                    const pathStr = detail.path.join(".");
-                    log.message(`  ${pc.dim("•")} ${pc.yellow(pathStr)} — kept local value`);
-                  }
-                } else {
-                  log.warn(`Conflict in ${pc.cyan(file)} — manual resolution needed`);
-                }
-              }
-            } else {
-              // base がない場合も構造マージを試みる（JSON/JSONC の場合）
-              // base がないので空オブジェクトを仮の base として使用
-              const result = threeWayMerge("", localContent, templateContent, file);
-              await writeFile(join(targetDir, file), result.content, "utf-8");
-              if (result.hasConflicts) {
-                hasUnresolvedConflicts = true;
-                if (result.conflictDetails.length > 0) {
-                  log.warn(`Conflict in ${pc.cyan(file)} — review these keys:`);
-                  for (const detail of result.conflictDetails) {
-                    const pathStr = detail.path.join(".");
-                    log.message(`  ${pc.dim("•")} ${pc.yellow(pathStr)} — kept local value`);
-                  }
-                } else {
-                  log.warn(`Conflict in ${pc.cyan(file)} — manual resolution needed`);
-                }
-              }
+            const result = threeWayMerge(baseContent, localContent, templateContent, file);
+            await writeFile(join(targetDir, file), result.content, "utf-8");
+            if (result.hasConflicts) {
+              hasUnresolvedConflicts = true;
+              logMergeConflict(file, result);
             }
           }
 
@@ -289,10 +256,7 @@ export const pullCommand = defineCommand({
  *
  * 対になる操作: pull.ts の pendingMerge 保存ロジック（コンフリクト発生時）
  */
-async function runContinue(
-  targetDir: string,
-  config: import("../modules/schemas").DevEnvConfig,
-): Promise<void> {
+async function runContinue(targetDir: string, config: DevEnvConfig): Promise<void> {
   if (!config.pendingMerge) {
     throw new BermError("No pending merge found", "Run `berm pull` first to start a merge");
   }
@@ -304,7 +268,7 @@ async function runContinue(
   for (const file of conflicts) {
     try {
       const content = await readFile(join(targetDir, file), "utf-8");
-      if (content.includes("<<<<<<<")) {
+      if (hasConflictMarkers(content).found) {
         stillConflicted.push(file);
       }
     } catch {
@@ -336,6 +300,26 @@ async function runContinue(
 }
 
 /**
+ * 1ファイルのマージ結果をユーザーに報告する。
+ *
+ * 背景: JSON/JSONC の構造マージ（conflictDetails あり）とテキストマージ（conflictMarkers あり）で
+ * メッセージが異なるため、このヘルパーに集約する。
+ * Step 8 と他の呼び出し元でログ出力のロジックを共有する。
+ */
+function logMergeConflict(file: string, result: MergeResult): void {
+  if (result.conflictDetails.length > 0) {
+    // 構造マージ: ファイルは壊れていないがキーレベルのコンフリクトあり
+    log.warn(`Conflict in ${pc.cyan(file)} — review these keys:`);
+    for (const detail of result.conflictDetails) {
+      const pathStr = detail.path.join(".");
+      log.message(`  ${pc.dim("•")} ${pc.yellow(pathStr)} — kept local value`);
+    }
+  } else {
+    log.warn(`Conflict in ${pc.cyan(file)} — manual resolution needed`);
+  }
+}
+
+/**
  * インストール済みモジュールの有効パターンを全て取得する。
  *
  * 背景: pull 時にハッシュ計算対象のファイルを特定するため、
@@ -344,13 +328,13 @@ async function runContinue(
 function getInstalledModulePatterns(
   moduleIds: string[],
   moduleList: TemplateModule[],
-  config: { excludePatterns?: string[] },
+  config: DevEnvConfig,
 ): string[] {
   const patterns: string[] = [];
   for (const moduleId of moduleIds) {
     const mod = moduleList.find((m) => m.id === moduleId);
     if (!mod) continue;
-    patterns.push(...getEffectivePatterns(moduleId, mod.patterns, config as any));
+    patterns.push(...getEffectivePatterns(moduleId, mod.patterns, config));
   }
   return patterns;
 }

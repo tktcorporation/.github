@@ -32,6 +32,10 @@ vi.mock("../../utils/hash", () => ({
 vi.mock("../../utils/merge", () => ({
   classifyFiles: vi.fn(),
   threeWayMerge: vi.fn(),
+  hasConflictMarkers: vi.fn((content: string) => ({
+    found: content.includes("<<<<<<<"),
+    lines: [],
+  })),
 }));
 
 vi.mock("../../utils/github", () => ({
