@@ -32,6 +32,10 @@ vi.mock("../../utils/hash", () => ({
 vi.mock("../../utils/merge", () => ({
   classifyFiles: vi.fn(),
   threeWayMerge: vi.fn(),
+  hasConflictMarkers: vi.fn((content: string) => ({
+    found: content.includes("<<<<<<<"),
+    lines: [],
+  })),
 }));
 
 vi.mock("../../utils/github", () => ({
@@ -421,6 +425,117 @@ describe("pullCommand", () => {
       });
 
       expect(mockCleanup).toHaveBeenCalled();
+    });
+
+    it("コンフリクト時に pendingMerge を保存して中断", async () => {
+      vol.fromJSON({
+        "/test/.mcp.json": "local content",
+        "/tmp/template/.mcp.json": "template content",
+      });
+
+      mockClassifyFiles.mockReturnValueOnce({
+        autoUpdate: [],
+        localOnly: [],
+        conflicts: [".mcp.json"],
+        newFiles: [],
+        deletedFiles: [],
+        unchanged: [],
+      });
+
+      mockThreeWayMerge.mockReturnValueOnce({
+        content: "<<<<<<< LOCAL\nlocal\n=======\ntemplate\n>>>>>>> TEMPLATE",
+        hasConflicts: true,
+        conflictDetails: [],
+      });
+
+      await (pullCommand.run as any)({
+        args: { dir: "/test", force: false, continue: false },
+        rawArgs: [],
+        cmd: pullCommand,
+      });
+
+      expect(mockSaveConfig).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          pendingMerge: expect.objectContaining({
+            conflicts: [".mcp.json"],
+          }),
+        }),
+      );
+      // baseHashes/baseRef は更新されない（pendingMerge に保留）
+      expect(mockSaveConfig).not.toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({ baseHashes: expect.any(Object), pendingMerge: undefined }),
+      );
+    });
+
+    it("--continue: pendingMerge がない場合はエラー", async () => {
+      mockLoadConfig.mockResolvedValueOnce({
+        ...baseConfig,
+        pendingMerge: undefined,
+      });
+
+      await expect(
+        (pullCommand.run as any)({
+          args: { dir: "/test", force: false, continue: true },
+          rawArgs: [],
+          cmd: pullCommand,
+        }),
+      ).rejects.toThrow(BermError);
+    });
+
+    it("--continue: コンフリクトマーカーが残っている場合はエラー", async () => {
+      vol.fromJSON({
+        "/test/.mcp.json": "<<<<<<< LOCAL\nlocal\n=======\ntemplate\n>>>>>>> TEMPLATE",
+      });
+
+      mockLoadConfig.mockResolvedValueOnce({
+        ...baseConfig,
+        pendingMerge: {
+          conflicts: [".mcp.json"],
+          templateHashes: { ".mcp.json": "hash123" },
+          latestRef: "latest123",
+        },
+      });
+
+      await expect(
+        (pullCommand.run as any)({
+          args: { dir: "/test", force: false, continue: true },
+          rawArgs: [],
+          cmd: pullCommand,
+        }),
+      ).rejects.toThrow(BermError);
+    });
+
+    it("--continue: 全解決済みなら baseHashes/baseRef を更新して pendingMerge を削除", async () => {
+      vol.fromJSON({
+        "/test/.mcp.json": "resolved content (no conflict markers)",
+      });
+
+      mockLoadConfig.mockResolvedValueOnce({
+        ...baseConfig,
+        pendingMerge: {
+          conflicts: [".mcp.json"],
+          templateHashes: { ".mcp.json": "newhash" },
+          latestRef: "newref123",
+        },
+      });
+
+      await (pullCommand.run as any)({
+        args: { dir: "/test", force: false, continue: true },
+        rawArgs: [],
+        cmd: pullCommand,
+      });
+
+      expect(mockSaveConfig).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          baseHashes: { ".mcp.json": "newhash" },
+          baseRef: "newref123",
+          pendingMerge: undefined,
+        }),
+      );
+      expect(mockLog.success).toHaveBeenCalledWith("All conflicts resolved");
     });
 
     it("エラー時も cleanup が呼ばれる", async () => {

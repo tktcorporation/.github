@@ -23,12 +23,7 @@ import {
   selectPushFiles,
 } from "../ui/prompts";
 import { intro, log, logDiffSummary, outro, pc, withSpinner } from "../ui/renderer";
-import {
-  colorizeUnifiedDiff,
-  detectDiff,
-  generateUnifiedDiff,
-  getPushableFiles,
-} from "../utils/diff";
+import { detectDiff, getPushableFiles } from "../utils/diff";
 import { createPullRequest, getGitHubToken } from "../utils/github";
 import {
   deleteManifest,
@@ -42,6 +37,41 @@ import {
 import { detectAndUpdateReadme } from "../utils/readme";
 import { buildTemplateSource } from "../utils/template";
 import { detectUntrackedFiles } from "../utils/untracked";
+
+/**
+ * FileDiff の差分統計を "+N -M" 形式でフォーマットする。
+ *
+ * 背景: git push の出力に合わせ、変更行数を可視化する。
+ * "modified" の場合は行数の差を表示（詳細な unified diff は berm diff で確認可能）。
+ */
+function formatFileStat(file: {
+  type: string;
+  localContent?: string;
+  templateContent?: string;
+}): string {
+  let additions = 0;
+  let deletions = 0;
+
+  if (file.type === "added" && file.localContent) {
+    additions = file.localContent.split("\n").length;
+  } else if (file.type === "deleted" && file.templateContent) {
+    deletions = file.templateContent.split("\n").length;
+  } else if (file.type === "modified") {
+    const local = file.localContent?.split("\n").length ?? 0;
+    const tmpl = file.templateContent?.split("\n").length ?? 0;
+    additions = Math.max(0, local - tmpl);
+    deletions = Math.max(0, tmpl - local);
+    if (additions === 0 && deletions === 0 && file.localContent !== file.templateContent) {
+      additions = 1;
+      deletions = 1;
+    }
+  }
+
+  const parts: string[] = [];
+  if (additions > 0) parts.push(pc.green(`+${additions}`));
+  if (deletions > 0) parts.push(pc.red(`-${deletions}`));
+  return parts.length > 0 ? parts.join(" ") : pc.dim("~");
+}
 
 /**
  * process.exit() でも確実に一時ディレクトリを削除するための同期クリーンアップを登録する。
@@ -375,17 +405,18 @@ async function runExecuteMode(
     // マニフェストファイルを自動削除（PR作成に成功したので不要）
     await deleteManifest(targetDir);
 
-    // 成功メッセージ
+    // 成功メッセージ — git push の "To repo branch" 形式に準拠
     log.success("Pull request created!");
     log.message(
       [
-        `URL:    ${pc.cyan(result.url)}`,
-        `Branch: ${result.branch}`,
-        `Files:  ${files.length} files included`,
+        `${pc.dim("To")} ${pc.bold(`${config.source.owner}/${config.source.repo}`)}`,
+        `  ${pc.green(result.branch)}  ${pc.dim(`(${files.length} file${files.length !== 1 ? "s" : ""} changed)`)}`,
+        "",
+        `  ${pc.bold(`PR #${result.number}`)}  ${pc.cyan(result.url)}`,
       ].join("\n"),
     );
     log.message(pc.dim(`Cleaned up ${MANIFEST_FILENAME}`));
-    outro(`Review and merge the PR at ${result.url}`);
+    outro(`Review and merge at ${pc.cyan(result.url)}`);
   } finally {
     unregisterCleanup();
     // 一時ディレクトリを削除
@@ -494,6 +525,15 @@ export const pushCommand = defineCommand({
       return;
     }
 
+    // pendingMerge がある場合はコンフリクト未解決のためブロック
+    if (config.pendingMerge) {
+      throw new BermError(
+        "Unresolved merge conflicts from `berm pull`",
+        "Resolve conflicts in these files, then run `berm pull --continue`:\n" +
+          config.pendingMerge.conflicts.map((f) => `  • ${f}`).join("\n"),
+      );
+    }
+
     // --execute モード: マニフェストファイルを使ってPRを作成
     if (args.execute) {
       await runExecuteMode(targetDir, config, args.message);
@@ -585,8 +625,12 @@ export const pushCommand = defineCommand({
         if (classification.conflicts.length > 0) {
           const { threeWayMerge } = await import("../utils/merge");
 
+          // baseRef がある場合はハッシュを強調表示する（git の "non-fast-forward" エラーに相当）
+          const baseInfo = config.baseRef
+            ? `since ${pc.bold(config.baseRef.slice(0, 7))} (your last sync)`
+            : "since your last pull/init";
           log.warn(
-            `Template has also changed ${classification.conflicts.length} file(s) since last pull/init. Attempting auto-merge...`,
+            `Template updated ${baseInfo} — ${classification.conflicts.length} conflict(s) detected, attempting auto-merge...`,
           );
 
           // baseRef が存在すれば、ベースバージョンを再ダウンロードして 3-way マージ
@@ -645,16 +689,19 @@ export const pushCommand = defineCommand({
             if (unresolved.length > 0) {
               log.warn(`${unresolved.length} file(s) could not be auto-merged:`);
               for (const file of unresolved) {
-                log.message(`  ${pc.yellow("⚠")} ${file}`);
+                log.message(`  ${pc.yellow("!")} ${file}`);
               }
               log.message(
-                pc.dim(
-                  "Your PR will include your local version for these files. The reviewer can compare with upstream.",
-                ),
+                [
+                  pc.dim("Your local changes will be included in the PR."),
+                  pc.dim(
+                    `hint: Run ${pc.cyan("berm pull")} to sync changes first, then push again.`,
+                  ),
+                ].join("\n"),
               );
 
               if (!args.yes) {
-                const proceed = await confirmAction("Continue with push?", {
+                const proceed = await confirmAction("Continue with unresolved conflicts?", {
                   initialValue: true,
                 });
                 if (!proceed) {
@@ -842,28 +889,44 @@ export const pushCommand = defineCommand({
         });
       }
 
-      // Step 4: サマリー表示 + 確認
-      log.step("Push summary");
-      const fileIcons = files.map((f) => `  ${pc.dim("•")} ${f.path}`);
-      log.message(
-        [
-          `${pc.bold("Title:")} ${title}`,
-          `${pc.bold("Files:")} ${files.length} file(s)`,
-          ...fileIcons,
-        ].join("\n"),
-      );
+      // Step 4: git-like なサマリー表示 + 確認
+      // "To owner/repo → branch" 形式でプッシュ先と変更内容を一覧表示する。
+      // 詳細な unified diff は `berm diff` で確認可能。
+      const destination = `${config.source.owner}/${config.source.repo}`;
+      const baseBranch = config.source.ref || "main";
+      const baseHashStr = config.baseRef
+        ? `  ${pc.dim(`since ${config.baseRef.slice(0, 7)}`)}`
+        : "";
 
-      // ファイルごとの差分プレビューを表示
-      // 確認前に変更内容を把握できるようにする
-      log.step("Changes");
+      // 変更ファイル行の生成（type アイコン + パス + 行数統計）
+      const fileLines: string[] = [];
       for (const pf of pushableFiles) {
-        // files に含まれるもの（選択済み or 全ファイル）のみ表示
         if (!files.some((f) => f.path === pf.path)) continue;
-        const unifiedDiff = generateUnifiedDiff(pf);
-        if (unifiedDiff) {
-          log.message(colorizeUnifiedDiff(unifiedDiff));
+        const stat = formatFileStat(pf);
+        const icon =
+          pf.type === "added"
+            ? pc.green("+")
+            : pf.type === "modified"
+              ? pc.yellow("~")
+              : pc.red("-");
+        fileLines.push(`  ${icon} ${pf.path.padEnd(50)} ${stat}`);
+      }
+      // pushableFiles に含まれない追加ファイル（modules.jsonc、README 自動更新等）
+      for (const f of files) {
+        if (!pushableFiles.some((pf) => pf.path === f.path)) {
+          fileLines.push(`  ${pc.green("+")} ${f.path.padEnd(50)} ${pc.dim("(auto-updated)")}`);
         }
       }
+
+      log.message(
+        [
+          `${pc.dim("To")} ${pc.bold(destination)}  ${pc.dim(`→ ${baseBranch}`)}${baseHashStr}`,
+          pc.dim("─".repeat(62)),
+          ...fileLines,
+          pc.dim("─".repeat(62)),
+          `  ${pc.dim("PR:")} ${title}`,
+        ].join("\n"),
+      );
 
       if (!args.yes) {
         const confirmed = await confirmAction("Create PR?", { initialValue: true });
@@ -887,16 +950,17 @@ export const pushCommand = defineCommand({
         }),
       );
 
-      // 成功メッセージ
+      // 成功メッセージ — git push の "To repo branch" 形式に準拠
       log.success("Pull request created!");
       log.message(
         [
-          `URL:    ${pc.cyan(result.url)}`,
-          `Branch: ${result.branch}`,
-          `Files:  ${files.length} files included`,
+          `${pc.dim("To")} ${pc.bold(`${config.source.owner}/${config.source.repo}`)}`,
+          `  ${config.baseRef ? `${pc.dim(config.baseRef.slice(0, 7))}..` : ""}${pc.green(result.branch)}  ${pc.dim(`(${files.length} file${files.length !== 1 ? "s" : ""} changed)`)}`,
+          "",
+          `  ${pc.bold(`PR #${result.number}`)}  ${pc.cyan(result.url)}`,
         ].join("\n"),
       );
-      outro(`Review and merge the PR at ${result.url}`);
+      outro(`Review and merge at ${pc.cyan(result.url)}`);
     } finally {
       unregisterCleanup();
       // 一時ディレクトリを削除

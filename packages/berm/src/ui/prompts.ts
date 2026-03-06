@@ -67,7 +67,41 @@ export async function selectOverwriteStrategy(options?: {
 
 // ─── push ─────────────────────────────────────────────────────
 
-/** push 対象ファイルの選択 */
+/**
+ * ファイルの行数統計を "+N -M" 形式で返す（hint テキスト用）。
+ * git push の出力に合わせ、変更規模をひと目で把握できるようにする。
+ */
+function fileStatHint(file: FileDiff): string {
+  let additions = 0;
+  let deletions = 0;
+
+  if (file.type === "added" && file.localContent) {
+    additions = file.localContent.split("\n").length;
+  } else if (file.type === "deleted" && file.templateContent) {
+    deletions = file.templateContent.split("\n").length;
+  } else if (file.type === "modified") {
+    const local = file.localContent?.split("\n").length ?? 0;
+    const tmpl = file.templateContent?.split("\n").length ?? 0;
+    additions = Math.max(0, local - tmpl);
+    deletions = Math.max(0, tmpl - local);
+    if (additions === 0 && deletions === 0 && file.localContent !== file.templateContent) {
+      additions = 1;
+      deletions = 1;
+    }
+  }
+
+  const parts: string[] = [];
+  if (additions > 0) parts.push(pc.green(`+${additions}`));
+  if (deletions > 0) parts.push(pc.red(`-${deletions}`));
+  return parts.join(" ");
+}
+
+/**
+ * push 対象ファイルの選択（+N -M 統計付き）
+ *
+ * 背景: git の `git add -p` に相当するファイル選択 UI。
+ * 変更規模（行数増減）をヒントとして表示し、何を同期するか判断しやすくする。
+ */
 export async function selectPushFiles(files: FileDiff[]): Promise<FileDiff[]> {
   const typeIcon = (type: string) => {
     switch (type) {
@@ -84,10 +118,14 @@ export async function selectPushFiles(files: FileDiff[]): Promise<FileDiff[]> {
 
   const selected = await p.multiselect({
     message: "Select files to include in PR",
-    options: files.map((f) => ({
-      value: f.path,
-      label: `${typeIcon(f.type)} ${f.path}`,
-    })),
+    options: files.map((f) => {
+      const hint = fileStatHint(f);
+      return {
+        value: f.path,
+        label: `${typeIcon(f.type)} ${f.path}`,
+        hint: hint || undefined,
+      };
+    }),
     initialValues: files.map((f) => f.path),
     required: false,
   });

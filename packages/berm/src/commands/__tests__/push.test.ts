@@ -119,6 +119,7 @@ vi.mock("../../ui/renderer", () => ({
     dim: (s: string) => s,
     green: (s: string) => s,
     yellow: (s: string) => s,
+    red: (s: string) => s,
   },
   withSpinner: vi.fn(async (_text: string, fn: () => Promise<unknown>) => fn()),
 }));
@@ -538,9 +539,7 @@ describe("pushCommand", () => {
         cmd: pushCommand,
       });
 
-      expect(mockLog.warn).toHaveBeenCalledWith(
-        "Template has also changed 1 file(s) since last pull/init. Attempting auto-merge...",
-      );
+      expect(mockLog.warn).toHaveBeenCalledWith(expect.stringContaining("Template updated"));
       expect(mockLog.info).toHaveBeenCalledWith(
         "Run `berm pull` first to sync template changes, then push again.",
       );
