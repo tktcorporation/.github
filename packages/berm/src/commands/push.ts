@@ -525,6 +525,15 @@ export const pushCommand = defineCommand({
       return;
     }
 
+    // pendingMerge がある場合はコンフリクト未解決のためブロック
+    if (config.pendingMerge) {
+      throw new BermError(
+        "Unresolved merge conflicts from `berm pull`",
+        "Resolve conflicts in these files, then run `berm pull --continue`:\n" +
+          config.pendingMerge.conflicts.map((f) => `  • ${f}`).join("\n"),
+      );
+    }
+
     // --execute モード: マニフェストファイルを使ってPRを作成
     if (args.execute) {
       await runExecuteMode(targetDir, config, args.message);

@@ -45,6 +45,11 @@ export const pullCommand = defineCommand({
       description: "Skip confirmations",
       default: false,
     },
+    continue: {
+      type: "boolean",
+      description: "Continue after resolving merge conflicts",
+      default: false,
+    },
   },
   async run({ args }) {
     intro("pull");
@@ -57,6 +62,12 @@ export const pullCommand = defineCommand({
       config = await loadConfig(targetDir);
     } catch {
       throw new BermError("Not initialized", "Run `berm init` first");
+    }
+
+    // --continue モード: コンフリクト解決後の状態更新
+    if (args.continue) {
+      await runContinue(targetDir, config);
+      return;
     }
 
     if (config.modules.length === 0) {
@@ -207,10 +218,25 @@ export const pullCommand = defineCommand({
           }
 
           if (hasUnresolvedConflicts) {
-            log.warn("Some files have conflicts. Please resolve them manually.");
+            log.warn("Some files have conflicts. Resolve them, then run `berm pull --continue`");
           }
         } finally {
           baseCleanup?.();
+        }
+
+        if (hasUnresolvedConflicts) {
+          // pendingMerge を保存して中断。baseHashes/baseRef は --continue 後に更新する。
+          const latestRef = await resolveLatestCommitSha(config.source.owner, config.source.repo);
+          await saveConfig(targetDir, {
+            ...config,
+            pendingMerge: {
+              conflicts: classification.conflicts,
+              templateHashes: templateHashes,
+              ...(latestRef ? { latestRef } : {}),
+            },
+          });
+          outro("Merge paused — resolve conflicts then run `berm pull --continue`");
+          return;
         }
       }
 
@@ -253,6 +279,61 @@ export const pullCommand = defineCommand({
     }
   },
 });
+
+/**
+ * `--continue` モードの処理: コンフリクト解決後に baseHashes/baseRef を更新する。
+ *
+ * 背景: `berm pull` でコンフリクトが発生した際、ユーザーが手動解決した後に
+ * `berm pull --continue` を実行することで状態更新が完了する。
+ * git の `git merge --continue` / `git rebase --continue` パターンを踏襲。
+ *
+ * 対になる操作: pull.ts の pendingMerge 保存ロジック（コンフリクト発生時）
+ */
+async function runContinue(
+  targetDir: string,
+  config: import("../modules/schemas").DevEnvConfig,
+): Promise<void> {
+  if (!config.pendingMerge) {
+    throw new BermError("No pending merge found", "Run `berm pull` first to start a merge");
+  }
+
+  const { conflicts, templateHashes, latestRef } = config.pendingMerge;
+
+  // コンフリクトマーカーが残っていないか確認
+  const stillConflicted: string[] = [];
+  for (const file of conflicts) {
+    try {
+      const content = await readFile(join(targetDir, file), "utf-8");
+      if (content.includes("<<<<<<<")) {
+        stillConflicted.push(file);
+      }
+    } catch {
+      // ファイルが存在しない場合は解決済みとみなす（削除により解決）
+    }
+  }
+
+  if (stillConflicted.length > 0) {
+    for (const file of stillConflicted) {
+      log.warn(`Still has conflict markers: ${pc.cyan(file)}`);
+    }
+    throw new BermError(
+      "Unresolved conflicts remain",
+      "Resolve all conflict markers then run `berm pull --continue` again",
+    );
+  }
+
+  // 全て解決済み: baseHashes/baseRef を更新して pendingMerge を削除
+  const updatedConfig = {
+    ...config,
+    baseHashes: templateHashes,
+    ...(latestRef ? { baseRef: latestRef } : {}),
+    pendingMerge: undefined,
+  };
+  await saveConfig(targetDir, updatedConfig);
+
+  log.success("All conflicts resolved");
+  outro("Pull complete");
+}
 
 /**
  * インストール済みモジュールの有効パターンを全て取得する。

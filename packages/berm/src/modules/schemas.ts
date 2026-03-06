@@ -70,6 +70,24 @@ export const configSchema = z.object({
    * 「ユーザーが変更したか」を判定できるようにするため。
    */
   baseHashes: z.record(z.string(), z.string()).optional(),
+  /**
+   * pull 中のコンフリクト解決待ち状態。
+   *
+   * 背景: `berm pull` でコンフリクトが発生した場合、ユーザーが手動解決してから
+   * `berm pull --continue` を実行するまでの間、この状態が保持される。
+   * `berm push` はこのフィールドが存在する間ブロックされる。
+   * 解決完了後 `berm pull --continue` により削除される。
+   */
+  pendingMerge: z
+    .object({
+      /** コンフリクトマーカーを確認すべきファイルパス一覧 */
+      conflicts: z.array(z.string()),
+      /** pull 対象のテンプレートハッシュ（解決後の baseHashes として適用） */
+      templateHashes: z.record(z.string(), z.string()),
+      /** pull 対象の最新コミット SHA（解決後の baseRef として適用） */
+      latestRef: z.string().optional(),
+    })
+    .optional(),
 });
 
 export type DevEnvConfig = z.infer<typeof configSchema>;
