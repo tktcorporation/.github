@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { defineCommand } from "citty";
 import { dirname, join, resolve } from "pathe";
 import { BermError } from "../errors";
@@ -10,6 +10,7 @@ import {
   modulesFileExists,
 } from "../modules";
 import type { TemplateModule } from "../modules/schemas";
+import { selectDeletedFiles } from "../ui/prompts";
 import { intro, log, outro, pc, withSpinner } from "../ui/renderer";
 import { loadConfig, saveConfig } from "../utils/config";
 import { resolveLatestCommitSha } from "../utils/github";
@@ -213,11 +214,26 @@ export const pullCommand = defineCommand({
         }
       }
 
-      // Step 9: 削除されたファイルの警告
-      if (classification.deletedFiles.length > 0 && !args.force) {
-        log.warn(`${classification.deletedFiles.length} file(s) were deleted in template:`);
-        for (const file of classification.deletedFiles) {
-          log.message(`  ${pc.dim("-")} ${file}`);
+      // Step 9: 削除されたファイルを処理
+      if (classification.deletedFiles.length > 0) {
+        let filesToDelete: string[];
+
+        if (args.force) {
+          // --force: 確認なしで全削除
+          filesToDelete = classification.deletedFiles;
+          log.info(`Deleting ${filesToDelete.length} file(s) removed from template...`);
+        } else {
+          // 通常: ユーザーに選択させる
+          filesToDelete = await selectDeletedFiles(classification.deletedFiles);
+        }
+
+        for (const file of filesToDelete) {
+          try {
+            await rm(join(targetDir, file), { force: true });
+            log.success(`Deleted: ${file}`);
+          } catch {
+            log.warn(`Could not delete: ${file}`);
+          }
         }
       }
 

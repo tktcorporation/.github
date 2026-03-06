@@ -44,6 +44,11 @@ vi.mock("../../modules", () => ({
   modulesFileExists: vi.fn().mockReturnValue(false),
 }));
 
+// ui/diff-view をモック
+vi.mock("../../ui/diff-view", () => ({
+  renderFileDiff: vi.fn(),
+}));
+
 // ui/renderer をモック
 vi.mock("../../ui/renderer", () => ({
   intro: vi.fn(),
@@ -69,6 +74,7 @@ const { diffCommand } = await import("../diff");
 const { downloadTemplate } = await import("giget");
 const { detectDiff, hasDiff } = await import("../../utils/diff");
 const { log, outro, logDiffSummary } = await import("../../ui/renderer");
+const { renderFileDiff } = await import("../../ui/diff-view");
 import { BermError } from "../../errors";
 
 const mockDownloadTemplate = vi.mocked(downloadTemplate);
@@ -77,6 +83,7 @@ const mockHasDiff = vi.mocked(hasDiff);
 const mockLog = vi.mocked(log);
 const mockOutro = vi.mocked(outro);
 const mockLogDiffSummary = vi.mocked(logDiffSummary);
+const mockRenderFileDiff = vi.mocked(renderFileDiff);
 
 const validConfig = {
   version: "0.1.0",
@@ -277,6 +284,89 @@ describe("diffCommand", () => {
           cmd: diffCommand,
         }),
       ).rejects.toThrow("Diff error");
+    });
+
+    it("--verbose のとき renderFileDiff を各変更ファイルに対して呼ぶ", async () => {
+      vol.fromJSON({
+        "/test/.devenv.json": JSON.stringify(validConfig),
+      });
+
+      const diffWithChanges = {
+        files: [{ path: "new-file.txt", type: "added" as const, localContent: "content" }],
+        summary: { added: 1, modified: 0, deleted: 0, unchanged: 0 },
+      };
+
+      mockDetectDiff.mockResolvedValueOnce(diffWithChanges);
+      mockHasDiff.mockReturnValueOnce(true);
+
+      await (diffCommand.run as any)({
+        args: { dir: "/test", verbose: true },
+        rawArgs: [],
+        cmd: diffCommand,
+      });
+
+      expect(mockRenderFileDiff).toHaveBeenCalledWith(diffWithChanges.files[0]);
+    });
+
+    it("--verbose なしのとき renderFileDiff を呼ばない", async () => {
+      vol.fromJSON({
+        "/test/.devenv.json": JSON.stringify(validConfig),
+      });
+
+      const diffWithChanges = {
+        files: [{ path: "new-file.txt", type: "added" as const, localContent: "content" }],
+        summary: { added: 1, modified: 0, deleted: 0, unchanged: 0 },
+      };
+
+      mockDetectDiff.mockResolvedValueOnce(diffWithChanges);
+      mockHasDiff.mockReturnValueOnce(true);
+
+      await (diffCommand.run as any)({
+        args: { dir: "/test", verbose: false },
+        rawArgs: [],
+        cmd: diffCommand,
+      });
+
+      expect(mockRenderFileDiff).not.toHaveBeenCalled();
+    });
+
+    it("--verbose のとき変更ファイルのみ renderFileDiff を呼び、unchanged ファイルはスキップ", async () => {
+      vol.fromJSON({
+        "/test/.devenv.json": JSON.stringify(validConfig),
+      });
+
+      const unchangedFile = {
+        path: "unchanged.txt",
+        type: "unchanged" as const,
+        localContent: "same",
+      };
+      const addedFile = { path: "added.txt", type: "added" as const, localContent: "new" };
+      const modifiedFile = {
+        path: "modified.txt",
+        type: "modified" as const,
+        localContent: "changed",
+      };
+
+      const diffWithMixed = {
+        files: [addedFile, unchangedFile, modifiedFile],
+        summary: { added: 1, modified: 1, deleted: 0, unchanged: 1 },
+      };
+
+      mockDetectDiff.mockResolvedValueOnce(diffWithMixed);
+      mockHasDiff.mockReturnValueOnce(true);
+
+      await (diffCommand.run as any)({
+        args: { dir: "/test", verbose: true },
+        rawArgs: [],
+        cmd: diffCommand,
+      });
+
+      // 変更された2ファイル分だけ呼ばれる
+      expect(mockRenderFileDiff).toHaveBeenCalledTimes(2);
+      expect(mockRenderFileDiff).toHaveBeenCalledWith(addedFile);
+      expect(mockRenderFileDiff).toHaveBeenCalledWith(modifiedFile);
+      // unchanged ファイルは呼ばれない
+      expect(mockRenderFileDiff).not.toHaveBeenCalledWith(unchangedFile);
     });
   });
 });

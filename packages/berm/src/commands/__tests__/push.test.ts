@@ -200,9 +200,9 @@ describe("pushCommand", () => {
       expect(args.dryRun.default).toBe(false);
     });
 
-    it("force 引数のデフォルト値は false", () => {
-      const args = pushCommand.args as { force: { default: boolean } };
-      expect(args.force.default).toBe(false);
+    it("yes 引数のデフォルト値は false", () => {
+      const args = pushCommand.args as { yes: { default: boolean } };
+      expect(args.yes.default).toBe(false);
     });
 
     it("select 引数のデフォルト値は false", () => {
@@ -224,7 +224,7 @@ describe("pushCommand", () => {
 
       await expect(
         (pushCommand.run as any)({
-          args: { dir: "/test", dryRun: false, force: false, select: false, edit: false },
+          args: { dir: "/test", dryRun: false, yes: false, select: false, edit: false },
           rawArgs: [],
           cmd: pushCommand,
         }),
@@ -238,7 +238,7 @@ describe("pushCommand", () => {
 
       await expect(
         (pushCommand.run as any)({
-          args: { dir: "/test", dryRun: false, force: false, select: false, edit: false },
+          args: { dir: "/test", dryRun: false, yes: false, select: false, edit: false },
           rawArgs: [],
           cmd: pushCommand,
         }),
@@ -254,7 +254,7 @@ describe("pushCommand", () => {
       });
 
       await (pushCommand.run as any)({
-        args: { dir: "/test", dryRun: false, force: false, select: false, edit: false },
+        args: { dir: "/test", dryRun: false, yes: false, select: false, edit: false },
         rawArgs: [],
         cmd: pushCommand,
       });
@@ -270,7 +270,7 @@ describe("pushCommand", () => {
       mockGetPushableFiles.mockReturnValue([]);
 
       await (pushCommand.run as any)({
-        args: { dir: "/test", dryRun: false, force: false, select: false, edit: false },
+        args: { dir: "/test", dryRun: false, yes: false, select: false, edit: false },
         rawArgs: [],
         cmd: pushCommand,
       });
@@ -292,7 +292,7 @@ describe("pushCommand", () => {
       ]);
 
       await (pushCommand.run as any)({
-        args: { dir: "/test", dryRun: true, force: false, select: false, edit: false },
+        args: { dir: "/test", dryRun: true, yes: false, select: false, edit: false },
         rawArgs: [],
         cmd: pushCommand,
       });
@@ -318,7 +318,7 @@ describe("pushCommand", () => {
       mockSelectPushFiles.mockResolvedValueOnce([]);
 
       await (pushCommand.run as any)({
-        args: { dir: "/test", dryRun: false, force: false, select: true, edit: false },
+        args: { dir: "/test", dryRun: false, yes: false, select: true, edit: false },
         rawArgs: [],
         cmd: pushCommand,
       });
@@ -344,7 +344,7 @@ describe("pushCommand", () => {
       mockConfirmAction.mockResolvedValueOnce(false);
 
       await (pushCommand.run as any)({
-        args: { dir: "/test", dryRun: false, force: false, select: false, edit: false },
+        args: { dir: "/test", dryRun: false, yes: false, select: false, edit: false },
         rawArgs: [],
         cmd: pushCommand,
       });
@@ -376,7 +376,7 @@ describe("pushCommand", () => {
       });
 
       await (pushCommand.run as any)({
-        args: { dir: "/test", dryRun: false, force: false, select: false, edit: false },
+        args: { dir: "/test", dryRun: false, yes: false, select: false, edit: false },
         rawArgs: [],
         cmd: pushCommand,
       });
@@ -419,7 +419,7 @@ describe("pushCommand", () => {
       });
 
       await (pushCommand.run as any)({
-        args: { dir: "/test", dryRun: false, force: false, select: false, edit: false },
+        args: { dir: "/test", dryRun: false, yes: false, select: false, edit: false },
         rawArgs: [],
         cmd: pushCommand,
       });
@@ -452,7 +452,7 @@ describe("pushCommand", () => {
         args: {
           dir: "/test",
           dryRun: false,
-          force: false,
+          yes: false,
           select: false,
           edit: false,
           message: "Custom PR title",
@@ -471,7 +471,7 @@ describe("pushCommand", () => {
       );
     });
 
-    it("--force オプションで確認をスキップ", async () => {
+    it("--yes オプションで確認をスキップ", async () => {
       vol.fromJSON({
         "/test/.devenv.json": JSON.stringify(validConfig),
       });
@@ -491,12 +491,12 @@ describe("pushCommand", () => {
       });
 
       await (pushCommand.run as any)({
-        args: { dir: "/test", dryRun: false, force: true, select: false, edit: false },
+        args: { dir: "/test", dryRun: false, yes: true, select: false, edit: false },
         rawArgs: [],
         cmd: pushCommand,
       });
 
-      // --force: ファイル選択・タイトル入力・確認プロンプトすべてスキップ
+      // --yes: ファイル選択・タイトル入力・確認プロンプトすべてスキップ
       expect(mockSelectPushFiles).not.toHaveBeenCalled();
       expect(mockInputPrTitle).not.toHaveBeenCalled();
       expect(mockInputPrBody).not.toHaveBeenCalled();
@@ -533,7 +533,7 @@ describe("pushCommand", () => {
       mockConfirmAction.mockResolvedValueOnce(false);
 
       await (pushCommand.run as any)({
-        args: { dir: "/test", dryRun: false, force: false, select: false, edit: false },
+        args: { dir: "/test", dryRun: false, yes: false, select: false, edit: false },
         rawArgs: [],
         cmd: pushCommand,
       });
@@ -590,7 +590,7 @@ describe("pushCommand", () => {
       });
 
       await (pushCommand.run as any)({
-        args: { dir: "/test", dryRun: false, force: false, select: false, edit: false },
+        args: { dir: "/test", dryRun: false, yes: false, select: false, edit: false },
         rawArgs: [],
         cmd: pushCommand,
       });
@@ -650,7 +650,7 @@ describe("pushCommand", () => {
       });
 
       await (pushCommand.run as any)({
-        args: { dir: "/test", dryRun: false, force: false, select: false, edit: false },
+        args: { dir: "/test", dryRun: false, yes: false, select: false, edit: false },
         rawArgs: [],
         cmd: pushCommand,
       });
@@ -677,7 +677,7 @@ describe("pushCommand", () => {
       mockGetPushableFiles.mockReturnValue([]);
 
       await (pushCommand.run as any)({
-        args: { dir: "/test", dryRun: false, force: false, select: false, edit: false },
+        args: { dir: "/test", dryRun: false, yes: false, select: false, edit: false },
         rawArgs: [],
         cmd: pushCommand,
       });
@@ -712,7 +712,7 @@ describe("pushCommand", () => {
       mockGetPushableFiles.mockReturnValue([]);
 
       await (pushCommand.run as any)({
-        args: { dir: "/test", dryRun: false, force: false, select: false, edit: false },
+        args: { dir: "/test", dryRun: false, yes: false, select: false, edit: false },
         rawArgs: [],
         cmd: pushCommand,
       });
@@ -723,5 +723,18 @@ describe("pushCommand", () => {
       // "No changes to push" に到達
       expect(mockLog.info).toHaveBeenCalledWith("No changes to push");
     });
+  });
+});
+
+describe("pushCommand args", () => {
+  it("args に yes フラグが定義されている", () => {
+    const args = pushCommand.args as Record<string, { type: string; default?: unknown }>;
+    expect(args.yes).toBeDefined();
+    expect(args.yes.default).toBe(false);
+  });
+
+  it("args に force という名前のトップレベルフラグが存在しない", () => {
+    const args = pushCommand.args as Record<string, unknown>;
+    expect(args.force).toBeUndefined();
   });
 });

@@ -7,6 +7,7 @@ import { BermError } from "../errors";
 import { defaultModules, loadModulesFile, modulesFileExists } from "../modules";
 import type { DevEnvConfig, TemplateModule } from "../modules/schemas";
 import { configSchema } from "../modules/schemas";
+import { renderFileDiff } from "../ui/diff-view";
 import { intro, log, logDiffSummary, outro, pc, withSpinner } from "../ui/renderer";
 import { detectDiff, hasDiff } from "../utils/diff";
 import { buildTemplateSource } from "../utils/template";
@@ -106,6 +107,13 @@ export const diffCommand = defineCommand({
       // 結果表示
       if (hasDiff(diff)) {
         logDiffSummary(diff.files);
+
+        // --verbose: 各ファイルの unified diff を表示
+        if (args.verbose) {
+          for (const file of diff.files.filter((f) => f.type !== "unchanged")) {
+            renderFileDiff(file);
+          }
+        }
 
         // 未トラックファイルがあればヒントを表示
         if (untrackedCount > 0) {
