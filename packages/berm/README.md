@@ -103,7 +103,7 @@ OPTIONS
 
    `-n, --dryRun`    Preview only, don't create PR
   `-m, --message`    PR title
-    `-f, --force`    Skip confirmation prompts
+  `-y, -f, --yes`    Skip confirmation prompts
    `-s, --select`    Interactively select files to include in PR
          `--edit`    Edit PR title and description before creating
   `-p, --prepare`    Generate a manifest file for AI-agent friendly workflow (no PR created)
