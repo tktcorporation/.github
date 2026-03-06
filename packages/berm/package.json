@@ -1,6 +1,6 @@
 {
   "name": "@tktco/berm",
-  "version": "0.17.1",
+  "version": "0.17.2",
   "description": "Interactive CLI to scaffold development environment templates",
   "repository": {
     "type": "git",
