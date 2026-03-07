@@ -59,6 +59,32 @@ export interface MorningSession { ... }
 export const SNOOZE_DURATION_SECONDS = 540;
 ```
 
+### 一見して意図が分からない初期化・デフォルト値・配置
+
+- 「なぜここでこの値を設定しているのか」が文脈なしでは分からないコードには、理由を書く
+- 特に: 防御的デフォルト値、上流で保証するための初期化、定数を特定ファイルに集約した理由
+
+```python
+# ✗ BAD: 読み手は「なぜ False をわざわざ設定？」と思う
+data['email_verified'] = False
+
+# ✓ GOOD: 下流が暗黙の None に依存しないよう、上流で契約を保証
+# /emails API 失敗時や primary email が見つからないパスでも
+# email_verified が必ず存在することを保証する。
+data['email_verified'] = False
+```
+
+```python
+# ✗ BAD: なぜこの定数がここにある？
+NO_SNS_IDENTIFIER_PROVIDERS = frozenset({...})
+
+# ✓ GOOD: 関連する定数群をまとめた理由と参照先を明記
+# --- プロバイダー特性による分類 ---
+# 新しいプロバイダー追加時はここを確認し、該当するセットに追加すること。
+# 参照: modules.user.service.activation.activate_user_and_create_person
+NO_SNS_IDENTIFIER_PROVIDERS = frozenset({...})
+```
+
 ## 書かなくていいもの
 
 - 自明なゲッター/セッター (`getName` に「名前を取得する」は不要)
