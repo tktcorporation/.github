@@ -4,12 +4,6 @@
 
 set -euo pipefail
 
-# jj が使えない環境では git にフォールバックする
-if ! command -v jj &>/dev/null; then
-  cat
-  exit 0
-fi
-
 # stdin から JSON を読み取る
 input=$(cat)
 
