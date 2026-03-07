@@ -1,5 +1,11 @@
 # @tktco/berm
 
+## 0.18.0
+
+### Minor Changes
+
+- [#113](https://github.com/tktcorporation/.github/pull/113) [`bb05918`](https://github.com/tktcorporation/.github/commit/bb05918003084fedeb6c0806531077f53fc5ea0a) Thanks [@tktcorporation](https://github.com/tktcorporation)! - push で --select をデフォルトの動作に変更。ファイル選択プロンプトがデフォルトで表示されるようになり、意図しないファイルの push を防止。従来の動作は --no-select で利用可能。
+
 ## 0.17.2
 
 ### Patch Changes
