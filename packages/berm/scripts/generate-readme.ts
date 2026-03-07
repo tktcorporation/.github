@@ -177,28 +177,31 @@ function cleanUsageOutput(usage: string): string {
 /**
  * Generate What You Get section
  */
+/**
+ * モジュールのディレクトリ単位の概要のみを表示する。個別パターンは列挙しない。
+ *
+ * 背景: 個別パターンを列挙すると、既存モジュール内にファイルを1つ追加するだけで
+ * docs:check が失敗してしまう。パターン詳細は modules.jsonc が正規の置き場であり、
+ * README に二重管理する必要はない。
+ *
+ * モジュール追加（新フォルダ単位）はREADME変更を伴うが、
+ * 既存モジュール内のパターン追加はREADMEに影響しない。
+ */
 function generateFilesSection(modules: TemplateModule[]): string {
   const lines: string[] = [];
   lines.push("## What You Get\n");
   lines.push("Files generated based on selected modules:\n");
 
   for (const mod of modules) {
-    // Get directory name from module ID
-    const dirName = mod.id === "." ? "Root" : `\`${mod.id}/\``;
-    lines.push(`### ${dirName}\n`);
-    lines.push(`${mod.description}\n`);
-
-    for (const pattern of mod.patterns) {
-      // Display glob patterns descriptively
-      const displayPattern = pattern.includes("*") ? `\`${pattern}\`` : `\`${pattern}\``;
-      lines.push(`- ${displayPattern}`);
-    }
-    lines.push("");
+    const dirName = mod.id === "." ? "Root (`./`)" : `\`${mod.id}/\``;
+    lines.push(`- **${dirName}** — ${mod.description}`);
   }
 
-  // Add config file description
-  lines.push("### Config\n");
-  lines.push("- `.devenv.json` - Tracks which modules are applied\n");
+  lines.push("");
+  lines.push(
+    "> See [`.devenv/modules.jsonc`](./.devenv/modules.jsonc) for the full list of tracked file patterns.",
+  );
+  lines.push("");
 
   return lines.join("\n");
 }

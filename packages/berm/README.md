@@ -170,45 +170,12 @@ npx @tktco/berm ai-docs
 
 Files generated based on selected modules:
 
-### Root
+- **Root (`./`)** — MCP, mise, and other root-level config files
+- **`.devcontainer/`** — VS Code DevContainer with Docker-in-Docker
+- **`.github/`** — GitHub Actions and labeler workflows
+- **`.claude/`** — Claude Code project settings
 
-MCP, mise, and other root-level config files
-
-- `.mcp.json`
-- `.mise.toml`
-
-### `.devcontainer/`
-
-VS Code DevContainer with Docker-in-Docker
-
-- `.devcontainer/devcontainer.json`
-- `.devcontainer/.gitignore`
-- `.devcontainer/setup-*.sh`
-- `.devcontainer/test-*.sh`
-- `.devcontainer/.env.devcontainer.example`
-- `.devcontainer/run-chrome-devtools-mcp.sh`
-
-### `.github/`
-
-GitHub Actions and labeler workflows
-
-- `.github/workflows/issue-link.yml`
-- `.github/workflows/label.yml`
-- `.github/labeler.yml`
-
-### `.claude/`
-
-Claude Code project settings
-
-- `.claude/settings.json`
-- `.claude/hooks/*.sh`
-- `.claude/rules/*.md`
-- `.claude/rules/jujutsu.md`
-- `.claude/skills/upstream-fix/SKILL.md`
-
-### Config
-
-- `.devenv.json` - Tracks which modules are applied
+> See [`.devenv/modules.jsonc`](./.devenv/modules.jsonc) for the full list of tracked file patterns.
 
 <!-- FILES:END -->
 
