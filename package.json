@@ -2,7 +2,7 @@
   "name": "tktcorporation-github",
   "private": true,
   "scripts": {
-    "version": "changeset version",
+    "version": "changeset version && pnpm --filter @tktco/berm run docs",
     "release": "changeset publish"
   },
   "devDependencies": {
