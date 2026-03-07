@@ -206,9 +206,9 @@ describe("pushCommand", () => {
       expect(args.yes.default).toBe(false);
     });
 
-    it("select 引数のデフォルト値は false", () => {
+    it("select 引数のデフォルト値は true", () => {
       const args = pushCommand.args as { select: { default: boolean } };
-      expect(args.select.default).toBe(false);
+      expect(args.select.default).toBe(true);
     });
 
     it("edit 引数のデフォルト値は false", () => {

@@ -458,7 +458,7 @@ export const pushCommand = defineCommand({
       type: "boolean",
       alias: "s",
       description: "Interactively select files to include in PR",
-      default: false,
+      default: true,
     },
     edit: {
       type: "boolean",
