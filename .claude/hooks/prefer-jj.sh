@@ -29,23 +29,6 @@ EOF
   exit 2
 fi
 
-# jj git push で --select なしを検出
-if echo "$command" | grep -qE '^\s*jj\s+git\s+push' && ! echo "$command" | grep -qE '\-\-select'; then
-  cat <<'EOF'
-╭──────────────────────────────────────────────╮
-│  jj git push には --select を付けてください  │
-│                                              │
-│  jj git push --select <bookmark-name>        │
-│                                              │
-│  意図しないブックマークのプッシュを防ぐため、│
-│  プッシュ対象を明示的に選択してください       │
-│                                              │
-│  参考: .claude/rules/jujutsu.md              │
-╰──────────────────────────────────────────────╯
-EOF
-  exit 2
-fi
-
 # git add を検出
 if echo "$command" | grep -qE '^\s*git\s+add'; then
   cat <<'EOF'

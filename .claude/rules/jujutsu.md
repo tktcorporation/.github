@@ -20,24 +20,7 @@ jj commit -m "msg"  # 変更をコミット
 jj describe -m "msg" # 現在の変更にメッセージを設定
 jj new              # 新しい空のチェンジを作成
 jj bookmark create <name>  # ブックマーク（≒ブランチ）を作成
-jj git push --select # リモートにプッシュ（プッシュ対象を選択）
-```
-
-## Push ルール
-
-- **`jj git push` は必ず `--select` オプションを付けること**
-  - 意図しないブックマークのプッシュを防ぐため、プッシュ対象を明示的に選択する
-  - 例: `jj git push --select <bookmark-name>`
-  - interactive でも AI 操作でも同様
-  - PreToolUse フック (`prefer-jj.sh`) で `--select` なしの push はブロックされる
-
-### interactive ユーザー向けの設定
-
-`~/.config/jj/config.toml` に以下を追加すると、`jj push` で `--select` 付きの push が実行できる:
-
-```toml
-[aliases]
-push = ["git", "push", "--select"]
+jj git push         # リモートにプッシュ
 ```
 
 ## Git との共存
