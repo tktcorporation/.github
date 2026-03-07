@@ -203,6 +203,8 @@ Claude Code project settings
 - `.claude/settings.json`
 - `.claude/hooks/*.sh`
 - `.claude/rules/*.md`
+- `.claude/rules/jujutsu.md`
+- `.claude/skills/upstream-fix/SKILL.md`
 
 ### Config
 

@@ -45,7 +45,8 @@
         ".claude/settings.json",
         ".claude/hooks/*.sh",
         ".claude/rules/*.md",
-        // Excluded: settings.local.json (personal settings)
+        ".claude/rules/jujutsu.md",
+        ".claude/skills/upstream-fix/SKILL.md"
       ],
     },
   ],
