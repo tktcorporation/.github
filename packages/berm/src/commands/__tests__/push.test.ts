@@ -472,6 +472,134 @@ describe("pushCommand", () => {
       );
     });
 
+    it("--files オプションで指定ファイルのみ PR に含める", async () => {
+      vol.fromJSON({
+        "/test/.devenv.json": JSON.stringify(validConfig),
+      });
+
+      const file1 = {
+        path: ".claude/statusline.sh",
+        type: "added" as const,
+        localContent: "#!/bin/bash\necho hello",
+      };
+      const file2 = {
+        path: ".claude/settings.json",
+        type: "modified" as const,
+        localContent: '{"statusLine": "script"}',
+        templateContent: '{"statusLine": "default"}',
+      };
+      const file3 = {
+        path: ".devcontainer/devcontainer.json",
+        type: "modified" as const,
+        localContent: '{"name": "new"}',
+        templateContent: '{"name": "old"}',
+      };
+
+      mockGetPushableFiles.mockReturnValue([file1, file2, file3]);
+      mockGetGitHubToken.mockReturnValue("ghp_token");
+      mockConfirmAction.mockResolvedValueOnce(true);
+      mockCreatePullRequest.mockResolvedValueOnce({
+        url: "https://github.com/owner/repo/pull/1",
+        branch: "update-template-123",
+        number: 1,
+      });
+
+      await (pushCommand.run as any)({
+        args: {
+          dir: "/test",
+          dryRun: false,
+          yes: false,
+          select: true,
+          edit: false,
+          files: ".claude/statusline.sh,.claude/settings.json",
+        },
+        rawArgs: [],
+        cmd: pushCommand,
+      });
+
+      // --files が指定された場合はインタラクティブ選択をスキップ
+      expect(mockSelectPushFiles).not.toHaveBeenCalled();
+      expect(mockCreatePullRequest).toHaveBeenCalledWith(
+        "ghp_token",
+        expect.objectContaining({
+          files: expect.arrayContaining([
+            expect.objectContaining({ path: ".claude/statusline.sh" }),
+            expect.objectContaining({ path: ".claude/settings.json" }),
+          ]),
+        }),
+      );
+      // file3 は含まれない
+      const callArgs = mockCreatePullRequest.mock.calls[0][1];
+      expect(callArgs.files.some((f: any) => f.path === ".devcontainer/devcontainer.json")).toBe(
+        false,
+      );
+    });
+
+    it("--files に存在しないファイルを指定すると警告", async () => {
+      vol.fromJSON({
+        "/test/.devenv.json": JSON.stringify(validConfig),
+      });
+
+      const file1 = {
+        path: "file.txt",
+        type: "added" as const,
+        localContent: "content",
+      };
+
+      mockGetPushableFiles.mockReturnValue([file1]);
+      mockGetGitHubToken.mockReturnValue("ghp_token");
+      mockConfirmAction.mockResolvedValueOnce(true);
+      mockCreatePullRequest.mockResolvedValueOnce({
+        url: "https://github.com/owner/repo/pull/1",
+        branch: "update-template-123",
+        number: 1,
+      });
+
+      await (pushCommand.run as any)({
+        args: {
+          dir: "/test",
+          dryRun: false,
+          yes: false,
+          select: false,
+          edit: false,
+          files: "file.txt,nonexistent.txt",
+        },
+        rawArgs: [],
+        cmd: pushCommand,
+      });
+
+      expect(mockLog.warn).toHaveBeenCalledWith(
+        "Files not found in pushable changes: nonexistent.txt",
+      );
+      expect(mockCreatePullRequest).toHaveBeenCalled();
+    });
+
+    it("--files に一致するファイルがない場合はキャンセル", async () => {
+      vol.fromJSON({
+        "/test/.devenv.json": JSON.stringify(validConfig),
+      });
+
+      mockGetPushableFiles.mockReturnValue([
+        { path: "file.txt", type: "added" as const, localContent: "content" },
+      ]);
+
+      await (pushCommand.run as any)({
+        args: {
+          dir: "/test",
+          dryRun: false,
+          yes: false,
+          select: false,
+          edit: false,
+          files: "nonexistent.txt",
+        },
+        rawArgs: [],
+        cmd: pushCommand,
+      });
+
+      expect(mockLog.info).toHaveBeenCalledWith("No matching files found. Cancelled.");
+      expect(mockCreatePullRequest).not.toHaveBeenCalled();
+    });
+
     it("--yes オプションで確認をスキップ", async () => {
       vol.fromJSON({
         "/test/.devenv.json": JSON.stringify(validConfig),

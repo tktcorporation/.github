@@ -50,7 +50,10 @@ npx @tktco/berm init --modules .,devcontainer        # Specific modules only
 npx @tktco/berm init --modules .github -s skip       # Specific modules with skip strategy
 npx @tktco/berm init --yes --overwrite-strategy skip # All modules with skip strategy
 
-# Non-interactive push workflow for AI agents
+# Non-interactive push workflow for AI agents (simple)
+npx @tktco/berm push --yes --files "path1,path2" -m "feat: ..."  # Push specific files only
+
+# Non-interactive push workflow for AI agents (manifest-based)
 npx @tktco/berm push --prepare    # Generate manifest
 # Edit ${MANIFEST_FILENAME}              # Select files
 npx @tktco/berm push --execute    # Create PR
@@ -130,7 +133,26 @@ npx @tktco/berm push --prepare
     },
     {
       title: "Push Workflow for AI Agents",
-      content: `When contributing template improvements, use the two-phase workflow:
+      content: `When contributing template improvements, use one of these workflows:
+
+### Simple: Direct Push with \`--files\`
+
+For quick, targeted pushes where you know exactly which files to include:
+
+\`\`\`bash
+# Push only specific files (non-interactive, no manifest needed)
+npx @tktco/berm push --yes --files ".claude/statusline.sh,.claude/settings.json" -m "feat: add statusline"
+\`\`\`
+
+- \`--files\`: Comma-separated list of file paths to include (only files with actual changes are eligible)
+- \`--yes\`: Skips confirmation prompts
+- \`-m\`: Sets the PR title
+- Files not found in pushable changes will be warned but won't block the push
+- This is the recommended approach for AI agents when you know which files to push
+
+### Manifest-based: \`--prepare\` + \`--execute\`
+
+For complex pushes where you need to review changes first:
 
 ### Phase 1: Prepare
 
@@ -251,13 +273,14 @@ npx @tktco/berm track --list
     {
       title: "Best Practices for AI Agents",
       content: `1. **Use \`--modules\` and \`--overwrite-strategy\`** for granular non-interactive init (e.g., \`init --modules .github,.claude -s skip\`)
-2. **Always use \`--prepare\` then \`--execute\`** for non-interactive push operation
-3. **Review the diff first** with \`npx @tktco/berm diff\` — this also reports untracked files
-4. **Check for untracked files** — if \`diff\` or \`push --prepare\` reports untracked files, use \`track\` to add them before pushing
-5. **Use \`track\` command** to add new files to the sync whitelist (non-interactive, no prompts)
-6. **Set meaningful PR titles** that follow conventional commits (e.g., \`feat:\`, \`fix:\`, \`docs:\`)
-7. **Deselect unrelated changes** by setting \`selected: false\`
-8. **Use environment variables** for tokens instead of hardcoding in manifest`,
+2. **Use \`--files\` for simple pushes** — specify exactly which files to include (e.g., \`push --yes --files "path1,path2" -m "feat: ..."\`)
+3. **Use \`--prepare\` then \`--execute\`** for complex pushes where you need to review the full diff first
+4. **Review the diff first** with \`npx @tktco/berm diff\` — this also reports untracked files
+5. **Check for untracked files** — if \`diff\` or \`push --prepare\` reports untracked files, use \`track\` to add them before pushing
+6. **Use \`track\` command** to add new files to the sync whitelist (non-interactive, no prompts)
+7. **Set meaningful PR titles** that follow conventional commits (e.g., \`feat:\`, \`fix:\`, \`docs:\`)
+8. **Deselect unrelated changes** by using \`--files\` or setting \`selected: false\` in manifest
+9. **Use environment variables** for tokens instead of hardcoding in manifest`,
     },
     {
       title: "Track + Push: Adding New Files to Template",
