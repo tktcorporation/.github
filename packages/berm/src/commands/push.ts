@@ -454,12 +454,6 @@ export const pushCommand = defineCommand({
       description: "Skip confirmation prompts",
       default: false,
     },
-    select: {
-      type: "boolean",
-      alias: "s",
-      description: "Interactively select files to include in PR",
-      default: true,
-    },
     edit: {
       type: "boolean",
       description: "Edit PR title and description before creating",
@@ -499,11 +493,9 @@ export const pushCommand = defineCommand({
       log.warn("--dry-run is ignored with --prepare (--prepare doesn't create a PR).");
     }
 
-    // --execute と --select/--edit の組み合わせは無視（executeはマニフェストベース）
-    if (args.execute && (args.select || args.edit)) {
-      log.message(
-        pc.dim("Note: --select and --edit are ignored in --execute mode (uses manifest)."),
-      );
+    // --execute と --edit の組み合わせは無視（executeはマニフェストベース）
+    if (args.execute && args.edit) {
+      log.message(pc.dim("Note: --edit is ignored in --execute mode (uses manifest)."));
     }
 
     const targetDir = resolve(args.dir);
@@ -837,7 +829,7 @@ export const pushCommand = defineCommand({
 
       // Step 3: ファイル選択
       // --files: ノンインタラクティブにファイルをカンマ区切りで指定（AI エージェント向け）
-      // --select: インタラクティブにファイルを選択（デフォルト）
+      // それ以外: インタラクティブにファイルを選択
       if (args.files) {
         const requestedPaths = args.files
           .split(",")
@@ -855,7 +847,7 @@ export const pushCommand = defineCommand({
           return;
         }
         log.info(`${pushableFiles.length} file(s) selected via --files`);
-      } else if (args.select) {
+      } else {
         log.step("Selecting files...");
         pushableFiles = await selectPushFiles(pushableFiles);
         if (pushableFiles.length === 0 && !updatedModulesContent) {
@@ -955,7 +947,7 @@ export const pushCommand = defineCommand({
       if (!args.yes) {
         const confirmed = await confirmAction("Create PR?", { initialValue: true });
         if (!confirmed) {
-          log.info("Cancelled. Use --edit to customize title/body, or --select to pick files.");
+          log.info("Cancelled. Use --edit to customize title/body, or --files to specify files.");
           return;
         }
       }
