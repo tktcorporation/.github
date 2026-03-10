@@ -30,6 +30,7 @@
     "test": "vitest",
     "test:run": "vitest run",
     "test:coverage": "vitest run --coverage",
+    "check": "npm run format:check && npm run lint && npm run build && npm run test:run && npm run docs:check",
     "prepack": "npm run build",
     "docs": "npx tsx scripts/generate-readme.ts",
     "docs:check": "npx tsx scripts/generate-readme.ts --check"
