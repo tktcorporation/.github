@@ -1,5 +1,11 @@
 # @tktco/berm
 
+## 0.20.0
+
+### Minor Changes
+
+- [#129](https://github.com/tktcorporation/.github/pull/129) [`3e680ca`](https://github.com/tktcorporation/.github/commit/3e680caa93a4605eadeb79c1bea242ab91b020a7) Thanks [@tktcorporation](https://github.com/tktcorporation)! - push コマンドから `--select` / `--no-select` オプションを削除。ファイル選択は常にインタラクティブに行われるようになり、非インタラクティブなファイル指定には `--files` オプションを使用する設計に変更。
+
 ## 0.19.0
 
 ### Minor Changes
