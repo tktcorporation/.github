@@ -80,5 +80,9 @@
     }
   },
   "language": "japanese",
-  "plansDirectory": ".claude/plans"
+  "plansDirectory": ".claude/plans",
+  "statusLine": {
+    "type": "command",
+    "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/statusline.sh\""
+  }
 }
