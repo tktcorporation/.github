@@ -1,5 +1,11 @@
 # @tktco/berm
 
+## 0.19.0
+
+### Minor Changes
+
+- [#123](https://github.com/tktcorporation/.github/pull/123) [`b014816`](https://github.com/tktcorporation/.github/commit/b014816f0a74f301a5c1a3034f2e98cf81863b0e) Thanks [@tktcorporation](https://github.com/tktcorporation)! - `berm push` に `--files` フラグを追加。カンマ区切りでファイルパスを指定し、ノンインタラクティブに特定ファイルのみをプッシュ可能に。AI エージェントが `--no-select --yes` で全差分をプッシュしてしまう問題を解決。
+
 ## 0.18.0
 
 ### Minor Changes
