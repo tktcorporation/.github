@@ -3,7 +3,7 @@
   "changelog": ["@changesets/changelog-github", { "repo": "tktcorporation/.github" }],
   "commit": false,
   "fixed": [],
-  "linked": [],
+  "linked": [["@tktco/berm", "berm"]],
   "access": "public",
   "baseBranch": "main",
   "updateInternalDependencies": "patch",
