@@ -51,7 +51,7 @@ async function promptCommand(): Promise<void> {
 
   p.log.message(
     pc.dim(
-      `Are you an AI agent? Run ${pc.cyan("npx @tktco/berm ai-docs")} for non-interactive usage guide.`,
+      `Are you an AI agent? Run ${pc.cyan("npx berm ai-docs")} for non-interactive usage guide.`,
     ),
   );
 
@@ -115,7 +115,7 @@ async function run(): Promise<void> {
       ].includes(args[0]);
 
     if (!hasSubCommand && args.length > 0 && !args[0].startsWith("-")) {
-      // npx @tktco/berm . のような形式は init コマンドとして実行
+      // npx berm . のような形式は init コマンドとして実行
       await runMain(initCommand);
     } else if (!hasSubCommand && args.length === 0) {
       // 引数なしの場合はコマンド選択プロンプトを表示

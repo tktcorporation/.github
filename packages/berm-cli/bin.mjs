@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 
 /**
- * `npx berm` で呼び出せるようにするための薄いラッパー。
- * 実体は @tktco/berm の CLI エントリポイントをそのまま実行する。
+ * 後方互換のためのラッパー。`npx @tktco/berm` でも動作するようにする。
+ * 本体は `berm` パッケージに移行済み。`npx berm` を推奨。
  *
- * @tktco/berm が不要になればこのパッケージも削除可能。
+ * berm パッケージへの完全移行後、このパッケージは削除可能。
  */
-await import("@tktco/berm/dist/index.mjs");
+await import("berm/dist/index.mjs");

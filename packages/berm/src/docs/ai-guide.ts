@@ -45,30 +45,30 @@ export function getDocSections(): DocSection[] {
       title: "Quick Reference",
       content: `\`\`\`bash
 # Non-interactive init for AI agents
-npx @tktco/berm init --yes                           # All modules, overwrite strategy
-npx @tktco/berm init --modules .,devcontainer        # Specific modules only
-npx @tktco/berm init --modules .github -s skip       # Specific modules with skip strategy
-npx @tktco/berm init --yes --overwrite-strategy skip # All modules with skip strategy
+npx berm init --yes                           # All modules, overwrite strategy
+npx berm init --modules .,devcontainer        # Specific modules only
+npx berm init --modules .github -s skip       # Specific modules with skip strategy
+npx berm init --yes --overwrite-strategy skip # All modules with skip strategy
 
 # Non-interactive push workflow for AI agents (simple)
-npx @tktco/berm push --yes --files "path1,path2" -m "feat: ..."  # Push specific files only
+npx berm push --yes --files "path1,path2" -m "feat: ..."  # Push specific files only
 
 # Non-interactive push workflow for AI agents (manifest-based)
-npx @tktco/berm push --prepare    # Generate manifest
+npx berm push --prepare    # Generate manifest
 # Edit ${MANIFEST_FILENAME}              # Select files
-npx @tktco/berm push --execute    # Create PR
+npx berm push --execute    # Create PR
 
 # Add files to tracking (non-interactive)
-npx @tktco/berm track ".cloud/rules/*.md"            # Add pattern (auto-detect module)
-npx @tktco/berm track ".cloud/config.json" -m .cloud # Specify module explicitly
-npx @tktco/berm track --list                         # List tracked modules/patterns
+npx berm track ".cloud/rules/*.md"            # Add pattern (auto-detect module)
+npx berm track ".cloud/config.json" -m .cloud # Specify module explicitly
+npx berm track --list                         # List tracked modules/patterns
 
 # Show differences and detect untracked files
-npx @tktco/berm diff              # Show differences (also reports untracked files)
+npx berm diff              # Show differences (also reports untracked files)
 
 # Other commands
-npx @tktco/berm init [dir]        # Apply template (interactive)
-npx @tktco/berm ai-docs           # Show this guide
+npx berm init [dir]        # Apply template (interactive)
+npx berm ai-docs           # Show this guide
 \`\`\``,
     },
     {
@@ -88,16 +88,16 @@ npx @tktco/berm ai-docs           # Show this guide
 
 \`\`\`bash
 # Apply only specific modules (skips module selection prompt)
-npx @tktco/berm init --modules .github,.claude
+npx berm init --modules .github,.claude
 
 # Apply specific modules and skip existing files
-npx @tktco/berm init --modules devcontainer -s skip
+npx berm init --modules devcontainer -s skip
 
 # Apply all modules but skip existing files
-npx @tktco/berm init --yes --overwrite-strategy skip
+npx berm init --yes --overwrite-strategy skip
 
 # Re-init when .devenv.json exists, replacing only specific modules
-npx @tktco/berm init --modules . -s overwrite
+npx berm init --modules . -s overwrite
 \`\`\`
 
 ### Behavior
@@ -116,13 +116,13 @@ To sync these files to the template, you **must** first add them to tracking:
 
 \`\`\`bash
 # 1. Check for untracked files
-npx @tktco/berm diff
+npx berm diff
 
 # 2. Add untracked files to the whitelist
-npx @tktco/berm track "<file-or-glob-pattern>"
+npx berm track "<file-or-glob-pattern>"
 
 # 3. Now push will include these files
-npx @tktco/berm push --prepare
+npx berm push --prepare
 \`\`\`
 
 **Key points:**
@@ -141,7 +141,7 @@ For quick, targeted pushes where you know exactly which files to include:
 
 \`\`\`bash
 # Push only specific files (non-interactive, no manifest needed)
-npx @tktco/berm push --yes --files ".claude/statusline.sh,.claude/settings.json" -m "feat: add statusline"
+npx berm push --yes --files ".claude/statusline.sh,.claude/settings.json" -m "feat: add statusline"
 \`\`\`
 
 - \`--files\`: Comma-separated list of file paths to include (only files with actual changes are eligible)
@@ -157,7 +157,7 @@ For complex pushes where you need to review changes first:
 ### Phase 1: Prepare
 
 \`\`\`bash
-npx @tktco/berm push --prepare
+npx berm push --prepare
 \`\`\`
 
 This generates \`${MANIFEST_FILENAME}\` containing:
@@ -195,7 +195,7 @@ files:
 export GITHUB_TOKEN="your-token"
 
 # Create the PR
-npx @tktco/berm push --execute
+npx berm push --execute
 \`\`\``,
     },
     {
@@ -233,10 +233,10 @@ This is useful when you create new files or directories that should be part of t
 
 \`\`\`bash
 # Auto-detects module from path (.claude module)
-npx @tktco/berm track ".claude/commands/*.md"
+npx berm track ".claude/commands/*.md"
 
 # Explicit module
-npx @tktco/berm track ".devcontainer/new-script.sh" --module .devcontainer
+npx berm track ".devcontainer/new-script.sh" --module .devcontainer
 \`\`\`
 
 ### Create a new module with patterns
@@ -245,10 +245,10 @@ When the module doesn't exist yet, it is automatically created:
 
 \`\`\`bash
 # Creates ".cloud" module and adds the pattern
-npx @tktco/berm track ".cloud/rules/*.md"
+npx berm track ".cloud/rules/*.md"
 
 # With custom name and description
-npx @tktco/berm track ".cloud/rules/*.md" \\
+npx berm track ".cloud/rules/*.md" \\
   --module .cloud \\
   --name "Cloud Rules" \\
   --description "Cloud configuration and rule files"
@@ -257,7 +257,7 @@ npx @tktco/berm track ".cloud/rules/*.md" \\
 ### List current tracking configuration
 
 \`\`\`bash
-npx @tktco/berm track --list
+npx berm track --list
 \`\`\`
 
 ### Options
@@ -275,7 +275,7 @@ npx @tktco/berm track --list
       content: `1. **Use \`--modules\` and \`--overwrite-strategy\`** for granular non-interactive init (e.g., \`init --modules .github,.claude -s skip\`)
 2. **Use \`--files\` for simple pushes** — specify exactly which files to include (e.g., \`push --yes --files "path1,path2" -m "feat: ..."\`)
 3. **Use \`--prepare\` then \`--execute\`** for complex pushes where you need to review the full diff first
-4. **Review the diff first** with \`npx @tktco/berm diff\` — this also reports untracked files
+4. **Review the diff first** with \`npx berm diff\` — this also reports untracked files
 5. **Check for untracked files** — if \`diff\` or \`push --prepare\` reports untracked files, use \`track\` to add them before pushing
 6. **Use \`track\` command** to add new files to the sync whitelist (non-interactive, no prompts)
 7. **Set meaningful PR titles** that follow conventional commits (e.g., \`feat:\`, \`fix:\`, \`docs:\`)
@@ -296,10 +296,10 @@ mkdir -p .cloud/rules
 echo "naming conventions..." > .cloud/rules/naming.md
 
 # 2. Add to tracking (updates local .devenv/modules.jsonc)
-npx @tktco/berm track ".cloud/rules/*.md"
+npx berm track ".cloud/rules/*.md"
 
 # 3. Push detects local module additions automatically
-npx @tktco/berm push --prepare
+npx berm push --prepare
 \`\`\`
 
 ### What happens internally
@@ -332,16 +332,16 @@ export function generateReadmeSection(): string {
   lines.push("AI coding agents can use the non-interactive workflow:\n");
   lines.push("```bash");
   lines.push("# 1. Generate manifest file");
-  lines.push("npx @tktco/berm push --prepare");
+  lines.push("npx berm push --prepare");
   lines.push("");
   lines.push(`# 2. Edit ${MANIFEST_FILENAME} to select files and set PR details`);
   lines.push("");
   lines.push("# 3. Create PR from manifest");
-  lines.push("npx @tktco/berm push --execute");
+  lines.push("npx berm push --execute");
   lines.push("```\n");
   lines.push("For detailed documentation, run:\n");
   lines.push("```bash");
-  lines.push("npx @tktco/berm ai-docs");
+  lines.push("npx berm ai-docs");
   lines.push("```\n");
   return lines.join("\n");
 }

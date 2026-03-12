@@ -6,8 +6,8 @@ A bi-directional dev environment template that evolves with you.
 </p>
 <br>
 <p align="center">
-<a href="https://www.npmjs.com/package/@tktco/berm"><img src="https://img.shields.io/npm/v/@tktco/berm?color=a1b858&label=" alt="npm version"></a>
-<a href="https://www.npmjs.com/package/@tktco/berm"><img src="https://img.shields.io/npm/dm/@tktco/berm?color=50a36f&label=" alt="npm downloads"></a>
+<a href="https://www.npmjs.com/package/berm"><img src="https://img.shields.io/npm/v/berm?color=a1b858&label=" alt="npm version"></a>
+<a href="https://www.npmjs.com/package/berm"><img src="https://img.shields.io/npm/dm/berm?color=50a36f&label=" alt="npm downloads"></a>
 <a href="https://github.com/tktcorporation/.github/blob/main/LICENSE"><img src="https://img.shields.io/github/license/tktcorporation/.github?color=blue&label=" alt="license"></a>
 </p>
 <br>
@@ -33,16 +33,16 @@ Your template stays alive, fed by every project that uses it.
 
 ```bash
 # Apply template to current directory
-npx @tktco/berm
+npx berm
 
 # Apply to a specific directory
-npx @tktco/berm ./my-project
+npx berm ./my-project
 
 # Push your improvements back
-npx @tktco/berm push -m "Add new workflow"
+npx berm push -m "Add new workflow"
 
 # Check what's different
-npx @tktco/berm diff
+npx berm diff
 ```
 
 <!-- USAGE:END -->
@@ -148,18 +148,18 @@ AI coding agents can use the non-interactive workflow:
 
 ```bash
 # 1. Generate manifest file
-npx @tktco/berm push --prepare
+npx berm push --prepare
 
 # 2. Edit .devenv-push-manifest.yaml to select files and set PR details
 
 # 3. Create PR from manifest
-npx @tktco/berm push --execute
+npx berm push --execute
 ```
 
 For detailed documentation, run:
 
 ```bash
-npx @tktco/berm ai-docs
+npx berm ai-docs
 ```
 
 <!-- AI_AGENTS:END -->

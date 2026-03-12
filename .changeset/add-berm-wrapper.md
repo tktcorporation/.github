@@ -1,5 +1,7 @@
 ---
 "berm": minor
+"@tktco/berm": minor
 ---
 
-`npx berm` で呼び出せるようにするためのラッパーパッケージを追加
+パッケージ名を `berm` に変更し、`npx berm` で直接呼び出せるようにした。
+`@tktco/berm` は後方互換のためのラッパーとして維持。

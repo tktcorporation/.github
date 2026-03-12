@@ -125,10 +125,10 @@ export const diffCommand = defineCommand({
           log.info(
             `To include these files in sync, add them to tracking with the ${pc.cyan("track")} command:`,
           );
-          log.message(pc.dim(`  npx @tktco/berm track "<pattern>"`));
+          log.message(pc.dim(`  npx berm track "<pattern>"`));
           log.message(
             pc.dim(
-              `  Example: npx @tktco/berm track "${untrackedByFolder[0]?.files[0]?.path || ".cloud/rules/*.md"}"`,
+              `  Example: npx berm track "${untrackedByFolder[0]?.files[0]?.path || ".cloud/rules/*.md"}"`,
             ),
           );
         }
@@ -142,7 +142,7 @@ export const diffCommand = defineCommand({
         );
         log.message(untrackedLines.join("\n"));
         log.info(
-          `Use ${pc.cyan("npx @tktco/berm track <pattern>")} to add them, then ${pc.cyan("push")} to sync.`,
+          `Use ${pc.cyan("npx berm track <pattern>")} to add them, then ${pc.cyan("push")} to sync.`,
         );
         outro("Tracked files are in sync, but untracked files exist.");
       } else {

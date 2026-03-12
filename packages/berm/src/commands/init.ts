@@ -249,7 +249,7 @@ export const initCommand = defineCommand({
           `${pc.bold("Next steps:")}`,
           `  ${pc.cyan("git add . && git commit -m 'chore: add devenv config'")}`,
           `  ${pc.dim("Commit the changes")}`,
-          `  ${pc.cyan("npx @tktco/berm diff")}`,
+          `  ${pc.cyan("npx berm diff")}`,
           `  ${pc.dim("Check for updates from upstream")}`,
         ].join("\n"),
       );

@@ -85,16 +85,16 @@ function generateUsageSection(): string {
   lines.push("## Usage\n");
   lines.push("```bash");
   lines.push("# Apply template to current directory");
-  lines.push("npx @tktco/berm");
+  lines.push("npx berm");
   lines.push("");
   lines.push("# Apply to a specific directory");
-  lines.push("npx @tktco/berm ./my-project");
+  lines.push("npx berm ./my-project");
   lines.push("");
   lines.push("# Push your improvements back");
-  lines.push('npx @tktco/berm push -m "Add new workflow"');
+  lines.push('npx berm push -m "Add new workflow"');
   lines.push("");
   lines.push("# Check what's different");
-  lines.push("npx @tktco/berm diff");
+  lines.push("npx berm diff");
   lines.push("```\n");
   return lines.join("\n");
 }

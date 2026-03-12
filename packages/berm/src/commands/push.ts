@@ -815,8 +815,8 @@ export const pushCommand = defineCommand({
           log.message(
             pc.dim(
               [
-                `  npx @tktco/berm track "<pattern>"  # Add file patterns to the sync whitelist`,
-                `  npx @tktco/berm track --list        # List currently tracked patterns`,
+                `  npx berm track "<pattern>"  # Add file patterns to the sync whitelist`,
+                `  npx berm track --list        # List currently tracked patterns`,
                 `  Then re-run 'push --prepare' to include them in the manifest.`,
               ].join("\n"),
             ),

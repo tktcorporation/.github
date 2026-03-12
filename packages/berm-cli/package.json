@@ -1,7 +1,7 @@
 {
-  "name": "berm",
-  "version": "0.19.0",
-  "description": "Interactive CLI to scaffold development environment templates (wrapper for @tktco/berm)",
+  "name": "@tktco/berm",
+  "version": "0.20.0",
+  "description": "Wrapper for berm CLI (use 'npx berm' instead)",
   "repository": {
     "type": "git",
     "url": "https://github.com/tktcorporation/.github.git"
@@ -19,7 +19,7 @@
     "registry": "https://registry.npmjs.org/"
   },
   "dependencies": {
-    "@tktco/berm": "workspace:*"
+    "berm": "workspace:*"
   },
   "engines": {
     "node": ">=20.0.0"

@@ -30,7 +30,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Run oxlint
-        run: pnpm --filter @tktco/berm run lint
+        run: pnpm --filter berm run lint
 
   format:
     name: Format Check (oxfmt)
@@ -49,7 +49,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Run oxfmt
-        run: pnpm --filter @tktco/berm run format:check
+        run: pnpm --filter berm run format:check
 
   typecheck:
     name: Type Check (oxlint --type-check)
@@ -68,7 +68,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Run oxlint type-check
-        run: pnpm --filter @tktco/berm run typecheck
+        run: pnpm --filter berm run typecheck
 
   build:
     name: Build (tsdown)
@@ -87,7 +87,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build
-        run: pnpm --filter @tktco/berm run build
+        run: pnpm --filter berm run build
 
       - name: Test CLI help
         run: node packages/berm/dist/index.mjs --help
@@ -116,7 +116,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Run tests
-        run: pnpm --filter @tktco/berm run test:run
+        run: pnpm --filter berm run test:run
 
   docs:
     name: Check README
@@ -135,4 +135,4 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Check README is up to date
-        run: pnpm --filter @tktco/berm run docs:check
+        run: pnpm --filter berm run docs:check

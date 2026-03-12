@@ -233,7 +233,7 @@ describe("prompts", () => {
     it("should include berm attribution", () => {
       const files: FileDiff[] = [{ path: "a.json", type: "added" }];
       const body = generatePrBody(files);
-      expect(body).toContain("@tktco/berm");
+      expect(body).toContain("berm");
     });
   });
 
