@@ -13,7 +13,7 @@ A bi-directional dev environment template that evolves with you.
 <br>
 </p>
 
-> _berm_ — a shaped, maintained buffer zone between structures. Like a ziku bridges terrain, this tool bridges the gap between your template and your projects.
+> _ziku_ (軸) — the axis around which things revolve. Your template is the axis; every project builds on it, and improvements flow back to keep it turning.
 
 ## Why
 

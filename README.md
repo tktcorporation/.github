@@ -1,11 +1,22 @@
 # .github
 
-## Github Repository Template
+Shared dev environment templates and the CLI tool [**ziku**](./packages/ziku) that keeps them in sync.
 
-Generate your repository by this.
+## What's inside
 
-## Actions
+| Path | Description |
+|------|-------------|
+| [`packages/ziku`](./packages/ziku) | CLI tool for bi-directional template sync |
+| [`.devenv/`](./.devenv) | Template source files (DevContainer, GitHub Actions, Claude, etc.) |
 
-- https://github.com/github/codeql-action
-- https://github.com/tkt-actions/add-issue-links
-- https://github.com/actions/labeler
+## Quick start
+
+```bash
+# Apply templates to your project
+npx ziku
+
+# Push improvements back
+npx ziku push
+```
+
+See [packages/ziku/README.md](./packages/ziku/README.md) for full documentation.
