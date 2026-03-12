@@ -20,14 +20,14 @@ jobs:
           # Get changed files in this PR compared to base branch
           CHANGED_FILES=$(git diff --name-only "origin/${BASE_REF}...HEAD")
 
-          # Check if berm package code changed (exclude auto-generated files)
-          CODE_CHANGES=$(echo "$CHANGED_FILES" | grep -E '^packages/berm/src/' || true)
+          # Check if ziku package code changed (exclude auto-generated files)
+          CODE_CHANGES=$(echo "$CHANGED_FILES" | grep -E '^packages/ziku/src/' || true)
           if [ -z "$CODE_CHANGES" ]; then
-            echo "No berm code changes detected, skipping changeset check"
+            echo "No ziku code changes detected, skipping changeset check"
             exit 0
           fi
 
-          echo "Detected berm code changes:"
+          echo "Detected ziku code changes:"
           echo "$CODE_CHANGES"
           echo ""
 
