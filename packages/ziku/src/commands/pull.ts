@@ -147,7 +147,7 @@ export const pullCommand = defineCommand({
       }
 
       // Step 8: コンフリクト解決
-      let hasUnresolvedConflicts = false;
+      const unresolvedConflicts: string[] = [];
       if (classification.conflicts.length > 0) {
         // baseRef が存在する場合、ベースバージョンを再ダウンロードして 3-way マージ
         let baseTemplateDir: string | undefined;
@@ -179,25 +179,28 @@ export const pullCommand = defineCommand({
             const result = threeWayMerge(baseContent, localContent, templateContent, file);
             await writeFile(join(targetDir, file), result.content, "utf-8");
             if (result.hasConflicts) {
-              hasUnresolvedConflicts = true;
+              unresolvedConflicts.push(file);
               logMergeConflict(file, result);
+            } else {
+              log.success(`Auto-merged: ${pc.cyan(file)}`);
             }
           }
 
-          if (hasUnresolvedConflicts) {
+          if (unresolvedConflicts.length > 0) {
             log.warn("Some files have conflicts. Resolve them, then run `ziku pull --continue`");
           }
         } finally {
           baseCleanup?.();
         }
 
-        if (hasUnresolvedConflicts) {
+        if (unresolvedConflicts.length > 0) {
           // pendingMerge を保存して中断。baseHashes/baseRef は --continue 後に更新する。
+          // 自動マージ成功したファイルは含めず、未解決ファイルのみ記録する。
           const latestRef = await resolveLatestCommitSha(config.source.owner, config.source.repo);
           await saveConfig(targetDir, {
             ...config,
             pendingMerge: {
-              conflicts: classification.conflicts,
+              conflicts: unresolvedConflicts,
               templateHashes: templateHashes,
               ...(latestRef ? { latestRef } : {}),
             },
