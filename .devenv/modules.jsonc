@@ -49,7 +49,8 @@
         ".claude/skills/upstream-fix/SKILL.md",
         ".claude/skills/ui-craft",
         ".claude/statusline.sh",
-        ".claude/skills/ui-design-research"
+        ".claude/skills/ui-design-research",
+        ".claude/skills/faithful-doc-writing"
       ],
     },
   ],
