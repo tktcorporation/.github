@@ -7,7 +7,10 @@
   // Volume name must start with [a-zA-Z0-9] to comply with Docker naming rules
   // Using 'devcontainer-' prefix so ${localWorkspaceFolderBasename} ('.github') doesn't start the name
   "mounts": [
-    "source=devcontainer-${localWorkspaceFolderBasename}-pnpm-store,target=${containerWorkspaceFolder}/.pnpm-store,type=volume"
+    "source=devcontainer-${localWorkspaceFolderBasename}-pnpm-store,target=${containerWorkspaceFolder}/.pnpm-store,type=volume",
+    "source=devcontainer-${localWorkspaceFolderBasename}-claude,target=/home/vscode/.claude,type=volume",
+    // ホストの credentials を readonly で一時配置（初回コピー元）
+    "source=${localEnv:HOME}/.claude,target=/tmp/.host-claude,type=bind,readonly"
   ],
 
   "features": {
@@ -20,6 +23,8 @@
     "ghcr.io/devcontainers/features/github-cli:1": {},
     "ghcr.io/devcontainers-extra/features/mise:1": {}
   },
+  // シークレット用 env ファイル。なければ initializeCommand で空ファイルを作成し起動失敗を防ぐ
+  "initializeCommand": "touch .devcontainer/.env.devcontainer",
   "runArgs": ["--env-file", ".devcontainer/.env.devcontainer"],
   "customizations": {
     "vscode": {
@@ -39,15 +44,25 @@
           "**/node_modules/**": true,
           "**/.pnpm/**": true,
           "**/.pnpm-store/**": true,
-          "**/.turbo/**": true
+          "**/.turbo/**": true,
+          "**/dist/**": true,
+          "**/.next/**": true,
+          "**/__pycache__/**": true,
+          "**/.pytest_cache/**": true,
+          "**/venv/**": true,
+          "**/.venv/**": true
         },
         "search.exclude": {
           "**/node_modules": true,
+          "**/dist": true,
           "**/.pnpm": true,
           "**/.pnpm-store": true,
           "**/.git": true,
-          "**/.turbo": true
-        }
+          "**/.turbo": true,
+          "**/.next": true,
+          "**/coverage": true
+        },
+        "git.detectSubmodulesLimit": 0
       }
     }
   },
@@ -65,15 +80,18 @@
       "set -e; curl -fsSL https://raw.githubusercontent.com/nodejs/release-keys/b362bd15f2ac7ce350d7563fc03e0c625e455e5f/cli.sh | bash -s import"
     ],
     "setup-mise-bash": ["bash", "-c", "echo 'eval \"$(mise activate bash)\"' >> ~/.bashrc"],
-    "trust-mise": ["mise", "trust"],
-    "setup-git-user": ["bash", "-lc", ".devcontainer/setup-git-user.sh"]
+    "trust-mise": ["mise", "trust"]
   },
   "postCreateCommand": {
     "mise-install": "mise install",
+    "git-performance": "git config status.submoduleSummary false && git config diff.ignoreSubmodules all && git config fetch.recurseSubmodules false && git config submodule.recurse false",
+    "install-gh-extensions": "gh extension install agbiotech/gh-sub-issue 2>/dev/null || true",
     "fix-pnpm-store-permissions": ["bash", "-lc", "sudo chown -R $(whoami) .pnpm-store"]
   },
   "postStartCommand": {
     "setup-chrome-devtools-mcp": ["bash", "-lc", ".devcontainer/setup-chrome-devtools-mcp.sh"],
-    "mise-upgrade": ["mise", "upgrade"]
+    "mise-upgrade": ["mise", "upgrade"],
+    "sync-claude-credentials": ["bash", "-c", "[ -f ~/.claude/.credentials.json ] || cp /tmp/.host-claude/.credentials.json ~/.claude/.credentials.json 2>/dev/null || true"],
+    "check-env-file": ["bash", "-c", "[ -s .devcontainer/.env.devcontainer ] || echo '⚠️  WARNING: .devcontainer/.env.devcontainer is empty or missing. Secrets are not loaded.'"]
   }
 }
