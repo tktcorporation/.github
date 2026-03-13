@@ -20,6 +20,7 @@ Research other products and UX best practices before making UI design decisions.
 ### 1. Define the Design Problem
 
 Identify:
+
 - What information needs to be displayed?
 - What are the constraints (space, mobile, context)?
 - What is the user's goal at this point in the flow?
@@ -39,6 +40,7 @@ Use WebFetch on promising results for detail. If 403, use additional WebSearch.
 ### 3. Synthesize
 
 Extract from research:
+
 - **Common patterns** — what most products do
 - **Anti-patterns** — what to avoid
 - **Constraints** — e.g., "max 2 hierarchy levels", "5-7 items for dot steppers"
