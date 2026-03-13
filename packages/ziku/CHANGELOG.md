@@ -1,5 +1,11 @@
 # @tktco/berm
 
+## 0.21.1
+
+### Patch Changes
+
+- [#140](https://github.com/tktcorporation/.github/pull/140) [`e0c0923`](https://github.com/tktcorporation/.github/commit/e0c09236d373a0714dcac3ab677de6f838c70043) Thanks [@tktcorporation](https://github.com/tktcorporation)! - Show "Auto-merged" success message when conflict files are resolved by 3-way merge
+
 ## 0.21.0
 
 ### Minor Changes
