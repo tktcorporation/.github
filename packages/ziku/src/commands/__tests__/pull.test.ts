@@ -559,6 +559,180 @@ describe("pullCommand", () => {
       expect(mockCleanup).toHaveBeenCalled();
     });
 
+    it("コンフリクトファイルが自動マージ成功した場合に success ログを出す", async () => {
+      vol.fromJSON({
+        "/test/.mcp.json": "local content",
+        "/tmp/template/.mcp.json": "template content",
+      });
+
+      mockClassifyFiles.mockReturnValueOnce({
+        autoUpdate: [],
+        localOnly: [],
+        conflicts: [".mcp.json"],
+        newFiles: [],
+        deletedFiles: [],
+        unchanged: [],
+      });
+
+      // 自動マージ成功（hasConflicts: false）
+      mockThreeWayMerge.mockReturnValueOnce({
+        content: "auto-merged content",
+        hasConflicts: false,
+        conflictDetails: [],
+      });
+
+      await (pullCommand.run as any)({
+        args: { dir: "/test", force: false },
+        rawArgs: [],
+        cmd: pullCommand,
+      });
+
+      // 自動マージ成功のメッセージが出力される
+      expect(mockLog.success).toHaveBeenCalledWith(expect.stringContaining("Auto-merged"));
+      expect(mockLog.success).toHaveBeenCalledWith(expect.stringContaining(".mcp.json"));
+      // pendingMerge は保存されない（正常完了パス）
+      expect(mockSaveConfig).not.toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({ pendingMerge: expect.anything() }),
+      );
+    });
+
+    it("複数コンフリクトで一部自動マージ・一部未解決の場合に各ログが出る", async () => {
+      vol.fromJSON({
+        "/test/a.json": "local a",
+        "/test/b.txt": "local b",
+        "/tmp/template/a.json": "template a",
+        "/tmp/template/b.txt": "template b",
+      });
+
+      mockClassifyFiles.mockReturnValueOnce({
+        autoUpdate: [],
+        localOnly: [],
+        conflicts: ["a.json", "b.txt"],
+        newFiles: [],
+        deletedFiles: [],
+        unchanged: [],
+      });
+
+      // a.json: 自動マージ成功
+      mockThreeWayMerge.mockReturnValueOnce({
+        content: "merged a",
+        hasConflicts: false,
+        conflictDetails: [],
+      });
+      // b.txt: コンフリクト（テキストマーカー）
+      mockThreeWayMerge.mockReturnValueOnce({
+        content: "<<<<<<< LOCAL\nlocal b\n=======\ntemplate b\n>>>>>>> TEMPLATE",
+        hasConflicts: true,
+        conflictDetails: [],
+      });
+
+      await (pullCommand.run as any)({
+        args: { dir: "/test", force: false },
+        rawArgs: [],
+        cmd: pullCommand,
+      });
+
+      // a.json は自動マージ成功
+      expect(mockLog.success).toHaveBeenCalledWith(expect.stringContaining("Auto-merged"));
+      expect(mockLog.success).toHaveBeenCalledWith(expect.stringContaining("a.json"));
+      // b.txt はコンフリクト
+      expect(mockLog.warn).toHaveBeenCalledWith(expect.stringContaining("b.txt"));
+      // 未解決コンフリクトがあるので pendingMerge が保存される
+      expect(mockSaveConfig).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          pendingMerge: expect.objectContaining({
+            conflicts: ["b.txt"],
+          }),
+        }),
+      );
+    });
+
+    it("全コンフリクトが自動マージ成功した場合は pendingMerge なしで正常完了", async () => {
+      vol.fromJSON({
+        "/test/a.json": "local a",
+        "/test/b.json": "local b",
+        "/tmp/template/a.json": "template a",
+        "/tmp/template/b.json": "template b",
+      });
+
+      mockClassifyFiles.mockReturnValueOnce({
+        autoUpdate: [],
+        localOnly: [],
+        conflicts: ["a.json", "b.json"],
+        newFiles: [],
+        deletedFiles: [],
+        unchanged: [],
+      });
+
+      mockThreeWayMerge.mockReturnValueOnce({
+        content: "merged a",
+        hasConflicts: false,
+        conflictDetails: [],
+      });
+      mockThreeWayMerge.mockReturnValueOnce({
+        content: "merged b",
+        hasConflicts: false,
+        conflictDetails: [],
+      });
+
+      await (pullCommand.run as any)({
+        args: { dir: "/test", force: false },
+        rawArgs: [],
+        cmd: pullCommand,
+      });
+
+      // 両方自動マージ成功
+      expect(mockLog.success).toHaveBeenCalledWith(expect.stringContaining("a.json"));
+      expect(mockLog.success).toHaveBeenCalledWith(expect.stringContaining("b.json"));
+      // pendingMerge なしで正常完了
+      expect(mockSaveConfig).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          baseHashes: expect.any(Object),
+        }),
+      );
+      expect(mockSaveConfig).not.toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          pendingMerge: expect.anything(),
+        }),
+      );
+    });
+
+    it("JSON 構造マージでキーレベルコンフリクト時は warn を出す（既存動作）", async () => {
+      vol.fromJSON({
+        "/test/config.json": '{"version": "2.0"}',
+        "/tmp/template/config.json": '{"version": "3.0"}',
+      });
+
+      mockClassifyFiles.mockReturnValueOnce({
+        autoUpdate: [],
+        localOnly: [],
+        conflicts: ["config.json"],
+        newFiles: [],
+        deletedFiles: [],
+        unchanged: [],
+      });
+
+      mockThreeWayMerge.mockReturnValueOnce({
+        content: '{"version": "2.0"}',
+        hasConflicts: true,
+        conflictDetails: [{ path: ["version"], localValue: "2.0", templateValue: "3.0" }],
+      });
+
+      await (pullCommand.run as any)({
+        args: { dir: "/test", force: false },
+        rawArgs: [],
+        cmd: pullCommand,
+      });
+
+      // キーレベルコンフリクトの warn
+      expect(mockLog.warn).toHaveBeenCalledWith(expect.stringContaining("config.json"));
+      expect(mockLog.warn).toHaveBeenCalledWith(expect.stringContaining("review these keys"));
+    });
+
     it("新規ファイル追加時にディレクトリを自動作成", async () => {
       vol.fromJSON({
         "/test": null,
