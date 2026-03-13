@@ -1,5 +1,22 @@
 # PR ワークフロールール
 
+## プッシュ前の必須チェック（CRITICAL）
+
+**コードを push する前に、以下を必ず順番に実行すること。1つでも漏れたら push 禁止。**
+
+1. `pnpm --filter ziku run check` で CI 相当の全チェックを通す（format, lint, build, test, docs）
+2. changeset ファイルが必要か確認する（機能追加・バグ修正なら必須）
+   - `ls .changeset/*.md` で README.md 以外のファイルがあるか確認
+   - なければ `.changeset/<名前>.md` を作成
+3. 全部通ったことを確認してから `git push`
+
+```bash
+# チェックリスト（コピペ用）
+pnpm --filter ziku run check         # 全チェック一括
+ls .changeset/*.md                    # changeset 確認
+# ↑ 両方 OK なら push
+```
+
 ## PR 作成後の CI ウォッチ
 
 PR を作成した後は、必ず CI が完了するまでウォッチする。
@@ -26,6 +43,7 @@ gh pr checks <PR番号> --watch
 ```
 
 形式:
+
 ```markdown
 ---
 "cross-recorder": minor
