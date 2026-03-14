@@ -794,7 +794,7 @@ describe("pushCommand", () => {
       );
     });
 
-    it("baseHashes がない場合はコンフリクト検出をスキップ", async () => {
+    it("baseHashes がない場合でもコンフリクト検出を実行（空の baseHashes で分類）", async () => {
       vol.fromJSON({
         "/test/.devenv.json": JSON.stringify(validConfig),
       });
@@ -807,9 +807,65 @@ describe("pushCommand", () => {
         cmd: pushCommand,
       });
 
-      // hashFiles と classifyFiles は呼ばれない
-      expect(mockHashFiles).not.toHaveBeenCalled();
-      expect(mockClassifyFiles).not.toHaveBeenCalled();
+      // baseHashes がなくても hashFiles と classifyFiles は実行される
+      expect(mockHashFiles).toHaveBeenCalled();
+      expect(mockClassifyFiles).toHaveBeenCalledWith(
+        expect.objectContaining({
+          baseHashes: {},
+        }),
+      );
+    });
+
+    it("autoUpdate ファイル（テンプレートのみ変更）は push 対象から除外", async () => {
+      const configWithBaseHashes = {
+        ...validConfig,
+        baseHashes: {
+          "file.txt": "abc123",
+          "template-only.txt": "def456",
+        },
+      };
+
+      vol.fromJSON({
+        "/test/.devenv.json": JSON.stringify(configWithBaseHashes),
+        "/test/file.txt": "local content",
+        "/test/template-only.txt": "old template content",
+        "/tmp/template/file.txt": "local content",
+        "/tmp/template/template-only.txt": "new template content",
+      });
+
+      // template-only.txt はテンプレートのみ変更
+      mockClassifyFiles.mockReturnValueOnce({
+        autoUpdate: ["template-only.txt"],
+        localOnly: [],
+        conflicts: [],
+        newFiles: [],
+        deletedFiles: [],
+        unchanged: ["file.txt"],
+      });
+
+      // detectDiff は template-only.txt を "modified" として返すが、
+      // autoUpdate なので除外されるべき
+      const templateOnlyFile = {
+        path: "template-only.txt",
+        type: "modified" as const,
+        localContent: "old template content",
+        templateContent: "new template content",
+      };
+
+      mockGetPushableFiles.mockReturnValue([templateOnlyFile]);
+
+      await (pushCommand.run as any)({
+        args: { dir: "/test", dryRun: false, yes: false, edit: false },
+        rawArgs: [],
+        cmd: pushCommand,
+      });
+
+      // autoUpdate ファイルは push 対象から除外 → "No changes to push"
+      expect(mockLog.info).toHaveBeenCalledWith(
+        expect.stringContaining("Skipping 1 file(s) only changed in template"),
+      );
+      expect(mockLog.info).toHaveBeenCalledWith("No changes to push");
+      expect(mockCreatePullRequest).not.toHaveBeenCalled();
     });
 
     it("baseHashes が存在しコンフリクトがない場合は正常に続行", async () => {

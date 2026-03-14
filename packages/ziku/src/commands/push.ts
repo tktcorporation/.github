@@ -593,8 +593,15 @@ export const pushCommand = defineCommand({
       // PR 作成時に localContent の代わりにマージ済み内容を使う
       const mergedContents = new Map<string, string>();
 
-      // コンフリクト検出（baseHashes が存在する場合のみ）
-      if (config.baseHashes) {
+      // テンプレートのみ更新されたファイル（push すると template の変更をリバートしてしまう）
+      // classifyFiles の結果を使い、pushableFiles から除外する
+      let autoUpdateFiles: Set<string> = new Set();
+
+      // コンフリクト検出
+      // baseHashes がない場合は {} をデフォルトとし、全ての差異を conflict として扱う。
+      // これにより「テンプレートのみ更新」「ローカルのみ変更」を判別できないケースでも
+      // ユーザーに確認を求め、テンプレート変更の意図しないリバートを防止する。
+      {
         const { hashFiles } = await import("../utils/hash");
         const { classifyFiles } = await import("../utils/merge");
         const { getModuleById } = await import("../modules");
@@ -614,10 +621,22 @@ export const pushCommand = defineCommand({
         const localHashes = await hashFiles(targetDir, allPatterns);
 
         const classification = classifyFiles({
-          baseHashes: config.baseHashes,
+          baseHashes: config.baseHashes ?? {},
           localHashes,
           templateHashes,
         });
+
+        // autoUpdate ファイル（テンプレートのみ変更、ローカル未変更）を記録。
+        // これらを push すると template の更新がリバートされるため、対象から除外する。
+        if (classification.autoUpdate.length > 0) {
+          autoUpdateFiles = new Set(classification.autoUpdate);
+          log.info(
+            `Skipping ${classification.autoUpdate.length} file(s) only changed in template (use \`ziku pull\` to sync):`,
+          );
+          for (const file of classification.autoUpdate) {
+            log.message(`  ${pc.dim("↓")} ${pc.dim(file)}`);
+          }
+        }
 
         if (classification.conflicts.length > 0) {
           const { threeWayMerge } = await import("../utils/merge");
@@ -742,7 +761,9 @@ export const pushCommand = defineCommand({
       );
 
       // push 対象ファイルを取得
-      let pushableFiles = getPushableFiles(diff);
+      // autoUpdate ファイル（テンプレートのみ変更）は除外する。
+      // これらを push すると template の更新がリバートされてしまうため。
+      let pushableFiles = getPushableFiles(diff).filter((f) => !autoUpdateFiles.has(f.path));
 
       if (pushableFiles.length === 0 && !updatedModulesContent) {
         log.info("No changes to push");
