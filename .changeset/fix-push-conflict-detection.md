@@ -2,7 +2,9 @@
 "ziku": patch
 ---
 
-fix: push 時にテンプレートのみ変更されたファイルがリバートされる問題を修正
+fix: push のファイル選定を classifyFiles 駆動に統一し、テンプレート変更のリバートを構造的に防止
 
-- `baseHashes` がない場合でもコンフリクト検知を実行するように変更
-- `autoUpdate` ファイル（テンプレートのみ変更）を push 対象から除外
+- push のデータフローを pull と統一: classifyFiles の結果を一次情報として pushable files を決定
+- localOnly + conflicts のみを push 対象とし、autoUpdate/newFiles/deletedFiles を構造的に除外
+- detectDiff はコンテンツ提供と表示目的のみに限定
+- baseHashes がない場合でも空 {} で classifyFiles を実行し、全差異を conflicts として扱う

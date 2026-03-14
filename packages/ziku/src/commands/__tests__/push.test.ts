@@ -167,6 +167,46 @@ const emptyDiff = {
   summary: { added: 0, modified: 0, deleted: 0, unchanged: 0 },
 };
 
+/**
+ * classification と detectDiff を同時にセットアップするヘルパー。
+ * メインの push フローでは classifyFiles が pushable files の決定権を持ち、
+ * detectDiff はコンテンツ提供のみを担うため、両方の整合性を取る必要がある。
+ */
+function setupPushableFiles(
+  files: {
+    path: string;
+    type: "added" | "modified";
+    localContent: string;
+    templateContent?: string;
+  }[],
+) {
+  // classification: 全ファイルを localOnly に分類（push 対象）
+  mockClassifyFiles.mockReturnValueOnce({
+    autoUpdate: [],
+    localOnly: files.map((f) => f.path),
+    conflicts: [],
+    newFiles: [],
+    deletedFiles: [],
+    unchanged: [],
+  });
+
+  // detectDiff: ファイル内容を提供
+  mockDetectDiff.mockResolvedValueOnce({
+    files: files.map((f) => ({
+      path: f.path,
+      type: f.type,
+      localContent: f.localContent,
+      templateContent: f.templateContent,
+    })),
+    summary: {
+      added: files.filter((f) => f.type === "added").length,
+      modified: files.filter((f) => f.type === "modified").length,
+      deleted: 0,
+      unchanged: 0,
+    },
+  });
+}
+
 describe("pushCommand", () => {
   beforeEach(() => {
     vol.reset();
@@ -279,13 +319,7 @@ describe("pushCommand", () => {
         "/test/.devenv.json": JSON.stringify(validConfig),
       });
 
-      mockGetPushableFiles.mockReturnValue([
-        {
-          path: "file.txt",
-          type: "added" as const,
-          localContent: "content",
-        },
-      ]);
+      setupPushableFiles([{ path: "file.txt", type: "added", localContent: "content" }]);
 
       await (pushCommand.run as any)({
         args: { dir: "/test", dryRun: true, yes: false, edit: false },
@@ -303,13 +337,7 @@ describe("pushCommand", () => {
         "/test/.devenv.json": JSON.stringify(validConfig),
       });
 
-      mockGetPushableFiles.mockReturnValue([
-        {
-          path: "file.txt",
-          type: "added" as const,
-          localContent: "content",
-        },
-      ]);
+      setupPushableFiles([{ path: "file.txt", type: "added", localContent: "content" }]);
 
       mockSelectPushFiles.mockResolvedValueOnce([]);
 
@@ -334,7 +362,7 @@ describe("pushCommand", () => {
         localContent: "content",
       };
 
-      mockGetPushableFiles.mockReturnValue([pushableFile]);
+      setupPushableFiles([pushableFile]);
       mockSelectPushFiles.mockResolvedValueOnce([pushableFile]);
       mockGetGitHubToken.mockReturnValue("ghp_token");
       mockConfirmAction.mockResolvedValueOnce(false);
@@ -362,7 +390,7 @@ describe("pushCommand", () => {
         localContent: "content",
       };
 
-      mockGetPushableFiles.mockReturnValue([pushableFile]);
+      setupPushableFiles([pushableFile]);
       mockSelectPushFiles.mockResolvedValueOnce([pushableFile]);
       mockGetGitHubToken.mockReturnValue("ghp_token");
       mockConfirmAction.mockResolvedValueOnce(true);
@@ -406,7 +434,7 @@ describe("pushCommand", () => {
         localContent: "content",
       };
 
-      mockGetPushableFiles.mockReturnValue([pushableFile]);
+      setupPushableFiles([pushableFile]);
       mockSelectPushFiles.mockResolvedValueOnce([pushableFile]);
       mockGetGitHubToken.mockReturnValue(undefined);
       mockInputGitHubToken.mockResolvedValueOnce("ghp_prompted_token");
@@ -438,7 +466,7 @@ describe("pushCommand", () => {
         localContent: "content",
       };
 
-      mockGetPushableFiles.mockReturnValue([pushableFile]);
+      setupPushableFiles([pushableFile]);
       mockSelectPushFiles.mockResolvedValueOnce([pushableFile]);
       mockGetGitHubToken.mockReturnValue("ghp_token");
       mockConfirmAction.mockResolvedValueOnce(true);
@@ -493,7 +521,7 @@ describe("pushCommand", () => {
         templateContent: '{"name": "old"}',
       };
 
-      mockGetPushableFiles.mockReturnValue([file1, file2, file3]);
+      setupPushableFiles([file1, file2, file3]);
       mockGetGitHubToken.mockReturnValue("ghp_token");
       mockConfirmAction.mockResolvedValueOnce(true);
       mockCreatePullRequest.mockResolvedValueOnce({
@@ -543,7 +571,7 @@ describe("pushCommand", () => {
         localContent: "content",
       };
 
-      mockGetPushableFiles.mockReturnValue([file1]);
+      setupPushableFiles([file1]);
       mockGetGitHubToken.mockReturnValue("ghp_token");
       mockConfirmAction.mockResolvedValueOnce(true);
       mockCreatePullRequest.mockResolvedValueOnce({
@@ -575,9 +603,7 @@ describe("pushCommand", () => {
         "/test/.devenv.json": JSON.stringify(validConfig),
       });
 
-      mockGetPushableFiles.mockReturnValue([
-        { path: "file.txt", type: "added" as const, localContent: "content" },
-      ]);
+      setupPushableFiles([{ path: "file.txt", type: "added", localContent: "content" }]);
 
       await (pushCommand.run as any)({
         args: {
@@ -606,7 +632,7 @@ describe("pushCommand", () => {
         localContent: "content",
       };
 
-      mockGetPushableFiles.mockReturnValue([pushableFile]);
+      setupPushableFiles([pushableFile]);
       mockSelectPushFiles.mockResolvedValueOnce([pushableFile]);
       mockGetGitHubToken.mockReturnValue("ghp_token");
       mockCreatePullRequest.mockResolvedValueOnce({
@@ -684,6 +710,14 @@ describe("pushCommand", () => {
         "/tmp/template/file.txt": "template content",
       });
 
+      const pushableFile = {
+        path: "file.txt",
+        type: "modified" as const,
+        localContent: "new content",
+        templateContent: "old content",
+      };
+
+      // classification: conflicts に分類 → pushableFilePaths に追加される
       mockClassifyFiles.mockReturnValueOnce({
         autoUpdate: [],
         localOnly: [],
@@ -693,14 +727,12 @@ describe("pushCommand", () => {
         unchanged: [],
       });
 
-      const pushableFile = {
-        path: "file.txt",
-        type: "modified" as const,
-        localContent: "new content",
-        templateContent: "old content",
-      };
+      // detectDiff: コンテンツを提供
+      mockDetectDiff.mockResolvedValueOnce({
+        files: [pushableFile],
+        summary: { added: 0, modified: 1, deleted: 0, unchanged: 0 },
+      });
 
-      mockGetPushableFiles.mockReturnValue([pushableFile]);
       mockSelectPushFiles.mockResolvedValueOnce([pushableFile]);
       // コンフリクト確認: 続行（baseRef なし → unresolved → 確認）
       mockConfirmAction.mockResolvedValueOnce(true);
@@ -763,7 +795,12 @@ describe("pushCommand", () => {
         templateContent: "template content",
       };
 
-      mockGetPushableFiles.mockReturnValue([pushableFile]);
+      // detectDiff: コンテンツを提供
+      mockDetectDiff.mockResolvedValueOnce({
+        files: [pushableFile],
+        summary: { added: 0, modified: 1, deleted: 0, unchanged: 0 },
+      });
+
       mockSelectPushFiles.mockResolvedValueOnce([pushableFile]);
       // 3-way マージ成功 → unresolved なし → 確認は PR 作成確認のみ
       mockConfirmAction.mockResolvedValueOnce(true);
@@ -816,7 +853,7 @@ describe("pushCommand", () => {
       );
     });
 
-    it("autoUpdate ファイル（テンプレートのみ変更）は push 対象から除外", async () => {
+    it("autoUpdate ファイル（テンプレートのみ変更）は classification により push 対象外", async () => {
       const configWithBaseHashes = {
         ...validConfig,
         baseHashes: {
@@ -833,7 +870,7 @@ describe("pushCommand", () => {
         "/tmp/template/template-only.txt": "new template content",
       });
 
-      // template-only.txt はテンプレートのみ変更
+      // classification が autoUpdate に分類 → pushableFilePaths に含まれない
       mockClassifyFiles.mockReturnValueOnce({
         autoUpdate: ["template-only.txt"],
         localOnly: [],
@@ -844,15 +881,18 @@ describe("pushCommand", () => {
       });
 
       // detectDiff は template-only.txt を "modified" として返すが、
-      // autoUpdate なので除外されるべき
-      const templateOnlyFile = {
-        path: "template-only.txt",
-        type: "modified" as const,
-        localContent: "old template content",
-        templateContent: "new template content",
-      };
-
-      mockGetPushableFiles.mockReturnValue([templateOnlyFile]);
+      // classification の pushableFilePaths に含まれないため除外される
+      mockDetectDiff.mockResolvedValueOnce({
+        files: [
+          {
+            path: "template-only.txt",
+            type: "modified" as const,
+            localContent: "old template content",
+            templateContent: "new template content",
+          },
+        ],
+        summary: { added: 0, modified: 1, deleted: 0, unchanged: 0 },
+      });
 
       await (pushCommand.run as any)({
         args: { dir: "/test", dryRun: false, yes: false, edit: false },
@@ -860,7 +900,7 @@ describe("pushCommand", () => {
         cmd: pushCommand,
       });
 
-      // autoUpdate ファイルは push 対象から除外 → "No changes to push"
+      // autoUpdate ファイルは classification により除外 → "No changes to push"
       expect(mockLog.info).toHaveBeenCalledWith(
         expect.stringContaining("Skipping 1 file(s) only changed in template"),
       );

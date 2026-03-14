@@ -593,14 +593,17 @@ export const pushCommand = defineCommand({
       // PR 作成時に localContent の代わりにマージ済み内容を使う
       const mergedContents = new Map<string, string>();
 
-      // テンプレートのみ更新されたファイル（push すると template の変更をリバートしてしまう）
-      // classifyFiles の結果を使い、pushableFiles から除外する
-      let autoUpdateFiles: Set<string> = new Set();
+      // push 対象ファイルパスの集合。
+      // pull と同じく classifyFiles の結果を一次情報として使い、
+      // 「ユーザーが変更したファイル」(localOnly + conflicts) のみを push 対象とする。
+      // これにより autoUpdate（テンプレートのみ変更）や newFiles（テンプレート新規追加）が
+      // 誤って push されてテンプレート変更がリバートされることを構造的に防止する。
+      let pushableFilePaths: Set<string> = new Set();
 
-      // コンフリクト検出
-      // baseHashes がない場合は {} をデフォルトとし、全ての差異を conflict として扱う。
-      // これにより「テンプレートのみ更新」「ローカルのみ変更」を判別できないケースでも
-      // ユーザーに確認を求め、テンプレート変更の意図しないリバートを防止する。
+      // ファイル分類（pull と同じパターン）
+      // baseHashes がない場合は {} をデフォルトとし、全ファイルを base なしで分類する。
+      // base がないファイルは local ≠ template なら conflicts 扱いとなり、
+      // ユーザーに確認を求めることで意図しないリバートを防止する。
       {
         const { hashFiles } = await import("../utils/hash");
         const { classifyFiles } = await import("../utils/merge");
@@ -626,10 +629,18 @@ export const pushCommand = defineCommand({
           templateHashes,
         });
 
-        // autoUpdate ファイル（テンプレートのみ変更、ローカル未変更）を記録。
-        // これらを push すると template の更新がリバートされるため、対象から除外する。
+        // push 対象: localOnly（ユーザーのみ変更）+ conflicts（両方変更、マージ後に push）
+        // pull と同じく classification がファイルの処理方法を決定する。
+        for (const file of classification.localOnly) {
+          pushableFilePaths.add(file);
+        }
+        for (const file of classification.conflicts) {
+          pushableFilePaths.add(file);
+        }
+
+        // autoUpdate（テンプレートのみ変更）をユーザーに通知。
+        // push 対象には含めない（classification が除外済み）。
         if (classification.autoUpdate.length > 0) {
-          autoUpdateFiles = new Set(classification.autoUpdate);
           log.info(
             `Skipping ${classification.autoUpdate.length} file(s) only changed in template (use \`ziku pull\` to sync):`,
           );
@@ -760,10 +771,13 @@ export const pushCommand = defineCommand({
         }),
       );
 
-      // push 対象ファイルを取得
-      // autoUpdate ファイル（テンプレートのみ変更）は除外する。
-      // これらを push すると template の更新がリバートされてしまうため。
-      let pushableFiles = getPushableFiles(diff).filter((f) => !autoUpdateFiles.has(f.path));
+      // push 対象ファイルを取得。
+      // classification が決定した pushableFilePaths をソースオブトゥルースとして使う。
+      // diff はコンテンツ（localContent/templateContent）の提供元としてのみ使用する。
+      // これにより autoUpdate/newFiles/deletedFiles が push に含まれることを構造的に防止する。
+      let pushableFiles = diff.files.filter(
+        (f) => (f.type === "added" || f.type === "modified") && pushableFilePaths.has(f.path),
+      );
 
       if (pushableFiles.length === 0 && !updatedModulesContent) {
         log.info("No changes to push");
