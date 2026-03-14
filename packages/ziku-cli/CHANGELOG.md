@@ -1,5 +1,12 @@
 # @tktco/ziku
 
+## 0.21.2
+
+### Patch Changes
+
+- Updated dependencies [[`049c7f4`](https://github.com/tktcorporation/.github/commit/049c7f462ed38d4bc5bbc7a7d18b1f82cd4177fe)]:
+  - ziku@0.21.2
+
 ## 0.21.1
 
 ### Patch Changes
