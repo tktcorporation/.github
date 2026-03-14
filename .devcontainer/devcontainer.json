@@ -54,7 +54,12 @@
           "**/.pnpm": true,
           "**/.pnpm-store": true,
           "**/.git": true,
-          "**/.turbo": true
+          "**/.turbo": true,
+          "**/dist": true,
+          "**/.next": true,
+          "**/coverage": true
+        },
+        "git.detectSubmodulesLimit": 0
         }
       }
     }
