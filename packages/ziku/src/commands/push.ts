@@ -593,8 +593,18 @@ export const pushCommand = defineCommand({
       // PR 作成時に localContent の代わりにマージ済み内容を使う
       const mergedContents = new Map<string, string>();
 
-      // コンフリクト検出（baseHashes が存在する場合のみ）
-      if (config.baseHashes) {
+      // push 対象ファイルパスの集合。
+      // pull と同じく classifyFiles の結果を一次情報として使い、
+      // 「ユーザーが変更したファイル」(localOnly + conflicts) のみを push 対象とする。
+      // これにより autoUpdate（テンプレートのみ変更）や newFiles（テンプレート新規追加）が
+      // 誤って push されてテンプレート変更がリバートされることを構造的に防止する。
+      let pushableFilePaths: Set<string> = new Set();
+
+      // ファイル分類（pull と同じパターン）
+      // baseHashes がない場合は {} をデフォルトとし、全ファイルを base なしで分類する。
+      // base がないファイルは local ≠ template なら conflicts 扱いとなり、
+      // ユーザーに確認を求めることで意図しないリバートを防止する。
+      {
         const { hashFiles } = await import("../utils/hash");
         const { classifyFiles } = await import("../utils/merge");
         const { getModuleById } = await import("../modules");
@@ -614,10 +624,30 @@ export const pushCommand = defineCommand({
         const localHashes = await hashFiles(targetDir, allPatterns);
 
         const classification = classifyFiles({
-          baseHashes: config.baseHashes,
+          baseHashes: config.baseHashes ?? {},
           localHashes,
           templateHashes,
         });
+
+        // push 対象: localOnly（ユーザーのみ変更）+ conflicts（両方変更、マージ後に push）
+        // pull と同じく classification がファイルの処理方法を決定する。
+        for (const file of classification.localOnly) {
+          pushableFilePaths.add(file);
+        }
+        for (const file of classification.conflicts) {
+          pushableFilePaths.add(file);
+        }
+
+        // autoUpdate（テンプレートのみ変更）をユーザーに通知。
+        // push 対象には含めない（classification が除外済み）。
+        if (classification.autoUpdate.length > 0) {
+          log.info(
+            `Skipping ${classification.autoUpdate.length} file(s) only changed in template (use \`ziku pull\` to sync):`,
+          );
+          for (const file of classification.autoUpdate) {
+            log.message(`  ${pc.dim("↓")} ${pc.dim(file)}`);
+          }
+        }
 
         if (classification.conflicts.length > 0) {
           const { threeWayMerge } = await import("../utils/merge");
@@ -741,8 +771,13 @@ export const pushCommand = defineCommand({
         }),
       );
 
-      // push 対象ファイルを取得
-      let pushableFiles = getPushableFiles(diff);
+      // push 対象ファイルを取得。
+      // classification が決定した pushableFilePaths をソースオブトゥルースとして使う。
+      // diff はコンテンツ（localContent/templateContent）の提供元としてのみ使用する。
+      // これにより autoUpdate/newFiles/deletedFiles が push に含まれることを構造的に防止する。
+      let pushableFiles = diff.files.filter(
+        (f) => (f.type === "added" || f.type === "modified") && pushableFilePaths.has(f.path),
+      );
 
       if (pushableFiles.length === 0 && !updatedModulesContent) {
         log.info("No changes to push");

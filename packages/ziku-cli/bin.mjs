@@ -9,7 +9,7 @@
 
 // --from が未指定の場合のみデフォルトを注入する
 if (!process.argv.includes("--from")) {
-	process.argv.push("--from", "tktcorporation/.github");
+  process.argv.push("--from", "tktcorporation/.github");
 }
 
 await import("ziku/dist/index.mjs");
