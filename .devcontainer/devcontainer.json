@@ -41,7 +41,13 @@
           "**/node_modules/**": true,
           "**/.pnpm/**": true,
           "**/.pnpm-store/**": true,
-          "**/.turbo/**": true
+          "**/.turbo/**": true,
+          "**/dist/**": true,
+          "**/.next/**": true,
+          "**/__pycache__/**": true,
+          "**/.pytest_cache/**": true,
+          "**/venv/**": true,
+          "**/.venv/**": true
         },
         "search.exclude": {
           "**/node_modules": true,
