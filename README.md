@@ -4,10 +4,10 @@ Shared dev environment templates and the CLI tool [**ziku**](./packages/ziku) th
 
 ## What's inside
 
-| Path | Description |
-|------|-------------|
-| [`packages/ziku`](./packages/ziku) | CLI tool for bi-directional template sync |
-| [`.devenv/`](./.devenv) | Template source files (DevContainer, GitHub Actions, Claude, etc.) |
+| Path                               | Description                                                        |
+| ---------------------------------- | ------------------------------------------------------------------ |
+| [`packages/ziku`](./packages/ziku) | CLI tool for bi-directional template sync                          |
+| [`.devenv/`](./.devenv)            | Template source files (DevContainer, GitHub Actions, Claude, etc.) |
 
 ## Quick start
 

@@ -3,19 +3,22 @@
 ## Search Query Templates
 
 ### By UI Pattern
-| Pattern | Query Example |
-|---------|--------------|
+
+| Pattern          | Query Example                                                   |
+| ---------------- | --------------------------------------------------------------- |
 | Progress/Stepper | `"multi-step form wizard progress indicator UX best practices"` |
-| Navigation | `"nested navigation hierarchy mobile UX pattern"` |
-| Data Display | `"data table card view dashboard layout best practices"` |
-| Forms | `"long form UX chunking progressive disclosure design"` |
-| Onboarding | `"onboarding wizard checklist design pattern SaaS"` |
-| Empty States | `"empty state design pattern engagement"` |
-| Filters | `"faceted search filter UI pattern ecommerce"` |
-| Notifications | `"notification center badge design pattern"` |
+| Navigation       | `"nested navigation hierarchy mobile UX pattern"`               |
+| Data Display     | `"data table card view dashboard layout best practices"`        |
+| Forms            | `"long form UX chunking progressive disclosure design"`         |
+| Onboarding       | `"onboarding wizard checklist design pattern SaaS"`             |
+| Empty States     | `"empty state design pattern engagement"`                       |
+| Filters          | `"faceted search filter UI pattern ecommerce"`                  |
+| Notifications    | `"notification center badge design pattern"`                    |
 
 ### By Well-Known Product
+
 Combine product name + feature for concrete examples:
+
 - Airbnb: onboarding, search, listing creation
 - Linear: issue tracking, project views, keyboard navigation
 - Notion: page structure, sidebar, nested content
@@ -23,6 +26,7 @@ Combine product name + feature for concrete examples:
 - Figma: toolbar, panel layout, contextual menus
 
 ### By Constraint
+
 - `"[pattern] compact mobile"` — mobile-first variants
 - `"[pattern] hierarchical nested"` — multi-level structures
 - `"[pattern] many items scalable"` — handling large datasets
@@ -30,6 +34,7 @@ Combine product name + feature for concrete examples:
 ## Common UI Pattern Categories
 
 ### Progress & Status
+
 - **Segmented progress bar**: Major phases as segments, proportional widths
 - **Dot stepper**: Up to 5-7 steps with labels, horizontal dots + lines
 - **Compact bar + counter**: For 8+ steps, thin bar with "Step 3/11" text
@@ -38,12 +43,14 @@ Combine product name + feature for concrete examples:
 **Key rule**: Max 2 hierarchy levels. 3+ layers overwhelm users.
 
 ### Information Density
+
 - **Progressive disclosure**: Show summary, expand for detail
 - **Inline badges**: Replace standalone lines with small indicators (e.g., "AI" badge)
 - **Contextual switching**: Show different detail levels based on context (v-if/v-else)
 - **Collapsible sections**: For optional detail
 
 ### Layout
+
 - **Card layout**: For items with mixed content types
 - **Split view**: List + detail for master-detail patterns
 - **Timeline**: For chronological or sequential data
