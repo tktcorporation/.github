@@ -1,5 +1,7 @@
 import { applyPatch, createPatch, structuredPatch } from "diff";
 import { applyEdits, modify, parse as jsoncParse } from "jsonc-parser";
+import * as TOML from "smol-toml";
+import * as YAML from "yaml";
 import { z } from "zod/v4";
 
 // ---- Branded types: base/local/template の取り違えをコンパイル時に検出 ----
@@ -215,7 +217,23 @@ export function threeWayMerge({
     // JSON パースに失敗した場合はテキストマージにフォールバック
   }
 
-  return textThreeWayMerge(base, local, template);
+  if (filePath && isTomlFile(filePath)) {
+    const tomlResult = mergeTomlContent(base, local, template);
+    if (tomlResult !== null) {
+      return tomlResult;
+    }
+    // TOML パースに失敗した場合はテキストマージにフォールバック
+  }
+
+  if (filePath && isYamlFile(filePath)) {
+    const yamlResult = mergeYamlContent(base, local, template);
+    if (yamlResult !== null) {
+      return yamlResult;
+    }
+    // YAML パースに失敗した場合はテキストマージにフォールバック
+  }
+
+  return textThreeWayMerge(base, local, template, filePath);
 }
 
 // ---- JSON/JSONC 構造マージ ----
@@ -398,9 +416,240 @@ function deepEqual(a: unknown, b: unknown): boolean {
   return aKeys.every((key) => key in bObj && deepEqual(aObj[key], bObj[key]));
 }
 
+// ---- TOML 構造マージ ----
+
+/**
+ * TOML ファイルをキーレベルで 3-way マージする。
+ *
+ * 背景: TOML ファイルにコンフリクトマーカーを挿入するとパーサーが壊れるため、
+ * JSON マージと同様にキーレベルで変更を検出し、非コンフリクト部分を自動マージする。
+ * コンフリクトがあるキーはローカル値を採用し、conflictDetails で報告する。
+ *
+ * 制約: smol-toml の stringify はコメントを保持しないため、マージ結果では
+ * ローカルのコメントが失われる。ただし、壊れた TOML を出力するよりも
+ * 正しい TOML を出力することを優先する。
+ *
+ * @returns マージ結果。TOML パースに失敗した場合は null（テキストマージにフォールバック）。
+ */
+export function mergeTomlContent(
+  base: string,
+  local: string,
+  template: string,
+): MergeResult | null {
+  let baseObj: Record<string, unknown>;
+  let localObj: Record<string, unknown>;
+  let templateObj: Record<string, unknown>;
+
+  try {
+    baseObj = TOML.parse(base) as Record<string, unknown>;
+    localObj = TOML.parse(local) as Record<string, unknown>;
+    templateObj = TOML.parse(template) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+
+  // base→template の変更を検出
+  const templateDiffs = getJsonDiffs(baseObj, templateObj);
+  // base→local の変更を検出
+  const localDiffs = getJsonDiffs(baseObj, localObj);
+
+  // テンプレート変更のうち、ローカルとコンフリクトしないものを適用
+  const mergedObj = structuredClone(localObj);
+  const conflictDetails: ConflictDetail[] = [];
+
+  for (const diff of templateDiffs) {
+    const conflictsWithLocal = localDiffs.some((ld) => pathsOverlap(ld.path, diff.path));
+
+    if (conflictsWithLocal) {
+      const localVal = getValueAtPath(localObj, diff.path);
+      const templateVal = diff.type === "remove" ? undefined : diff.value;
+
+      if (deepEqual(localVal, templateVal)) {
+        continue;
+      }
+
+      // コンフリクト: ローカル値を保持
+      conflictDetails.push({
+        path: diff.path,
+        localValue: localVal,
+        templateValue: templateVal,
+      });
+      continue;
+    }
+
+    // テンプレートのみの変更 → マージオブジェクトに適用
+    if (diff.type === "remove") {
+      deleteAtPath(mergedObj, diff.path);
+    } else {
+      setAtPath(mergedObj, diff.path, diff.value);
+    }
+  }
+
+  return {
+    content: TOML.stringify(mergedObj),
+    hasConflicts: conflictDetails.length > 0,
+    conflictDetails,
+  };
+}
+
+// ---- YAML 構造マージ ----
+
+/**
+ * YAML ファイルをキーレベルで 3-way マージする。
+ *
+ * 背景: YAML ファイルもインデントベースの構造を持ち、テキストマージで
+ * 壊れることがある。JSON/TOML と同様にキーレベルでマージする。
+ *
+ * @returns マージ結果。YAML パースに失敗した場合は null（テキストマージにフォールバック）。
+ */
+export function mergeYamlContent(
+  base: string,
+  local: string,
+  template: string,
+): MergeResult | null {
+  let baseObj: unknown;
+  let localObj: unknown;
+  let templateObj: unknown;
+
+  try {
+    baseObj = YAML.parse(base);
+    localObj = YAML.parse(local);
+    templateObj = YAML.parse(template);
+  } catch {
+    return null;
+  }
+
+  if (baseObj == null || localObj == null || templateObj == null) {
+    return null;
+  }
+
+  // オブジェクト以外（スカラーや配列がトップレベル）はテキストマージにフォールバック
+  if (
+    typeof baseObj !== "object" ||
+    typeof localObj !== "object" ||
+    typeof templateObj !== "object"
+  ) {
+    return null;
+  }
+
+  const templateDiffs = getJsonDiffs(baseObj, templateObj);
+  const localDiffs = getJsonDiffs(baseObj, localObj);
+
+  const mergedObj = structuredClone(localObj) as Record<string, unknown>;
+  const conflictDetails: ConflictDetail[] = [];
+
+  for (const diff of templateDiffs) {
+    const conflictsWithLocal = localDiffs.some((ld) => pathsOverlap(ld.path, diff.path));
+
+    if (conflictsWithLocal) {
+      const localVal = getValueAtPath(localObj, diff.path);
+      const templateVal = diff.type === "remove" ? undefined : diff.value;
+
+      if (deepEqual(localVal, templateVal)) {
+        continue;
+      }
+
+      conflictDetails.push({
+        path: diff.path,
+        localValue: localVal,
+        templateValue: templateVal,
+      });
+      continue;
+    }
+
+    if (diff.type === "remove") {
+      deleteAtPath(mergedObj, diff.path);
+    } else {
+      setAtPath(mergedObj, diff.path, diff.value);
+    }
+  }
+
+  return {
+    content: YAML.stringify(mergedObj),
+    hasConflicts: conflictDetails.length > 0,
+    conflictDetails,
+  };
+}
+
+// ---- オブジェクト操作ヘルパー ----
+
+/**
+ * ネストされたオブジェクトのパスに値を設定する。
+ * 中間オブジェクトが存在しない場合は自動的に作成する。
+ */
+function setAtPath(obj: Record<string, unknown>, path: (string | number)[], value: unknown): void {
+  let current: unknown = obj;
+  for (let i = 0; i < path.length - 1; i++) {
+    const key = path[i];
+    if (current == null || typeof current !== "object") return;
+    const record = current as Record<string | number, unknown>;
+    if (!(key in record) || record[key] == null || typeof record[key] !== "object") {
+      record[key] = {};
+    }
+    current = record[key];
+  }
+  if (current != null && typeof current === "object") {
+    (current as Record<string | number, unknown>)[path[path.length - 1]] = value;
+  }
+}
+
+/**
+ * ネストされたオブジェクトのパスにあるキーを削除する。
+ */
+function deleteAtPath(obj: Record<string, unknown>, path: (string | number)[]): void {
+  let current: unknown = obj;
+  for (let i = 0; i < path.length - 1; i++) {
+    const key = path[i];
+    if (current == null || typeof current !== "object") return;
+    current = (current as Record<string | number, unknown>)[key];
+  }
+  if (current != null && typeof current === "object") {
+    delete (current as Record<string | number, unknown>)[path[path.length - 1]];
+  }
+}
+
 function isJsonFile(filePath: string): boolean {
   const lower = filePath.toLowerCase();
   return lower.endsWith(".json") || lower.endsWith(".jsonc");
+}
+
+function isTomlFile(filePath: string): boolean {
+  return filePath.toLowerCase().endsWith(".toml");
+}
+
+function isYamlFile(filePath: string): boolean {
+  const lower = filePath.toLowerCase();
+  return lower.endsWith(".yml") || lower.endsWith(".yaml");
+}
+
+/**
+ * 構造ファイル（TOML/YAML）のマージ結果をパースして妥当性を検証する。
+ *
+ * 背景: テキストベースの diff/patch は行レベルでマージするため、
+ * fuzz factor でパッチが「成功」しても、TOML のセクション重複や
+ * YAML のインデント崩れ等、構造的に壊れた出力を生むことがある。
+ * git の merge がこのような破損を出さないのに対し、patch ベースの
+ * マージはこの検証が必要。パース失敗時はコンフリクトマーカーに
+ * フォールバックすることで、壊れたファイルの生成を防ぐ。
+ */
+function validateStructuredContent(content: string, filePath: string): boolean {
+  if (isTomlFile(filePath)) {
+    try {
+      TOML.parse(content);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+  if (isYamlFile(filePath)) {
+    try {
+      YAML.parse(content);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+  return true;
 }
 
 // ---- テキスト 3-way マージ (改良版) ----
@@ -412,22 +661,40 @@ function isJsonFile(filePath: string): boolean {
  * 背景: TOML 等の構造ファイルにファイル全体のコンフリクトマーカーを入れると
  * パーサーが壊れる。hunk 単位にすることで影響範囲を最小化する。
  *
+ * filePath が渡された場合、パッチ適用後に構造ファイルの妥当性を検証する。
+ * fuzz factor でパッチが「成功」しても、TOML のセクション重複等で
+ * 壊れたファイルが生成されることがあるため、パース検証で検出して
+ * コンフリクトマーカーにフォールバックする。
+ *
  * 戦略:
- * 1. 標準パッチ適用（fuzz=0）
- * 2. fuzz factor を上げてリトライ（fuzz=2）
+ * 1. 標準パッチ適用（fuzz=0）+ 構造検証
+ * 2. fuzz factor を上げてリトライ（fuzz=2）+ 構造検証
  * 3. 失敗時: hunk 単位で適用を試み、失敗した hunk のみにマーカーを付与
  */
-function textThreeWayMerge(base: string, local: string, template: string): MergeResult {
+function textThreeWayMerge(
+  base: string,
+  local: string,
+  template: string,
+  filePath?: string,
+): MergeResult {
   // ステップ 1: 標準パッチ適用
   const patch = createPatch("file", base, template);
   const result = applyPatch(local, patch);
   if (typeof result === "string") {
+    // 構造ファイルの場合、パッチ適用結果を検証
+    if (filePath && !validateStructuredContent(result, filePath)) {
+      return mergeWithPerHunkMarkers(base, local, template);
+    }
     return { content: result, hasConflicts: false, conflictDetails: [] };
   }
 
   // ステップ 2: fuzz factor を上げてリトライ
   const resultFuzzy = applyPatch(local, patch, { fuzzFactor: 2 });
   if (typeof resultFuzzy === "string") {
+    // 構造ファイルの場合、パッチ適用結果を検証
+    if (filePath && !validateStructuredContent(resultFuzzy, filePath)) {
+      return mergeWithPerHunkMarkers(base, local, template);
+    }
     return { content: resultFuzzy, hasConflicts: false, conflictDetails: [] };
   }
 
