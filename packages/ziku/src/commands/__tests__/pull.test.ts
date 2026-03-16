@@ -704,7 +704,7 @@ describe("pullCommand", () => {
       );
     });
 
-    it("JSON 構造マージでキーレベルコンフリクト時は warn を出す（既存動作）", async () => {
+    it("コンフリクト時はマーカー付きで warn を出す", async () => {
       vol.fromJSON({
         "/test/config.json": '{"version": "2.0"}',
         "/tmp/template/config.json": '{"version": "3.0"}',
@@ -719,10 +719,12 @@ describe("pullCommand", () => {
         unchanged: [],
       });
 
+      // threeWayMerge は構造マージでコンフリクトがある場合、テキストマージにフォールバックし
+      // コンフリクトマーカーを挿入する
       mockThreeWayMerge.mockReturnValueOnce({
-        content: '{"version": "2.0"}',
+        content: '<<<<<<< LOCAL\n{"version": "2.0"}\n=======\n{"version": "3.0"}\n>>>>>>> TEMPLATE',
         hasConflicts: true,
-        conflictDetails: [{ path: ["version"], localValue: "2.0", templateValue: "3.0" }],
+        conflictDetails: [],
       });
 
       await (pullCommand.run as any)({
@@ -731,9 +733,11 @@ describe("pullCommand", () => {
         cmd: pullCommand,
       });
 
-      // キーレベルコンフリクトの warn
+      // コンフリクトの warn（manual resolution needed）
       expect(mockLog.warn).toHaveBeenCalledWith(expect.stringContaining("config.json"));
-      expect(mockLog.warn).toHaveBeenCalledWith(expect.stringContaining("review these keys"));
+      expect(mockLog.warn).toHaveBeenCalledWith(
+        expect.stringContaining("manual resolution needed"),
+      );
     });
 
     it("新規ファイル追加時にディレクトリを自動作成", async () => {
