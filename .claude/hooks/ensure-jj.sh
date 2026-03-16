@@ -9,6 +9,14 @@ if command -v jj &>/dev/null; then
   exit 0
 fi
 
+# 1.5. $HOME/bin/jj が既にダウンロード済みなら PATH に追加して終了
+# SessionStart hook は毎回新しいシェルで実行されるため、前回のインストールで
+# PATH に追加した設定が引き継がれない。ここで既存バイナリを検出して再ダウンロードを防ぐ。
+if [ -x "${HOME}/bin/jj" ]; then
+  echo "jj $(${HOME}/bin/jj version 2>/dev/null || echo '(version unknown)') を ${HOME}/bin で検出しました"
+  exit 0
+fi
+
 # 2. mise 経由でインストールを試みる
 if command -v mise &>/dev/null; then
   echo "jj が見つかりません。mise 経由でインストールします..."
