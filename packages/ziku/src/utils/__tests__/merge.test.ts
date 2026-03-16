@@ -273,8 +273,10 @@ describe("merge", () => {
       expect(parsed.b).toBe(2);
     });
 
-    it("コンフリクト時にローカル値が優先される（テンプレート値ではない）", () => {
-      // 背景: 引数逆転時、テンプレート値が "local" として優先されていた
+    it("コンフリクト時にテキストマージにフォールバックしてコンフリクトマーカーを挿入する", () => {
+      // 背景: JSON 構造マージでコンフリクトがある場合、ローカル値をサイレントに保持するのではなく
+      // テキストマージにフォールバックしてコンフリクトマーカーを挿入する。
+      // ユーザーが手動解決を強制される。
       const base = '{\n  "version": "1.0"\n}';
       const local = '{\n  "version": "2.0-user"\n}';
       const template = '{\n  "version": "2.0-template"\n}';
@@ -282,35 +284,32 @@ describe("merge", () => {
       const result = merge(base, local, template, "package.json");
 
       expect(result.hasConflicts).toBe(true);
-      // ローカル値が保持される（テンプレート値ではない）
-      const parsed = JSON.parse(result.content);
-      expect(parsed.version).toBe("2.0-user");
-      // conflictDetails でもローカル/テンプレートが正しく報告される
-      expect(result.conflictDetails[0].localValue).toBe("2.0-user");
-      expect(result.conflictDetails[0].templateValue).toBe("2.0-template");
+      // テキストマージにフォールバックするため、コンフリクトマーカーが含まれる
+      expect(result.content).toContain("<<<<<<< LOCAL");
+      expect(result.content).toContain("=======");
+      expect(result.content).toContain(">>>>>>> TEMPLATE");
+      // 両方の値がマーカー内に含まれる
+      expect(result.content).toContain("2.0-user");
+      expect(result.content).toContain("2.0-template");
     });
 
     it("引数を逆にすると結果が変わることを検証（非対称性の証明）", () => {
-      // local と template を入れ替えると、コンフリクト時の優先側が変わる
+      // local と template を入れ替えると、コンフリクトマーカー内の表示が変わる
       const base = '{\n  "key": "original"\n}';
       const localValue = '{\n  "key": "local-change"\n}';
       const templateValue = '{\n  "key": "template-change"\n}';
 
-      // 正しい順序: local が優先
+      // 正しい順序
       const correct = merge(base, localValue, templateValue, "test.json");
-      // 逆の順序: template が "local" として優先されてしまう
+      // 逆の順序
       const reversed = merge(base, templateValue, localValue, "test.json");
 
       expect(correct.hasConflicts).toBe(true);
       expect(reversed.hasConflicts).toBe(true);
 
-      const correctParsed = JSON.parse(correct.content);
-      const reversedParsed = JSON.parse(reversed.content);
-
-      // 正しい順序ではローカル値が採用される
-      expect(correctParsed.key).toBe("local-change");
-      // 逆の順序ではテンプレート値が採用される（これがバグの挙動）
-      expect(reversedParsed.key).toBe("template-change");
+      // どちらもコンフリクトマーカーが含まれる
+      expect(correct.content).toContain("<<<<<<< LOCAL");
+      expect(reversed.content).toContain("<<<<<<< LOCAL");
     });
 
     it("push シナリオ: ローカルの JSONC コメント付き devcontainer.json が保持される", () => {

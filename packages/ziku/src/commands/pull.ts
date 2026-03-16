@@ -18,7 +18,6 @@ import {
   hasConflictMarkers,
   threeWayMerge,
 } from "../utils/merge";
-import type { MergeResult } from "../utils/merge";
 import { downloadTemplateToTemp } from "../utils/template";
 import { getEffectivePatterns } from "../utils/patterns";
 
@@ -192,7 +191,7 @@ export const pullCommand = defineCommand({
             await writeFile(join(targetDir, file), result.content, "utf-8");
             if (result.hasConflicts) {
               unresolvedConflicts.push(file);
-              logMergeConflict(file, result);
+              logMergeConflict(file);
             } else {
               log.success(`Auto-merged: ${pc.cyan(file)}`);
             }
@@ -315,23 +314,14 @@ async function runContinue(targetDir: string, config: DevEnvConfig): Promise<voi
 }
 
 /**
- * 1ファイルのマージ結果をユーザーに報告する。
+ * 1ファイルのマージコンフリクトをユーザーに報告する。
  *
- * 背景: JSON/JSONC の構造マージ（conflictDetails あり）とテキストマージ（conflictMarkers あり）で
- * メッセージが異なるため、このヘルパーに集約する。
- * Step 8 と他の呼び出し元でログ出力のロジックを共有する。
+ * 背景: threeWayMerge は hasConflicts: true を返す場合、必ずファイル内に
+ * コンフリクトマーカー（<<<<<<< LOCAL / ======= / >>>>>>> TEMPLATE）を挿入する。
+ * ユーザーはマーカーを手動で解決し、`ziku pull --continue` で完了する。
  */
-function logMergeConflict(file: string, result: MergeResult): void {
-  if (result.conflictDetails.length > 0) {
-    // 構造マージ: ファイルは壊れていないがキーレベルのコンフリクトあり
-    log.warn(`Conflict in ${pc.cyan(file)} — review these keys:`);
-    for (const detail of result.conflictDetails) {
-      const pathStr = detail.path.join(".");
-      log.message(`  ${pc.dim("•")} ${pc.yellow(pathStr)} — kept local value`);
-    }
-  } else {
-    log.warn(`Conflict in ${pc.cyan(file)} — manual resolution needed`);
-  }
+function logMergeConflict(file: string): void {
+  log.warn(`Conflict in ${pc.cyan(file)} — manual resolution needed`);
 }
 
 /**

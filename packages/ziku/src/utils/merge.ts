@@ -209,28 +209,31 @@ export function threeWayMerge({
   }
 
   // ファイル拡張子で構造マージを試みる
+  // コンフリクトなしで成功した場合のみ構造マージ結果を返す。
+  // コンフリクトがある場合はテキストマージにフォールバックし、
+  // hunk 単位のコンフリクトマーカーを挿入してユーザーに手動解決を強制する。
   if (filePath && isJsonFile(filePath)) {
     const jsonResult = mergeJsonContent(base, local, template);
-    if (jsonResult !== null) {
+    if (jsonResult !== null && !jsonResult.hasConflicts) {
       return jsonResult;
     }
-    // JSON パースに失敗した場合はテキストマージにフォールバック
+    // パース失敗 or コンフリクトあり → テキストマージにフォールバック
   }
 
   if (filePath && isTomlFile(filePath)) {
     const tomlResult = mergeTomlContent(base, local, template);
-    if (tomlResult !== null) {
+    if (tomlResult !== null && !tomlResult.hasConflicts) {
       return tomlResult;
     }
-    // TOML パースに失敗した場合はテキストマージにフォールバック
+    // パース失敗 or コンフリクトあり → テキストマージにフォールバック
   }
 
   if (filePath && isYamlFile(filePath)) {
     const yamlResult = mergeYamlContent(base, local, template);
-    if (yamlResult !== null) {
+    if (yamlResult !== null && !yamlResult.hasConflicts) {
       return yamlResult;
     }
-    // YAML パースに失敗した場合はテキストマージにフォールバック
+    // パース失敗 or コンフリクトあり → テキストマージにフォールバック
   }
 
   return textThreeWayMerge(base, local, template, filePath);
