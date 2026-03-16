@@ -1,8 +1,17 @@
-import { copyFileSync, existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import {
+  accessSync,
+  constants,
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { homedir, tmpdir } from "node:os";
 import * as p from "@clack/prompts";
 import { downloadTemplate } from "giget";
 import pc from "picocolors";
-import { dirname, join } from "pathe";
+import { dirname, join, resolve } from "pathe";
 import { match } from "ts-pattern";
 import { getModuleById } from "../modules/index";
 import type {
@@ -16,6 +25,36 @@ import { loadMergedGitignore, separateByGitignore } from "./gitignore";
 import { getEffectivePatterns, resolvePatterns } from "./patterns";
 
 export const TEMPLATE_SOURCE = "gh:tktcorporation/.github";
+
+/**
+ * giget のキャッシュディレクトリが書き込み可能か確認し、不可能なら XDG_CACHE_HOME を
+ * 書き込み可能な一時ディレクトリにフォールバックさせる。
+ *
+ * 背景: giget は内部で homedir()/.cache/giget にキャッシュを作成するが、
+ * Codespaces 等の環境で homedir のキャッシュディレクトリに書き込み権限がない場合に
+ * EACCES エラーが発生する。XDG_CACHE_HOME が設定済みなら giget はそちらを使うため、
+ * フォールバック先として tmpdir を設定する。
+ *
+ * 呼び出し元: downloadTemplateToTemp(), fetchTemplates()
+ * giget が XDG_CACHE_HOME 対応をやめれば不要になる。
+ */
+function ensureGigetCacheDir(): void {
+  // XDG_CACHE_HOME が既に設定済みなら giget はそちらを使うため介入不要
+  if (process.env.XDG_CACHE_HOME) {
+    return;
+  }
+  const defaultCacheDir = resolve(homedir(), ".cache");
+  try {
+    // .cache ディレクトリが存在しなければ作成を試みる
+    if (!existsSync(defaultCacheDir)) {
+      mkdirSync(defaultCacheDir, { recursive: true });
+    }
+    accessSync(defaultCacheDir, constants.W_OK);
+  } catch {
+    // 書き込み不可の場合、OS の一時ディレクトリをフォールバックに設定
+    process.env.XDG_CACHE_HOME = resolve(tmpdir(), "giget-cache");
+  }
+}
 
 // 後方互換性のためのエイリアス
 export type CopyResult = FileOperationResult;
@@ -44,6 +83,7 @@ export async function downloadTemplateToTemp(
 ): Promise<{ templateDir: string; cleanup: () => void }> {
   const tempDir = join(targetDir, ".devenv-temp");
 
+  ensureGigetCacheDir();
   const { dir: templateDir } = await downloadTemplate(source ?? TEMPLATE_SOURCE, {
     dir: tempDir,
     force: true,
@@ -138,6 +178,7 @@ export async function fetchTemplates(options: DownloadOptions): Promise<FileOper
 
   try {
     if (shouldDownload) {
+      ensureGigetCacheDir();
       const result = await downloadTemplate(TEMPLATE_SOURCE, {
         dir: tempDir,
         force: true,
