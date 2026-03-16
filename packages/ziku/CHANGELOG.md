@@ -1,5 +1,21 @@
 # @tktco/berm
 
+## 0.21.3
+
+### Patch Changes
+
+- [#149](https://github.com/tktcorporation/.github/pull/149) [`503b659`](https://github.com/tktcorporation/.github/commit/503b6599b3cc659cdd4c9d3f17b4d4d0945de8dd) Thanks [@tktcorporation](https://github.com/tktcorporation)! - fix: push の 3-way マージで local/template 引数が逆転していたバグを修正
+
+  `ziku push` の automerge 時に `threeWayMerge` の `local` と `template` 引数が
+  逆に渡されていたため、ユーザーの JSONC コメントやフォーマットが失われ、
+  コンフリクト時にテンプレート側の値が優先される問題を修正。
+
+  上流修正として `threeWayMerge` を named parameters + Zod branded types に変更し、
+  同じ種類の取り違えをコンパイル時に検出できるようにした。
+
+  また、`check` スクリプトに `typecheck`（oxlint --type-check）を追加し、
+  ローカルの全チェック実行で型チェックも漏れなく実行されるようにした。
+
 ## 0.21.2
 
 ### Patch Changes
