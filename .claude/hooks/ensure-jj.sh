@@ -39,7 +39,19 @@ case "${OS}-${ARCH}" in
     ;;
 esac
 
-LATEST_TAG=$(curl -fsSL "https://api.github.com/repos/jj-vcs/jj/releases/latest" | grep '"tag_name"' | sed -E 's/.*"([^"]+)".*/\1/')
+# GitHub API → リダイレクト先 URL → python3 の順でバージョン取得を試みる
+LATEST_TAG=$(
+  curl -fsSL "https://api.github.com/repos/jj-vcs/jj/releases/latest" 2>/dev/null \
+    | grep '"tag_name"' | sed -E 's/.*"([^"]+)".*/\1/'
+) || true
+
+# API がレート制限等で失敗した場合、リダイレクト先 URL からタグを取得
+if [ -z "$LATEST_TAG" ]; then
+  LATEST_TAG=$(
+    curl -fsSIo /dev/null -w '%{redirect_url}' "https://github.com/jj-vcs/jj/releases/latest" 2>/dev/null \
+      | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+'
+  ) || true
+fi
 
 if [ -z "$LATEST_TAG" ]; then
   echo "警告: 最新バージョンの取得に失敗しました"
@@ -52,11 +64,16 @@ INSTALL_DIR="${HOME}/bin"
 
 mkdir -p "$INSTALL_DIR"
 
-if curl -fsSL "$DOWNLOAD_URL" | tar xz -C "$INSTALL_DIR" jj 2>/dev/null; then
+# アーカイブ内のパスが ./jj のため、--strip-components=1 で展開し jj だけ残す
+TMPDIR=$(mktemp -d)
+if curl -fsSL "$DOWNLOAD_URL" | tar xz -C "$TMPDIR" --strip-components=1 2>/dev/null && [ -f "$TMPDIR/jj" ]; then
+  mv "$TMPDIR/jj" "${INSTALL_DIR}/jj"
   chmod +x "${INSTALL_DIR}/jj"
+  rm -rf "$TMPDIR"
   export PATH="${INSTALL_DIR}:${PATH}"
   echo "jj ${LATEST_TAG} を ${INSTALL_DIR} にインストールしました"
 else
+  rm -rf "$TMPDIR"
   echo "警告: jj のダウンロードに失敗しました"
   echo "手動でインストールしてください: https://jj-vcs.github.io/jj/latest/install-and-setup/"
 fi
