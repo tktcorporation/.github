@@ -68,6 +68,9 @@ vi.mock("../../utils/merge", () => ({
     unchanged: [],
   })),
   threeWayMerge: vi.fn(() => ({ content: "merged", hasConflicts: false, conflictDetails: [] })),
+  asBaseContent: vi.fn((s: string) => s),
+  asLocalContent: vi.fn((s: string) => s),
+  asTemplateContent: vi.fn((s: string) => s),
 }));
 
 // utils/patterns をモック
@@ -818,6 +821,16 @@ describe("pushCommand", () => {
       });
 
       expect(mockLog.success).toHaveBeenCalledWith("Auto-merged 1 file(s):");
+
+      // 引数順序の検証: local にユーザーのローカル内容、template にテンプレート内容が渡されること
+      // 背景: #148 で local/template が逆転し、ユーザーのコメント・フォーマットが失われた
+      expect(mockThreeWayMerge).toHaveBeenCalledWith({
+        base: "base content",
+        local: "local content",
+        template: "template content",
+        filePath: "file.txt",
+      });
+
       expect(mockCreatePullRequest).toHaveBeenCalledWith(
         "ghp_token",
         expect.objectContaining({

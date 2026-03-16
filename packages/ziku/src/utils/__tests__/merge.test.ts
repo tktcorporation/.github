@@ -1,5 +1,23 @@
 import { describe, expect, it } from "vitest";
-import { classifyFiles, hasConflictMarkers, mergeJsonContent, threeWayMerge } from "../merge";
+import {
+  asBaseContent,
+  asLocalContent,
+  asTemplateContent,
+  classifyFiles,
+  hasConflictMarkers,
+  mergeJsonContent,
+  threeWayMerge,
+} from "../merge";
+
+/** テスト用ヘルパー: named params で threeWayMerge を呼ぶ */
+function merge(base: string, local: string, template: string, filePath?: string) {
+  return threeWayMerge({
+    base: asBaseContent(base),
+    local: asLocalContent(local),
+    template: asTemplateContent(template),
+    filePath,
+  });
+}
 
 describe("merge", () => {
   describe("classifyFiles", () => {
@@ -77,7 +95,7 @@ describe("merge", () => {
       const local = "local-added\nline1\nline2\nline3\n";
       const template = "line1\nline2\nline3\ntemplate-added\n";
 
-      const result = threeWayMerge(base, local, template);
+      const result = merge(base, local, template);
 
       expect(result.hasConflicts).toBe(false);
       expect(result.content).toContain("local-added");
@@ -89,7 +107,7 @@ describe("merge", () => {
       const local = "line1\nlocal-change\nline3\n";
       const template = "line1\ntemplate-change\nline3\n";
 
-      const result = threeWayMerge(base, local, template);
+      const result = merge(base, local, template);
 
       // applyPatch が失敗した場合はコンフリクトマーカーが含まれる
       if (result.hasConflicts) {
@@ -105,7 +123,7 @@ describe("merge", () => {
       const local = "same modified content\n";
       const template = "same modified content\n";
 
-      const result = threeWayMerge(base, local, template);
+      const result = merge(base, local, template);
 
       expect(result.hasConflicts).toBe(false);
       expect(result.content).toBe("same modified content\n");
@@ -116,7 +134,7 @@ describe("merge", () => {
       const local = "original\n";
       const template = "updated by template\n";
 
-      const result = threeWayMerge(base, local, template);
+      const result = merge(base, local, template);
 
       expect(result.hasConflicts).toBe(false);
       expect(result.content).toBe("updated by template\n");
@@ -127,7 +145,7 @@ describe("merge", () => {
       const local = "modified locally\n";
       const template = "original\n";
 
-      const result = threeWayMerge(base, local, template);
+      const result = merge(base, local, template);
 
       expect(result.hasConflicts).toBe(false);
       expect(result.content).toBe("modified locally\n");
@@ -138,7 +156,7 @@ describe("merge", () => {
       const local = '{\n  "a": 1,\n  "b": 2,\n  "c": 3\n}\n';
       const template = '{\n  "a": 1,\n  "b": 2,\n  "d": 4\n}\n';
 
-      const result = threeWayMerge(base, local, template, "config.json");
+      const result = merge(base, local, template, "config.json");
 
       expect(result.hasConflicts).toBe(false);
       // ローカルの c:3 とテンプレートの d:4 が両方含まれる
@@ -152,7 +170,7 @@ describe("merge", () => {
       const local = "line1\nline2-modified\nline3\n";
       const template = "line1\nline2\nline3\nline4\n";
 
-      const result = threeWayMerge(base, local, template);
+      const result = merge(base, local, template);
 
       expect(result.hasConflicts).toBe(false);
     });
@@ -165,7 +183,7 @@ describe("merge", () => {
       const local = "header-modified\nline1\nline2\nline3\nline4\nline5\nfooter\n";
       const template = "header\nline1\nline2\nline3\nline4\nline5\nfooter-updated\n";
 
-      const result = threeWayMerge(base, local, template);
+      const result = merge(base, local, template);
 
       expect(result.hasConflicts).toBe(false);
       expect(result.content).toContain("header-modified");
@@ -200,7 +218,7 @@ describe("merge", () => {
       const local = localLines.join("\n");
       const template = templateLines.join("\n");
 
-      const result = threeWayMerge(base, local, template);
+      const result = merge(base, local, template);
 
       if (result.hasConflicts) {
         // マーカーが含まれるが、変更されていない行（line3〜line9）も結果に含まれる
@@ -210,6 +228,131 @@ describe("merge", () => {
         expect(result.content).toContain("line5");
         expect(result.content).toContain("line6");
       }
+    });
+  });
+
+  describe("threeWayMerge - local/template の非対称性（#148 回帰テスト）", () => {
+    it("JSONC コメントはローカル側のものが保持される", () => {
+      // 背景: #148 で引数が逆転し、テンプレート側をベースにしたためローカルのコメントが消えた
+      const base = '{\n  "a": 1\n}';
+      const local = '{\n  // ユーザーが追加したコメント\n  "a": 1,\n  "b": 2\n}';
+      const template = '{\n  "a": 1,\n  "c": 3\n}';
+
+      const result = merge(base, local, template, "settings.json");
+
+      expect(result.hasConflicts).toBe(false);
+      // ローカルのコメントが保持されていること
+      expect(result.content).toContain("ユーザーが追加したコメント");
+      // テンプレートの新キーも適用されていること
+      const parsed = JSON.parse(result.content.replace(/\/\/.*$/gm, ""));
+      expect(parsed.b).toBe(2);
+      expect(parsed.c).toBe(3);
+    });
+
+    it("ローカルのフォーマットが保持され、テンプレートのフォーマットに上書きされない", () => {
+      // 背景: 引数逆転時、テンプレートのフォーマットが使われユーザーの整形が失われた
+      const base = '{\n  "a": 1,\n  "b": 2\n}';
+      // ローカル: ユーザーがキーを追加
+      const local = '{\n  "a": 1,\n  "b": 2,\n  "localKey": "value"\n}';
+      // テンプレート: テンプレートがキーを追加
+      const template = '{\n  "a": 1,\n  "b": 2,\n  "templateKey": "value"\n}';
+
+      const result = merge(base, local, template, "config.json");
+
+      expect(result.hasConflicts).toBe(false);
+      // ローカルのキーが保持されていること
+      expect(result.content).toContain('"localKey"');
+      // テンプレートの新キーも追加されていること
+      const parsed = JSON.parse(result.content);
+      expect(parsed.templateKey).toBe("value");
+      expect(parsed.localKey).toBe("value");
+      // ローカル側が起点なので、ローカルの既存キーはそのまま残る
+      expect(parsed.a).toBe(1);
+      expect(parsed.b).toBe(2);
+    });
+
+    it("コンフリクト時にローカル値が優先される（テンプレート値ではない）", () => {
+      // 背景: 引数逆転時、テンプレート値が "local" として優先されていた
+      const base = '{\n  "version": "1.0"\n}';
+      const local = '{\n  "version": "2.0-user"\n}';
+      const template = '{\n  "version": "2.0-template"\n}';
+
+      const result = merge(base, local, template, "package.json");
+
+      expect(result.hasConflicts).toBe(true);
+      // ローカル値が保持される（テンプレート値ではない）
+      const parsed = JSON.parse(result.content);
+      expect(parsed.version).toBe("2.0-user");
+      // conflictDetails でもローカル/テンプレートが正しく報告される
+      expect(result.conflictDetails[0].localValue).toBe("2.0-user");
+      expect(result.conflictDetails[0].templateValue).toBe("2.0-template");
+    });
+
+    it("引数を逆にすると結果が変わることを検証（非対称性の証明）", () => {
+      // local と template を入れ替えると、コンフリクト時の優先側が変わる
+      const base = '{\n  "key": "original"\n}';
+      const localValue = '{\n  "key": "local-change"\n}';
+      const templateValue = '{\n  "key": "template-change"\n}';
+
+      // 正しい順序: local が優先
+      const correct = merge(base, localValue, templateValue, "test.json");
+      // 逆の順序: template が "local" として優先されてしまう
+      const reversed = merge(base, templateValue, localValue, "test.json");
+
+      expect(correct.hasConflicts).toBe(true);
+      expect(reversed.hasConflicts).toBe(true);
+
+      const correctParsed = JSON.parse(correct.content);
+      const reversedParsed = JSON.parse(reversed.content);
+
+      // 正しい順序ではローカル値が採用される
+      expect(correctParsed.key).toBe("local-change");
+      // 逆の順序ではテンプレート値が採用される（これがバグの挙動）
+      expect(reversedParsed.key).toBe("template-change");
+    });
+
+    it("push シナリオ: ローカルの JSONC コメント付き devcontainer.json が保持される", () => {
+      // PR #148 の再現テスト: devcontainer.json でコメントが削除された
+      const base = [
+        "{",
+        "  // ベースのコメント",
+        '  "image": "node:20",',
+        '  "features": {}',
+        "}",
+      ].join("\n");
+
+      const local = [
+        "{",
+        "  // ベースのコメント",
+        "  // ユーザーが追加した説明コメント",
+        "  // ボリュームマウントの権限について",
+        '  "image": "node:20",',
+        '  "features": {},',
+        '  "mounts": ["source=vol,target=/workspace"]',
+        "}",
+      ].join("\n");
+
+      const template = [
+        "{",
+        "  // ベースのコメント",
+        '  "image": "node:22",',
+        '  "features": {',
+        '    "ghcr.io/devcontainers/features/git:1": {}',
+        "  }",
+        "}",
+      ].join("\n");
+
+      const result = merge(base, local, template, "devcontainer.json");
+
+      // ユーザーが追加したコメントが保持されていること
+      expect(result.content).toContain("ユーザーが追加した説明コメント");
+      expect(result.content).toContain("ボリュームマウントの権限について");
+      // ユーザーの mounts 追加が保持されていること
+      expect(result.content).toContain("mounts");
+      // テンプレートの image 更新も適用されていること
+      const cleaned = result.content.replace(/\/\/.*$/gm, "");
+      const parsed = JSON.parse(cleaned);
+      expect(parsed.image).toBe("node:22");
     });
   });
 

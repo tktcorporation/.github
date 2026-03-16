@@ -10,7 +10,14 @@ import { intro, log, outro, pc, withSpinner } from "../ui/renderer";
 import { loadConfig, saveConfig } from "../utils/config";
 import { resolveLatestCommitSha } from "../utils/github";
 import { hashFiles } from "../utils/hash";
-import { classifyFiles, hasConflictMarkers, threeWayMerge } from "../utils/merge";
+import {
+  asBaseContent,
+  asLocalContent,
+  asTemplateContent,
+  classifyFiles,
+  hasConflictMarkers,
+  threeWayMerge,
+} from "../utils/merge";
 import type { MergeResult } from "../utils/merge";
 import { downloadTemplateToTemp } from "../utils/template";
 import { getEffectivePatterns } from "../utils/patterns";
@@ -176,7 +183,12 @@ export const pullCommand = defineCommand({
               baseContent = await readFile(join(baseTemplateDir, file), "utf-8");
             }
 
-            const result = threeWayMerge(baseContent, localContent, templateContent, file);
+            const result = threeWayMerge({
+              base: asBaseContent(baseContent),
+              local: asLocalContent(localContent),
+              template: asTemplateContent(templateContent),
+              filePath: file,
+            });
             await writeFile(join(targetDir, file), result.content, "utf-8");
             if (result.hasConflicts) {
               unresolvedConflicts.push(file);

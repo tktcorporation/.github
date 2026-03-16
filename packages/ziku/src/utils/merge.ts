@@ -1,5 +1,41 @@
 import { applyPatch, createPatch, structuredPatch } from "diff";
 import { applyEdits, modify, parse as jsoncParse } from "jsonc-parser";
+import { z } from "zod/v4";
+
+// ---- Branded types: base/local/template の取り違えをコンパイル時に検出 ----
+
+/**
+ * 3-way マージにおけるベース（共通祖先）のファイル内容。
+ *
+ * 背景: threeWayMerge の引数は全て string だが、base/local/template を
+ * 入れ違えるとサイレントに誤った結果を返す（#148 で発生）。
+ * Zod brand で型レベルで区別し、取り違えをコンパイルエラーにする。
+ */
+const BaseContent = z.string().brand("BaseContent");
+export type BaseContent = z.infer<typeof BaseContent>;
+
+/** ローカル側（ユーザー）のファイル内容。コンフリクト時に優先される側。 */
+const LocalContent = z.string().brand("LocalContent");
+export type LocalContent = z.infer<typeof LocalContent>;
+
+/** テンプレート側のファイル内容。ローカルに適用される変更の源。 */
+const TemplateContent = z.string().brand("TemplateContent");
+export type TemplateContent = z.infer<typeof TemplateContent>;
+
+/** string を BaseContent にブランドする */
+export function asBaseContent(s: string): BaseContent {
+  return BaseContent.parse(s);
+}
+
+/** string を LocalContent にブランドする */
+export function asLocalContent(s: string): LocalContent {
+  return LocalContent.parse(s);
+}
+
+/** string を TemplateContent にブランドする */
+export function asTemplateContent(s: string): TemplateContent {
+  return TemplateContent.parse(s);
+}
 
 /** 3-way マージの結果 */
 export interface MergeResult {
@@ -130,6 +166,24 @@ export function classifyFiles(opts: ClassifyOptions): FileClassification {
 }
 
 /**
+ * 3-way マージの入力パラメータ。
+ *
+ * 背景: base/local/template の3つの文字列は全て string 型で、位置引数だと
+ * 入れ違いがコンパイルエラーにならない。named parameters + branded types で
+ * 意図を明示し、取り違えをコンパイルエラーにする。
+ */
+export interface ThreeWayMergeParams {
+  /** 共通祖先（ベース）の内容 */
+  base: BaseContent;
+  /** ローカル側の内容（コンフリクト時に優先される。フォーマット・コメントの起点） */
+  local: LocalContent;
+  /** テンプレート側の内容（ローカルに適用される変更の源） */
+  template: TemplateContent;
+  /** ファイルパス（拡張子で JSON/テキストのマージ戦略を選択） */
+  filePath?: string;
+}
+
+/**
  * ファイルパスに応じた最適な 3-way マージを実行する。
  *
  * 背景: ファイルの種類によって最適なマージ戦略が異なる。
@@ -137,14 +191,15 @@ export function classifyFiles(opts: ClassifyOptions): FileClassification {
  * ファイル構造を壊さずにマージできる。テキストファイルは fuzz factor や
  * hunk 単位のマーカーで精度を上げる。
  *
- * @param filePath ファイルパス（拡張子でマージ戦略を選択）
+ * result の内容は local をベースにし、template 側の変更を適用したもの。
+ * コンフリクト時は local 側の値が保持される。
  */
-export function threeWayMerge(
-  base: string,
-  local: string,
-  template: string,
-  filePath?: string,
-): MergeResult {
+export function threeWayMerge({
+  base,
+  local,
+  template,
+  filePath,
+}: ThreeWayMergeParams): MergeResult {
   // ローカルとテンプレートが同一なら即座に返す
   if (local === template) {
     return { content: local, hasConflicts: false, conflictDetails: [] };
@@ -498,14 +553,7 @@ function tryApplyHunk(
   return newLines;
 }
 
-/**
- * base/local/template の3つの内容から 3-way マージを実行する。
- * (後方互換性のためのラッパー)
- *
- * @deprecated filePath を渡す新しい threeWayMerge を使用してください
- */
-// Note: 後方互換性は threeWayMerge(base, local, template) の呼び出しで自動的に保たれる
-// filePath を省略すると従来通りテキストマージが使われる
+// Note: named parameters 化により、引数の入れ違いがコンパイルエラーになる
 
 /**
  * ファイル内容にコンフリクトマーカーが含まれるかを検出する。
