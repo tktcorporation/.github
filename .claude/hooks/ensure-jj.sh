@@ -17,6 +17,30 @@ if [ -x "${HOME}/bin/jj" ]; then
   exit 0
 fi
 
+# 1.9. インストール失敗のクールダウン機構
+# 前回のインストール試行が失敗していた場合、一定期間（24時間）はスキップする。
+# ネットワーク不通・非対応プラットフォーム等で毎セッション失敗し続けるのを防ぐ。
+SKIP_MARKER="${HOME}/.jj-install-skip"
+COOLDOWN_SECONDS=86400  # 24時間
+
+if [ -f "$SKIP_MARKER" ]; then
+  marker_age=$(( $(date +%s) - $(date -r "$SKIP_MARKER" +%s 2>/dev/null || stat -c %Y "$SKIP_MARKER" 2>/dev/null || echo 0) ))
+  if [ "$marker_age" -lt "$COOLDOWN_SECONDS" ]; then
+    echo "jj のインストールは前回失敗しました（$(( marker_age / 60 ))分前）。24時間後に再試行します。"
+    echo "今すぐ再試行するには: rm $SKIP_MARKER"
+    exit 0
+  else
+    # クールダウン期間を過ぎたのでマーカーを削除して再試行
+    rm -f "$SKIP_MARKER"
+  fi
+fi
+
+# インストール失敗時にマーカーファイルを作成するヘルパー関数
+mark_install_failed() {
+  local reason="${1:-unknown}"
+  echo "$reason" > "$SKIP_MARKER"
+}
+
 # 2. mise 経由でインストールを試みる
 if command -v mise &>/dev/null; then
   echo "jj が見つかりません。mise 経由でインストールします..."
@@ -43,6 +67,7 @@ case "${OS}-${ARCH}" in
   *)
     echo "警告: サポートされていないプラットフォーム (${OS}-${ARCH})"
     echo "手動でインストールしてください: https://jj-vcs.github.io/jj/latest/install-and-setup/"
+    mark_install_failed "unsupported-platform: ${OS}-${ARCH}"
     exit 0
     ;;
 esac
@@ -64,6 +89,7 @@ fi
 if [ -z "$LATEST_TAG" ]; then
   echo "警告: 最新バージョンの取得に失敗しました"
   echo "手動でインストールしてください: https://jj-vcs.github.io/jj/latest/install-and-setup/"
+  mark_install_failed "version-fetch-failed"
   exit 0
 fi
 
@@ -84,6 +110,7 @@ else
   rm -rf "$TMPDIR"
   echo "警告: jj のダウンロードに失敗しました"
   echo "手動でインストールしてください: https://jj-vcs.github.io/jj/latest/install-and-setup/"
+  mark_install_failed "download-failed: ${DOWNLOAD_URL}"
 fi
 
 exit 0
