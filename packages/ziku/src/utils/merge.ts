@@ -201,7 +201,8 @@ export function threeWayMerge({
   filePath,
 }: ThreeWayMergeParams): MergeResult {
   // ローカルとテンプレートが同一なら即座に返す
-  if (local === template) {
+  // branded types は実行時には同じ string なので、String() で brand を外して比較する
+  if (String(local) === String(template)) {
     return { content: local, hasConflicts: false, conflictDetails: [] };
   }
 

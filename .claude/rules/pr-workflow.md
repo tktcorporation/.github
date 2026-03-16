@@ -4,7 +4,7 @@
 
 **コードを push する前に、以下を必ず順番に実行すること。1つでも漏れたら push 禁止。**
 
-1. `pnpm --filter ziku run check` で CI 相当の全チェックを通す（format, lint, build, test, docs）
+1. `pnpm --filter ziku run check` で CI 相当の全チェックを通す（format, lint, typecheck, build, test, docs）
 2. changeset ファイルが必要か確認する（機能追加・バグ修正なら必須）
    - `ls .changeset/*.md` で README.md 以外のファイルがあるか確認
    - なければ `.changeset/<名前>.md` を作成

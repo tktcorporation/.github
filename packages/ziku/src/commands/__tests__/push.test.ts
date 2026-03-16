@@ -137,10 +137,7 @@ const { confirmAction, inputGitHubToken, inputPrTitle, inputPrBody, selectPushFi
 const { log } = await import("../../ui/renderer");
 const { hashFiles } = await import("../../utils/hash");
 const { classifyFiles, threeWayMerge } = await import("../../utils/merge");
-const { downloadTemplateToTemp } = await import("../../utils/template");
-
 const mockDownloadTemplate = vi.mocked(downloadTemplate);
-const mockDownloadTemplateToTemp = vi.mocked(downloadTemplateToTemp);
 const mockDetectDiff = vi.mocked(detectDiff);
 const mockGetPushableFiles = vi.mocked(getPushableFiles);
 const mockGetGitHubToken = vi.mocked(getGitHubToken);
