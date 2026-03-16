@@ -1,5 +1,11 @@
 # @tktco/berm
 
+## 0.22.1
+
+### Patch Changes
+
+- [#155](https://github.com/tktcorporation/.github/pull/155) [`2592ee9`](https://github.com/tktcorporation/.github/commit/2592ee9e6d821a6279e0595ea1a8bd0b4990d58f) Thanks [@tktcorporation](https://github.com/tktcorporation)! - giget キャッシュディレクトリに書き込み権限がない環境（Codespaces 等）で EACCES エラーが発生する問題を修正
+
 ## 0.22.0
 
 ### Minor Changes
