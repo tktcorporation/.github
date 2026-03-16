@@ -1,5 +1,11 @@
 # @tktco/berm
 
+## 0.22.2
+
+### Patch Changes
+
+- [#160](https://github.com/tktcorporation/.github/pull/160) [`c164820`](https://github.com/tktcorporation/.github/commit/c164820b23a19584a423471c1cf14f560ece071f) Thanks [@tktcorporation](https://github.com/tktcorporation)! - 構造マージ（JSON/TOML/YAML）でコンフリクト時にローカル値をサイレントに保持していた問題を修正。コンフリクトがある場合はテキストマージにフォールバックし、コンフリクトマーカー（<<<<<<< LOCAL / ======= / >>>>>>> TEMPLATE）を挿入してユーザーに手動解決を強制する。
+
 ## 0.22.1
 
 ### Patch Changes

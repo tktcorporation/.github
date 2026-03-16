@@ -1,6 +1,6 @@
 {
   "name": "@tktco/ziku",
-  "version": "0.22.1",
+  "version": "0.22.2",
   "description": "Wrapper for ziku CLI (use 'npx ziku' instead)",
   "repository": {
     "type": "git",
