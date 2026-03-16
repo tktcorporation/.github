@@ -650,7 +650,8 @@ export const pushCommand = defineCommand({
         }
 
         if (classification.conflicts.length > 0) {
-          const { threeWayMerge } = await import("../utils/merge");
+          const { threeWayMerge, asBaseContent, asLocalContent, asTemplateContent } =
+            await import("../utils/merge");
 
           // baseRef がある場合はハッシュを強調表示する（git の "non-fast-forward" エラーに相当）
           const baseInfo = config.baseRef
@@ -694,9 +695,14 @@ export const pushCommand = defineCommand({
               }
 
               if (baseContent) {
-                // 3-way マージ: base→local の変更を template に適用
-                // 結果: template + ユーザーの変更 = PR に含めるべき内容
-                const result = threeWayMerge(baseContent, templateContent, localContent, file);
+                // 3-way マージ: ユーザーのローカル内容をベースに、テンプレート側の変更を適用
+                // コンフリクト時はローカル（ユーザー）側を優先し、コメントやフォーマットも保持する
+                const result = threeWayMerge({
+                  base: asBaseContent(baseContent),
+                  local: asLocalContent(localContent),
+                  template: asTemplateContent(templateContent),
+                  filePath: file,
+                });
                 if (!result.hasConflicts) {
                   mergedContents.set(file, result.content);
                   autoMerged.push(file);

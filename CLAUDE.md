@@ -18,7 +18,7 @@ pnpm workspaces を使用したモノレポ構成のプロジェクトです。
 
 - **CI チェックをローカルで通してからプッシュ・PR作成してください**
   - `pnpm --filter ziku run check` で CI 相当の全チェックを一括実行
-  - フォーマット・lint・ビルド・テスト・README整合性チェックを含みます
+  - フォーマット・lint・型チェック（oxlint --type-check）・ビルド・テスト・README整合性チェックを含みます
   - フォーマットが失敗したら `npx oxfmt --write .` で修正
   - README が古い場合は `pnpm --filter ziku run docs` で再生成
 - **コマンド定義（args）を変更した場合は `pnpm --filter ziku run docs` を実行**
@@ -38,6 +38,7 @@ pnpm --filter ziku run check
 pnpm --filter ziku run build          # ビルド
 pnpm --filter ziku run test:run       # テスト
 pnpm --filter ziku run format:check   # フォーマットチェック
+pnpm --filter ziku run typecheck      # 型チェック（oxlint --type-check）
 pnpm --filter ziku run docs:check     # README 整合性チェック
 
 # 修正用

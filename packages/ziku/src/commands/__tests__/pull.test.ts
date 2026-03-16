@@ -36,6 +36,9 @@ vi.mock("../../utils/merge", () => ({
     found: content.includes("<<<<<<<"),
     lines: [],
   })),
+  asBaseContent: vi.fn((s: string) => s),
+  asLocalContent: vi.fn((s: string) => s),
+  asTemplateContent: vi.fn((s: string) => s),
 }));
 
 vi.mock("../../utils/github", () => ({
@@ -260,13 +263,13 @@ describe("pullCommand", () => {
       expect(mockLog.warn).toHaveBeenCalledWith(
         expect.stringContaining("manual resolution needed"),
       );
-      // threeWayMerge にファイルパスが渡される
-      expect(mockThreeWayMerge).toHaveBeenCalledWith(
-        "",
-        "local content",
-        "template content",
-        ".mcp.json",
-      );
+      // threeWayMerge にファイルパスが渡される（named params）
+      expect(mockThreeWayMerge).toHaveBeenCalledWith({
+        base: "",
+        local: "local content",
+        template: "template content",
+        filePath: ".mcp.json",
+      });
     });
 
     it("--force で selectDeletedFiles プロンプトをスキップ", async () => {
