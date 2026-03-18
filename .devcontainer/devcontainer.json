@@ -9,27 +9,18 @@
   "mounts": [
     "source=devcontainer-${localWorkspaceFolderBasename}-pnpm-store,target=${containerWorkspaceFolder}/.pnpm-store,type=volume",
 
-    // Claude Code データ永続化 (会話履歴・認証・設定)
-    // Anthropic 公式 devcontainer と同じアプローチ: ~/.claude 全体を named volume にする
-    // ref: https://github.com/anthropics/claude-code/blob/main/.devcontainer/devcontainer.json
-    // 認証には ~/.claude/.credentials.json と ~/.claude.json の両方が必要
-    // ~/.claude.json は volume 外 (ホームディレクトリ直下) なので postCreateCommand でリストアする
+    // Claude Code データ永続化 (会話履歴・設定)
+    // ~/.claude 全体を named volume にすることで、rebuild しても会話履歴が残る
+    // 会話履歴: ~/.claude/projects/<path>/*.jsonl
+    // 認証はコンテナ内で `claude login` して取得する（ホストの macOS Keychain は使えないため）
+    // ログイン後の ~/.claude.json は volume 外だが、postStartCommand で volume 内にバックアップされる
     "source=devcontainer-${localWorkspaceFolderBasename}-claude-data,target=/home/vscode/.claude,type=volume",
 
     // mise インストール済みツールを DevContainer 間で共有
     // 全コンテナが Linux なのでバイナリ互換性あり。ワークスペース名を含めず共有 volume にする
     // ホスト (macOS) とは OS が異なるためバインドマウントではなく named volume を使う
-    "source=devcontainer-shared-mise-data,target=/home/vscode/.local/share/mise,type=volume",
-
-    // ホストの Claude Code 認証情報を readonly で一時配置（初回コピー元）
-    // ローカル開発: ホストの ~/.claude から .credentials.json 等をコンテナの named volume にコピーする
-    // Codespaces: ~/.claude が空ディレクトリ/ファイルになるため何もコピーされない（OAuth ログインを使用）
-    "source=${localEnv:HOME}/.claude,target=/tmp/.host-claude,type=bind,readonly",
-    // ~/.claude.json（OAuth セッション）はホームディレクトリ直下にあり ~/.claude/ とは別
-    // サブスクリプションプランの認証にはこのファイルが必要
-    "source=${localEnv:HOME}/.claude.json,target=/tmp/.host-claude.json,type=bind,readonly"
+    "source=devcontainer-shared-mise-data,target=/home/vscode/.local/share/mise,type=volume"
   ],
-
   "features": {
     // "ghcr.io/devcontainers/features/docker-in-docker:2": {
     //   "version": "latest",
@@ -118,9 +109,9 @@
     "git-performance": "git config status.submoduleSummary false && git config diff.ignoreSubmodules all && git config fetch.recurseSubmodules false && git config submodule.recurse false",
     "install-gh-extensions": "gh extension install agbiotech/gh-sub-issue 2>/dev/null || true",
     "mise-install": ["bash", "-lc", "mise install"],
-    // ~/.claude.json (OAuth セッション) は volume 外のため、volume 内にバックアップをリストアする
-    // claude login 後に persist-claude-auth.sh save を実行してバックアップを作成する
-    // 初回は何もしない (ファイルがなければスキップ)
+    // ~/.claude.json は volume 外（ホームディレクトリ直下）のため、rebuild で消える
+    // volume 内のバックアップからリストアする（postStartCommand で毎回バックアップされる）
+    // 初回（バックアップなし）は onboarding 済みの最小ファイルを作成
     "restore-claude-json": [
       "bash",
       "-c",
@@ -128,13 +119,13 @@
     ]
   },
   "postStartCommand": {
-    // ホストの Claude Code 認証情報を named volume にコピー（初回のみ）
-    // ローカル開発: ホストの ~/.claude/.credentials.json と ~/.claude.json が使われる
-    // Codespaces: /tmp/.host-claude は空なので何もコピーされない（OAuth ログインを使用）
-    "sync-claude-credentials": [
+    // ~/.claude.json を volume 内にバックアップ（認証情報の永続化）
+    // コンテナ内で claude login した後の OAuth セッションを rebuild 後も保持するため
+    // 有効な認証（oauthAccount）が含まれている場合のみバックアップする
+    "backup-claude-json": [
       "bash",
       "-c",
-      "[ -f ~/.claude/.credentials.json ] || cp /tmp/.host-claude/.credentials.json ~/.claude/.credentials.json 2>/dev/null || true; [ -f ~/.claude.json ] || cp /tmp/.host-claude.json ~/.claude.json 2>/dev/null || true"
+      "grep -q 'oauthAccount' ~/.claude.json 2>/dev/null && cp ~/.claude.json ~/.claude/.claude.json.bak || true"
     ],
     "setup-chrome-devtools-mcp": ["bash", "-lc", ".devcontainer/setup-chrome-devtools-mcp.sh"],
     "mise-upgrade": ["mise", "upgrade"],
@@ -145,9 +136,6 @@
     ]
   },
   // initializeCommand はホスト側で実行される
-  // 1. .env.devcontainer が無ければ空ファイルを作成（runArgs --env-file の失敗防止）
-  // 2. ~/.claude ディレクトリが無ければ作成（バインドマウントの失敗防止、特に Codespaces）
-  // ~/.claude.json は単一ファイルのバインドマウント。ソースが無いと Docker がディレクトリとして
-  // 作成してしまうため、touch で空ファイルとして存在を保証する（既存ファイルには影響しない）
-  "initializeCommand": "touch .devcontainer/.env.devcontainer && mkdir -p ${HOME}/.claude && touch ${HOME}/.claude.json"
+  // .env.devcontainer が無ければ空ファイルを作成（runArgs --env-file の失敗防止）
+  "initializeCommand": "touch .devcontainer/.env.devcontainer"
 }
