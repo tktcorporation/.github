@@ -27,26 +27,6 @@
     "source=${localEnv:HOME}/.claude,target=/tmp/.host-claude,type=bind,readonly"
   ],
 
-  // Codespaces 環境変数の転送
-  // Codespaces では runArgs --env-file が無視されるため、remoteEnv で補完する。
-  // Codespaces: リポジトリの Codespaces secrets に設定した値が ${localEnv:...} 経由で注入される
-  // ローカル: ホストマシンの環境変数から注入される（.env.devcontainer と併用可）
-  // Claude Code OAuth 認証のコールバック用ポートフォワーディング
-  // claude login 実行時にローカル HTTP サーバーが起動し、ブラウザからのリダイレクトを受け取る
-  // Codespaces ではポートフォワーディングが必要（ローカルでは不要だが設定しても害はない）
-  "forwardPorts": [7160, 7161, 7162, 7163, 7164],
-  "portsAttributes": {
-    "7160-7164": {
-      "label": "Claude OAuth Callback",
-      "onAutoForward": "silent"
-    }
-  },
-
-  "remoteEnv": {
-    "GH_TOKEN": "${localEnv:GH_TOKEN}",
-    "WAKATIME_API_KEY": "${localEnv:WAKATIME_API_KEY}"
-  },
-
   "features": {
     // "ghcr.io/devcontainers/features/docker-in-docker:2": {
     //   "version": "latest",
