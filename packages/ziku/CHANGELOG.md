@@ -1,5 +1,16 @@
 # @tktco/berm
 
+## 0.22.3
+
+### Patch Changes
+
+- [#166](https://github.com/tktcorporation/.github/pull/166) [`eab9508`](https://github.com/tktcorporation/.github/commit/eab9508e9cd335d4bebc2eed465c862564877fd0) Thanks [@tktcorporation](https://github.com/tktcorporation)! - fix: 差分行数の計算を unified diff ベースに修正
+
+  push サマリーの行数表示が実際の変更量と大きくズレる問題を修正。
+  "modified" ファイルで行数の差（local - template）を表示していたのを、
+  unified diff の実際の変更行数に修正。
+  また "added"/"deleted" で末尾改行による off-by-one エラーも修正。
+
 ## 0.22.2
 
 ### Patch Changes
