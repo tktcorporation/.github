@@ -19,7 +19,12 @@
     // mise インストール済みツールを DevContainer 間で共有
     // 全コンテナが Linux なのでバイナリ互換性あり。ワークスペース名を含めず共有 volume にする
     // ホスト (macOS) とは OS が異なるためバインドマウントではなく named volume を使う
-    "source=devcontainer-shared-mise-data,target=/home/vscode/.local/share/mise,type=volume"
+    "source=devcontainer-shared-mise-data,target=/home/vscode/.local/share/mise,type=volume",
+
+    // ホストの Claude Code 認証情報を readonly で一時配置（初回コピー元）
+    // ローカル開発: ホストの ~/.claude から .credentials.json 等をコンテナの named volume にコピーする
+    // Codespaces: ~/.claude が空ディレクトリになるため何もコピーされない（OAuth ログインを使用）
+    "source=${localEnv:HOME}/.claude,target=/tmp/.host-claude,type=bind,readonly"
   ],
 
   // Codespaces 環境変数の転送
@@ -140,6 +145,14 @@
     ]
   },
   "postStartCommand": {
+    // ホストの Claude Code 認証情報を named volume にコピー（初回のみ）
+    // ローカル開発: ホストの ~/.claude/.credentials.json と ~/.claude.json が使われる
+    // Codespaces: /tmp/.host-claude は空なので何もコピーされない（OAuth ログインを使用）
+    "sync-claude-credentials": [
+      "bash",
+      "-c",
+      "[ -f ~/.claude/.credentials.json ] || cp /tmp/.host-claude/.credentials.json ~/.claude/.credentials.json 2>/dev/null || true; [ -f ~/.claude.json ] || cp /tmp/.host-claude.json ~/.claude.json 2>/dev/null || true"
+    ],
     // Codespaces では runArgs --env-file が無効なため、
     // .env.devcontainer の内容をシェルプロファイルに追加して補完する
     "load-env-to-profile": ["bash", "-lc", ".devcontainer/load-env-to-profile.sh"],
@@ -151,5 +164,8 @@
       "[ -s .devcontainer/.env.devcontainer ] || echo 'WARNING: .devcontainer/.env.devcontainer is empty or missing. Secrets are not loaded.'"
     ]
   },
-  "initializeCommand": "touch .devcontainer/.env.devcontainer"
+  // initializeCommand はホスト側で実行される
+  // 1. .env.devcontainer が無ければ空ファイルを作成（runArgs --env-file の失敗防止）
+  // 2. ~/.claude ディレクトリが無ければ作成（バインドマウントの失敗防止、特に Codespaces）
+  "initializeCommand": "touch .devcontainer/.env.devcontainer && mkdir -p ${HOME}/.claude"
 }
