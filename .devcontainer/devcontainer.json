@@ -136,9 +136,6 @@
       "-c",
       "[ -f ~/.claude/.credentials.json ] || cp /tmp/.host-claude/.credentials.json ~/.claude/.credentials.json 2>/dev/null || true; [ -f ~/.claude.json ] || cp /tmp/.host-claude.json ~/.claude.json 2>/dev/null || true"
     ],
-    // Codespaces では runArgs --env-file が無効なため、
-    // .env.devcontainer の内容をシェルプロファイルに追加して補完する
-    "load-env-to-profile": ["bash", "-lc", ".devcontainer/load-env-to-profile.sh"],
     "setup-chrome-devtools-mcp": ["bash", "-lc", ".devcontainer/setup-chrome-devtools-mcp.sh"],
     "mise-upgrade": ["mise", "upgrade"],
     "check-env-file": [
