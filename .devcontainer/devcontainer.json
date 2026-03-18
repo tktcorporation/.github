@@ -22,11 +22,11 @@
     "source=devcontainer-shared-mise-data,target=/home/vscode/.local/share/mise,type=volume"
   ],
   "features": {
-    // "ghcr.io/devcontainers/features/docker-in-docker:2": {
-    //   "version": "latest",
-    //   "enableNonRootDocker": "true",
-    //   "moby": "true"
-    // },
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {
+      "version": "latest",
+      "enableNonRootDocker": "true",
+      "moby": "true"
+    },
     "ghcr.io/devcontainers/features/aws-cli:1": {},
     "ghcr.io/devcontainers/features/github-cli:1": {},
     "ghcr.io/devcontainers-extra/features/mise:1": {}
@@ -56,7 +56,11 @@
           "**/__pycache__/**": true,
           "**/.pytest_cache/**": true,
           "**/venv/**": true,
-          "**/.venv/**": true
+          "**/.venv/**": true,
+          // jj workspace（*-ws-* パターン）の監視を除外
+          // Claude Code の並列作業で一時的に作成されるワークスペースが
+          // VS Code の Git 拡張に検知されてメモリを大量消費するのを防ぐ
+          "**/*-ws-*/**": true
         },
         "search.exclude": {
           "**/node_modules": true,
@@ -66,9 +70,13 @@
           "**/.turbo": true,
           "**/dist": true,
           "**/.next": true,
-          "**/coverage": true
+          "**/coverage": true,
+          "**/*-ws-*": true
         },
-        "git.detectSubmodulesLimit": 0
+        "git.detectSubmodulesLimit": 0,
+        // jj workspace が VS Code の Git 拡張に自動検出されるのを防ぐ
+        // "openEditors" に設定すると、開いたファイルのリポジトリのみ追跡する
+        "git.autoRepositoryDetection": "openEditors"
       }
     }
   },
