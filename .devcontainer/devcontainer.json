@@ -23,8 +23,11 @@
 
     // ホストの Claude Code 認証情報を readonly で一時配置（初回コピー元）
     // ローカル開発: ホストの ~/.claude から .credentials.json 等をコンテナの named volume にコピーする
-    // Codespaces: ~/.claude が空ディレクトリになるため何もコピーされない（OAuth ログインを使用）
-    "source=${localEnv:HOME}/.claude,target=/tmp/.host-claude,type=bind,readonly"
+    // Codespaces: ~/.claude が空ディレクトリ/ファイルになるため何もコピーされない（OAuth ログインを使用）
+    "source=${localEnv:HOME}/.claude,target=/tmp/.host-claude,type=bind,readonly",
+    // ~/.claude.json（OAuth セッション）はホームディレクトリ直下にあり ~/.claude/ とは別
+    // サブスクリプションプランの認証にはこのファイルが必要
+    "source=${localEnv:HOME}/.claude.json,target=/tmp/.host-claude.json,type=bind,readonly"
   ],
 
   "features": {
@@ -147,5 +150,7 @@
   // initializeCommand はホスト側で実行される
   // 1. .env.devcontainer が無ければ空ファイルを作成（runArgs --env-file の失敗防止）
   // 2. ~/.claude ディレクトリが無ければ作成（バインドマウントの失敗防止、特に Codespaces）
-  "initializeCommand": "touch .devcontainer/.env.devcontainer && mkdir -p ${HOME}/.claude"
+  // ~/.claude.json は単一ファイルのバインドマウント。ソースが無いと Docker がディレクトリとして
+  // 作成してしまうため、touch で空ファイルとして存在を保証する（既存ファイルには影響しない）
+  "initializeCommand": "touch .devcontainer/.env.devcontainer && mkdir -p ${HOME}/.claude && touch ${HOME}/.claude.json"
 }
