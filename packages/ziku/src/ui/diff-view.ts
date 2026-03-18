@@ -22,6 +22,19 @@ export interface DiffStats {
   readonly deletions: number;
 }
 
+/**
+ * テキストの実際の行数をカウントする。
+ *
+ * 背景: `"a\nb\n".split("\n").length` は 3 を返すが、実際の行数は 2。
+ * 末尾の改行を除去してからカウントすることで正確な行数を得る。
+ */
+function countLines(content: string): number {
+  if (!content) return 0;
+  const normalized = content.endsWith("\n") ? content.slice(0, -1) : content;
+  if (normalized === "") return 0;
+  return normalized.split("\n").length;
+}
+
 /** ファイルの差分統計を計算 */
 export function calculateDiffStats(fileDiff: FileDiff): DiffStats {
   switch (fileDiff.type) {
@@ -30,11 +43,11 @@ export function calculateDiffStats(fileDiff: FileDiff): DiffStats {
     case "deleted":
       return {
         additions: 0,
-        deletions: fileDiff.templateContent?.split("\n").length ?? 0,
+        deletions: countLines(fileDiff.templateContent ?? ""),
       };
     case "added":
       return {
-        additions: fileDiff.localContent?.split("\n").length ?? 0,
+        additions: countLines(fileDiff.localContent ?? ""),
         deletions: 0,
       };
     case "modified": {

@@ -22,6 +22,7 @@ import {
   inputPrTitle,
   selectPushFiles,
 } from "../ui/prompts";
+import { calculateDiffStats, formatStats } from "../ui/diff-view";
 import { intro, log, logDiffSummary, outro, pc, withSpinner } from "../ui/renderer";
 import { detectDiff, getPushableFiles } from "../utils/diff";
 import { createPullRequest, getGitHubToken } from "../utils/github";
@@ -42,35 +43,17 @@ import { detectUntrackedFiles } from "../utils/untracked";
  * FileDiff の差分統計を "+N -M" 形式でフォーマットする。
  *
  * 背景: git push の出力に合わせ、変更行数を可視化する。
- * "modified" の場合は行数の差を表示（詳細な unified diff は ziku diff で確認可能）。
+ * calculateDiffStats に統一し、unified diff ベースで実際の変更行数を算出する。
+ * 以前は行数の差で計算していたため、実際の変更量と大きくズレる問題があった。
  */
 function formatFileStat(file: {
+  path: string;
   type: string;
   localContent?: string;
   templateContent?: string;
 }): string {
-  let additions = 0;
-  let deletions = 0;
-
-  if (file.type === "added" && file.localContent) {
-    additions = file.localContent.split("\n").length;
-  } else if (file.type === "deleted" && file.templateContent) {
-    deletions = file.templateContent.split("\n").length;
-  } else if (file.type === "modified") {
-    const local = file.localContent?.split("\n").length ?? 0;
-    const tmpl = file.templateContent?.split("\n").length ?? 0;
-    additions = Math.max(0, local - tmpl);
-    deletions = Math.max(0, tmpl - local);
-    if (additions === 0 && deletions === 0 && file.localContent !== file.templateContent) {
-      additions = 1;
-      deletions = 1;
-    }
-  }
-
-  const parts: string[] = [];
-  if (additions > 0) parts.push(pc.green(`+${additions}`));
-  if (deletions > 0) parts.push(pc.red(`-${deletions}`));
-  return parts.length > 0 ? parts.join(" ") : pc.dim("~");
+  const stats = calculateDiffStats(file as import("../modules/schemas").FileDiff);
+  return formatStats(stats);
 }
 
 /**
