@@ -9,11 +9,11 @@
   "mounts": [
     "source=devcontainer-${localWorkspaceFolderBasename}-pnpm-store,target=${containerWorkspaceFolder}/.pnpm-store,type=volume",
 
-    // Claude Code データ永続化 (会話履歴・認証・設定)
-    // Anthropic 公式 devcontainer と同じアプローチ: ~/.claude 全体を named volume にする
-    // ref: https://github.com/anthropics/claude-code/blob/main/.devcontainer/devcontainer.json
-    // 認証には ~/.claude/.credentials.json と ~/.claude.json の両方が必要
-    // ~/.claude.json は volume 外 (ホームディレクトリ直下) なので postCreateCommand でリストアする
+    // Claude Code データ永続化 (会話履歴・設定)
+    // ~/.claude 全体を named volume にすることで、rebuild しても会話履歴が残る
+    // 会話履歴: ~/.claude/projects/<path>/*.jsonl
+    // 認証はコンテナ内で `claude login` して取得する（ホストの macOS Keychain は使えないため）
+    // ログイン後の ~/.claude.json は volume 外だが、postStartCommand で volume 内にバックアップされる
     "source=devcontainer-${localWorkspaceFolderBasename}-claude-data,target=/home/vscode/.claude,type=volume",
 
     // mise インストール済みツールを DevContainer 間で共有
@@ -21,27 +21,6 @@
     // ホスト (macOS) とは OS が異なるためバインドマウントではなく named volume を使う
     "source=devcontainer-shared-mise-data,target=/home/vscode/.local/share/mise,type=volume"
   ],
-
-  // Codespaces 環境変数の転送
-  // Codespaces では runArgs --env-file が無視されるため、remoteEnv で補完する。
-  // Codespaces: リポジトリの Codespaces secrets に設定した値が ${localEnv:...} 経由で注入される
-  // ローカル: ホストマシンの環境変数から注入される（.env.devcontainer と併用可）
-  // Claude Code OAuth 認証のコールバック用ポートフォワーディング
-  // claude login 実行時にローカル HTTP サーバーが起動し、ブラウザからのリダイレクトを受け取る
-  // Codespaces ではポートフォワーディングが必要（ローカルでは不要だが設定しても害はない）
-  "forwardPorts": [7160, 7161, 7162, 7163, 7164],
-  "portsAttributes": {
-    "7160-7164": {
-      "label": "Claude OAuth Callback",
-      "onAutoForward": "silent"
-    }
-  },
-
-  "remoteEnv": {
-    "GH_TOKEN": "${localEnv:GH_TOKEN}",
-    "WAKATIME_API_KEY": "${localEnv:WAKATIME_API_KEY}"
-  },
-
   "features": {
     // "ghcr.io/devcontainers/features/docker-in-docker:2": {
     //   "version": "latest",
@@ -130,9 +109,9 @@
     "git-performance": "git config status.submoduleSummary false && git config diff.ignoreSubmodules all && git config fetch.recurseSubmodules false && git config submodule.recurse false",
     "install-gh-extensions": "gh extension install agbiotech/gh-sub-issue 2>/dev/null || true",
     "mise-install": ["bash", "-lc", "mise install"],
-    // ~/.claude.json (OAuth セッション) は volume 外のため、volume 内にバックアップをリストアする
-    // claude login 後に persist-claude-auth.sh save を実行してバックアップを作成する
-    // 初回は何もしない (ファイルがなければスキップ)
+    // ~/.claude.json は volume 外（ホームディレクトリ直下）のため、rebuild で消える
+    // volume 内のバックアップからリストアする（postStartCommand で毎回バックアップされる）
+    // 初回（バックアップなし）は onboarding 済みの最小ファイルを作成
     "restore-claude-json": [
       "bash",
       "-c",
@@ -140,9 +119,14 @@
     ]
   },
   "postStartCommand": {
-    // Codespaces では runArgs --env-file が無効なため、
-    // .env.devcontainer の内容をシェルプロファイルに追加して補完する
-    "load-env-to-profile": ["bash", "-lc", ".devcontainer/load-env-to-profile.sh"],
+    // ~/.claude.json を volume 内にバックアップ（認証情報の永続化）
+    // コンテナ内で claude login した後の OAuth セッションを rebuild 後も保持するため
+    // 有効な認証（oauthAccount）が含まれている場合のみバックアップする
+    "backup-claude-json": [
+      "bash",
+      "-c",
+      "grep -q 'oauthAccount' ~/.claude.json 2>/dev/null && cp ~/.claude.json ~/.claude/.claude.json.bak || true"
+    ],
     "setup-chrome-devtools-mcp": ["bash", "-lc", ".devcontainer/setup-chrome-devtools-mcp.sh"],
     "mise-upgrade": ["mise", "upgrade"],
     "check-env-file": [
@@ -151,5 +135,7 @@
       "[ -s .devcontainer/.env.devcontainer ] || echo 'WARNING: .devcontainer/.env.devcontainer is empty or missing. Secrets are not loaded.'"
     ]
   },
+  // initializeCommand はホスト側で実行される
+  // .env.devcontainer が無ければ空ファイルを作成（runArgs --env-file の失敗防止）
   "initializeCommand": "touch .devcontainer/.env.devcontainer"
 }
