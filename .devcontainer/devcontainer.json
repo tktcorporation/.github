@@ -76,7 +76,11 @@
         "git.detectSubmodulesLimit": 0,
         // jj workspace が VS Code の Git 拡張に自動検出されるのを防ぐ
         // "openEditors" に設定すると、開いたファイルのリポジトリのみ追跡する
-        "git.autoRepositoryDetection": "openEditors"
+        "git.autoRepositoryDetection": "openEditors",
+        // バックグラウンドの定期 fetch を無効化（メモリ・CPU 削減）
+        "git.autoFetch": false,
+        // ファイルツリーの Git 差分色付け計算を省略（大きいリポジトリで効果大）
+        "git.decorations.enabled": false
       }
     }
   },
