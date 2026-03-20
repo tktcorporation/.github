@@ -1,5 +1,19 @@
 # @tktco/berm
 
+## 0.22.4
+
+### Patch Changes
+
+- [#170](https://github.com/tktcorporation/.github/pull/170) [`bc9f6eb`](https://github.com/tktcorporation/.github/commit/bc9f6eb599de0476f559857570ee040ca21329ee) Thanks [@tktcorporation](https://github.com/tktcorporation)! - fix: JSONC コメント/フォーマットのみの変更がテンプレートにある場合に、構造マージからテキストマージへフォールバックする
+
+  JSON 構造マージはパースされた値のみ比較するため、JSONC コメントやフォーマットの変更を検出できなかった。
+  結果としてマージ結果がローカルと同一になり、テンプレートの変更が反映されないまま baseRef が更新されていた。
+  構造マージ結果がローカルと同一の場合はテキストマージにフォールバックし、コメント/フォーマット差分を
+  コンフリクトマーカーで可視化するように修正。
+
+  また、テキストマージ後の構造検証に JSON/JSONC ファイルを追加し、fuzz 適用後に壊れた JSON が
+  生成された場合もコンフリクトマーカーにフォールバックするようにした。
+
 ## 0.22.3
 
 ### Patch Changes
