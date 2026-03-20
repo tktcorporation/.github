@@ -722,6 +722,65 @@ describe("merge", () => {
     });
   });
 
+  describe("threeWayMerge - JSONC コメント/フォーマット差分のフォールバック", () => {
+    it("コメントのみ変更されたテンプレートはテキストマージでコンフリクトマーカーを挿入する", () => {
+      // 背景: JSON 構造マージはパースされた値のみ比較するため、JSONC コメントの変更を検出できない。
+      // 結果がローカルと同一になった場合、テキストマージにフォールバックして
+      // コメント差分をコンフリクトマーカーで可視化する。
+      const base = '{\n  // old comment\n  "a": 1\n}';
+      const local = '{\n  // local comment\n  "a": 1\n}';
+      const template = '{\n  // template comment\n  "a": 1\n}';
+
+      const result = merge(base, local, template, "config.jsonc");
+
+      // JSON 構造マージは差分なし（値は全て同じ）→ result === local → テキストマージへ
+      // テキストマージでコメント行の差分を検出してコンフリクトマーカーを挿入
+      expect(result.hasConflicts).toBe(true);
+      expect(result.content).toContain("<<<<<<< LOCAL");
+      expect(result.content).toContain(">>>>>>> TEMPLATE");
+    });
+
+    it("フォーマットのみ変更されたテンプレートはテキストマージで処理する", () => {
+      // 値は同じだがフォーマットが異なる（インデントの違い等）
+      const base = '{\n  "a": 1,\n  "b": 2\n}\n';
+      const local = '{\n    "a": 1,\n    "b": 2\n}\n'; // 4スペースに変更
+      const template = '{\n"a": 1,\n"b": 2\n}\n'; // インデントなしに変更
+
+      const result = merge(base, local, template, "config.json");
+
+      // JSON 構造マージは差分なし → テキストマージへフォールバック
+      // テキストマージがフォーマット差分を処理する
+      // （clean merge でローカルのフォーマットが保持されるか、コンフリクトマーカー）
+      expect(result).toBeDefined();
+      // ローカル内容がそのままで SHA だけ更新される状態にはならない
+      // （hasConflicts: true でマーカー挿入 or 実際にフォーマット変更が適用される）
+      if (!result.hasConflicts) {
+        // テキストマージが成功した場合、何らかの変更が適用されているはず
+        // （ローカルと全く同一の結果にはならない）
+        expect(result.content).not.toBe('{\n    "a": 1,\n    "b": 2\n}\n');
+      }
+    });
+
+    it("値変更あり + コメント変更ありの場合、JSON 構造マージの結果を返す（result !== local）", () => {
+      // 値の変更がある場合は JSON 構造マージで適切にマージされ、result !== local になる。
+      // この場合はフォールバックせず、構造マージの結果をそのまま返す。
+      const base = '{\n  // base comment\n  "a": 1,\n  "b": 2\n}';
+      const local = '{\n  // local comment\n  "a": 1,\n  "b": 2,\n  "c": 3\n}';
+      const template = '{\n  // template comment\n  "a": 1,\n  "b": 2,\n  "d": 4\n}';
+
+      const result = merge(base, local, template, "config.json");
+
+      // JSON 構造マージで d:4 が追加され result !== local → 構造マージ結果を返す
+      expect(result.hasConflicts).toBe(false);
+      const cleaned = result.content.replace(/\/\/.*$/gm, "");
+      const parsed = JSON.parse(cleaned);
+      expect(parsed.c).toBe(3);
+      expect(parsed.d).toBe(4);
+      // ローカルのコメントが保持される（構造マージ = ローカルベース + modify）
+      expect(result.content).toContain("local comment");
+    });
+  });
+
   describe("threeWayMerge - テキストマージ後のバリデーション", () => {
     it("テキストマージが壊れた TOML を生成した場合、コンフリクトマーカーにフォールバック", () => {
       // TOML パースに失敗するケースをシミュレート

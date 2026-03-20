@@ -215,9 +215,17 @@ export function threeWayMerge({
   if (filePath && isJsonFile(filePath)) {
     const jsonResult = mergeJsonContent(base, local, template);
     if (jsonResult !== null && !jsonResult.hasConflicts) {
-      return jsonResult;
+      // JSON 構造マージは値レベルでしか差分を検出しないため、
+      // JSONC コメントやフォーマットのみの変更を見落とす。
+      // マージ結果がローカルと同一の場合、テンプレート側の変更（コメント等）が
+      // 反映されていない可能性があるため、テキストマージにフォールバックする。
+      // テキストマージなら行単位でコメント/フォーマット差分も処理できる。
+      if (jsonResult.content !== String(local)) {
+        return jsonResult;
+      }
+      // result === local → コメント/フォーマット差分の可能性あり、テキストマージへ
     }
-    // パース失敗 or コンフリクトあり → テキストマージにフォールバック
+    // パース失敗 or コンフリクトあり or 構造マージが実質無変更 → テキストマージにフォールバック
   }
 
   if (filePath && isTomlFile(filePath)) {
@@ -636,6 +644,16 @@ function isYamlFile(filePath: string): boolean {
  * フォールバックすることで、壊れたファイルの生成を防ぐ。
  */
 function validateStructuredContent(content: string, filePath: string): boolean {
+  if (isJsonFile(filePath)) {
+    try {
+      // JSONC のコメントを含むファイルも検証するため jsonc-parser を使用。
+      // テキストマージの fuzz 適用後に構造が壊れていないか確認する。
+      const result = jsoncParse(content);
+      return result != null;
+    } catch {
+      return false;
+    }
+  }
   if (isTomlFile(filePath)) {
     try {
       TOML.parse(content);
