@@ -76,12 +76,16 @@ export function buildTemplateSource(source: { owner: string; repo: string; ref?:
  * @param targetDir - テンプレートを展開するベースディレクトリ
  * @param source - giget 形式のテンプレートソース (例: "gh:owner/repo")。
  *                 未指定時はデフォルトの TEMPLATE_SOURCE を使用。
+ * @param label - 一時ディレクトリを区別するためのラベル。
+ *                同一 targetDir で複数回ダウンロードする場合（pull の template と base）、
+ *                ラベルを変えないと後のダウンロードが先のディレクトリを上書きする。
  */
 export async function downloadTemplateToTemp(
   targetDir: string,
   source?: string,
+  label?: string,
 ): Promise<{ templateDir: string; cleanup: () => void }> {
-  const tempDir = join(targetDir, ".devenv-temp");
+  const tempDir = join(targetDir, label ? `.devenv-temp-${label}` : ".devenv-temp");
 
   ensureGigetCacheDir();
   const { dir: templateDir } = await downloadTemplate(source ?? TEMPLATE_SOURCE, {
