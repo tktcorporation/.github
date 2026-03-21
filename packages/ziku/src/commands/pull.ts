@@ -163,7 +163,7 @@ export const pullCommand = defineCommand({
           try {
             log.info(`Downloading base version (${config.baseRef.slice(0, 7)}...) for merge...`);
             const baseSource = `gh:${config.source.owner}/${config.source.repo}#${config.baseRef}`;
-            const baseResult = await downloadTemplateToTemp(targetDir, baseSource);
+            const baseResult = await downloadTemplateToTemp(targetDir, baseSource, "base");
             baseTemplateDir = baseResult.templateDir;
             baseCleanup = baseResult.cleanup;
           } catch {

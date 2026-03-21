@@ -1343,6 +1343,23 @@ line2`;
       }
     });
 
+    it("base === template の場合ローカルがそのまま返る（上書きバグの症状確認）", () => {
+      // 背景: pull 時に base ダウンロードが template を上書きすると
+      // base === template になり、patch が空になるため、
+      // threeWayMerge が local をそのまま返す。これがバグの症状。
+      // このテストは「base === template なら変更なし」が threeWayMerge の
+      // 正しい動作であることを確認する（バグは呼び出し側にある）。
+      const base = '{\n  "a": 1\n}';
+      const local = '{\n  "a": 1,\n  "b": 2\n}';
+      const template = '{\n  "a": 1\n}'; // template === base
+
+      const result = merge(base, local, template, "settings.json");
+
+      // base === template → テンプレート側に変更なし → ローカルをそのまま返すのが正しい
+      expect(result.hasConflicts).toBe(false);
+      expect(result.content).toBe(local);
+    });
+
     it("TOML: 同じキーを異なる値に変更 → コンフリクトマーカー必須", () => {
       const base = '[tools]\nnode = "20"\n';
       const local = '[tools]\nnode = "22"\n';

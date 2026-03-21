@@ -541,6 +541,74 @@ describe("pullCommand", () => {
       expect(mockLog.success).toHaveBeenCalledWith("All conflicts resolved");
     });
 
+    it("base ダウンロードが template ディレクトリを上書きしない（一時ディレクトリ分離）", async () => {
+      // 背景: downloadTemplateToTemp が常に同じ .devenv-temp を使うため、
+      // base ダウンロード時に template を上書きし、base === template となって
+      // マージが空振り（ローカル内容そのまま）するバグがあった。
+      // ラベル引数で一時ディレクトリを分離することで解決。
+      vol.fromJSON({
+        "/test/settings.json": '{"local": true}',
+        "/tmp/template/settings.json": '{"template": true}',
+        "/tmp/base/settings.json": '{"base": true}',
+      });
+
+      mockLoadConfig.mockResolvedValueOnce({
+        ...baseConfig,
+        baseRef: "abc123",
+        baseHashes: { "settings.json": "old-hash" },
+      });
+
+      mockClassifyFiles.mockReturnValueOnce({
+        autoUpdate: [],
+        localOnly: [],
+        conflicts: ["settings.json"],
+        newFiles: [],
+        deletedFiles: [],
+        unchanged: [],
+      });
+
+      // template 用と base 用で異なるディレクトリが返される
+      mockDownloadTemplateToTemp
+        .mockResolvedValueOnce({
+          templateDir: "/tmp/template",
+          cleanup: vi.fn(),
+        })
+        .mockResolvedValueOnce({
+          templateDir: "/tmp/base",
+          cleanup: vi.fn(),
+        });
+
+      mockThreeWayMerge.mockReturnValueOnce({
+        content: '{"merged": true}',
+        hasConflicts: false,
+        conflictDetails: [],
+      });
+
+      await (pullCommand.run as any)({
+        args: { dir: "/test", force: false },
+        rawArgs: [],
+        cmd: pullCommand,
+      });
+
+      // threeWayMerge に正しい引数が渡される:
+      // base は base ディレクトリから、template は template ディレクトリから読まれる
+      expect(mockThreeWayMerge).toHaveBeenCalledWith({
+        base: '{"base": true}',
+        local: '{"local": true}',
+        template: '{"template": true}',
+        filePath: "settings.json",
+      });
+
+      // base ダウンロード時に "base" ラベルが使用されることを確認
+      expect(mockDownloadTemplateToTemp).toHaveBeenCalledTimes(2);
+      expect(mockDownloadTemplateToTemp).toHaveBeenNthCalledWith(
+        2,
+        "/test",
+        expect.stringContaining("#abc123"),
+        "base",
+      );
+    });
+
     it("エラー時も cleanup が呼ばれる", async () => {
       const mockCleanup = vi.fn();
       mockDownloadTemplateToTemp.mockResolvedValue({
