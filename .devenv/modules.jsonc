@@ -51,6 +51,7 @@
         ".claude/statusline.sh",
         ".claude/skills/ui-design-research",
         ".claude/skills/faithful-doc-writing",
+        ".claude/skills/autonomous-dev/SKILL.md"
       ],
     },
   ],
