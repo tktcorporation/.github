@@ -208,10 +208,9 @@ export function threeWayMerge({
     return { content: local, hasConflicts: false, conflictDetails: [] };
   }
 
-  // ファイル拡張子で構造マージを試みる
+  // ファイル拡張子で構造マージを試みる。
   // コンフリクトなしで成功した場合のみ構造マージ結果を返す。
-  // コンフリクトがある場合はテキストマージにフォールバックし、
-  // hunk 単位のコンフリクトマーカーを挿入してユーザーに手動解決を強制する。
+  // コンフリクトがある場合、パースに失敗した場合はテキストマージにフォールバックする。
   if (filePath && isJsonFile(filePath)) {
     const jsonResult = mergeJsonContent(base, local, template);
     if (jsonResult !== null && !jsonResult.hasConflicts) {
@@ -219,13 +218,11 @@ export function threeWayMerge({
       // JSONC コメントやフォーマットのみの変更を見落とす。
       // マージ結果がローカルと同一の場合、テンプレート側の変更（コメント等）が
       // 反映されていない可能性があるため、テキストマージにフォールバックする。
-      // テキストマージなら行単位でコメント/フォーマット差分も処理できる。
       if (jsonResult.content !== String(local)) {
         return jsonResult;
       }
       // result === local → コメント/フォーマット差分の可能性あり、テキストマージへ
     }
-    // パース失敗 or コンフリクトあり or 構造マージが実質無変更 → テキストマージにフォールバック
   }
 
   if (filePath && isTomlFile(filePath)) {
@@ -233,7 +230,6 @@ export function threeWayMerge({
     if (tomlResult !== null && !tomlResult.hasConflicts) {
       return tomlResult;
     }
-    // パース失敗 or コンフリクトあり → テキストマージにフォールバック
   }
 
   if (filePath && isYamlFile(filePath)) {
@@ -241,7 +237,6 @@ export function threeWayMerge({
     if (yamlResult !== null && !yamlResult.hasConflicts) {
       return yamlResult;
     }
-    // パース失敗 or コンフリクトあり → テキストマージにフォールバック
   }
 
   return textThreeWayMerge(base, local, template, filePath);
@@ -676,21 +671,17 @@ function validateStructuredContent(content: string, filePath: string): boolean {
 // ---- テキスト 3-way マージ (改良版) ----
 
 /**
- * テキストファイルの 3-way マージ。fuzz factor によるパッチ適用と
- * hunk 単位のコンフリクトマーカーで、従来のファイル全体マーカーを改善。
+ * Git と同様の行レベル 3-way マージ。
  *
- * 背景: TOML 等の構造ファイルにファイル全体のコンフリクトマーカーを入れると
- * パーサーが壊れる。hunk 単位にすることで影響範囲を最小化する。
+ * 戦略（git merge に準拠）:
+ *   1. 標準パッチ適用（fuzz=0, git apply 相当）→ 全 hunk 成功ならクリーンマージ
+ *   2. 失敗時: hunk 単位で個別適用。成功した hunk はクリーンマージ、
+ *      失敗した hunk にのみコンフリクトマーカーを付与
  *
- * filePath が渡された場合、パッチ適用後に構造ファイルの妥当性を検証する。
- * fuzz factor でパッチが「成功」しても、TOML のセクション重複等で
- * 壊れたファイルが生成されることがあるため、パース検証で検出して
- * コンフリクトマーカーにフォールバックする。
- *
- * 戦略:
- * 1. 標準パッチ適用（fuzz=0）+ 構造検証
- * 2. fuzz factor を上げてリトライ（fuzz=2）+ 構造検証
- * 3. 失敗時: hunk 単位で適用を試み、失敗した hunk のみにマーカーを付与
+ * fuzz factor は使わない。git の merge も fuzz を使わず、
+ * 厳密なコンテキストマッチングでコンフリクトを検出する。
+ * fuzz があると構造マージで検出した conflict をサイレントに
+ * 「解決」してしまい、ユーザーに判断機会を与えない。
  */
 function textThreeWayMerge(
   base: string,
@@ -698,7 +689,7 @@ function textThreeWayMerge(
   template: string,
   filePath?: string,
 ): MergeResult {
-  // ステップ 1: 標準パッチ適用
+  // ステップ 1: 標準パッチ適用（git apply 相当）
   const patch = createPatch("file", base, template);
   const result = applyPatch(local, patch);
   if (typeof result === "string") {
@@ -709,17 +700,9 @@ function textThreeWayMerge(
     return { content: result, hasConflicts: false, conflictDetails: [] };
   }
 
-  // ステップ 2: fuzz factor を上げてリトライ
-  const resultFuzzy = applyPatch(local, patch, { fuzzFactor: 2 });
-  if (typeof resultFuzzy === "string") {
-    // 構造ファイルの場合、パッチ適用結果を検証
-    if (filePath && !validateStructuredContent(resultFuzzy, filePath)) {
-      return mergeWithPerHunkMarkers(base, local, template);
-    }
-    return { content: resultFuzzy, hasConflicts: false, conflictDetails: [] };
-  }
-
-  // ステップ 3: hunk 単位でコンフリクトマーカーを付与
+  // ステップ 2: hunk 単位でコンフリクトマーカーを付与
+  // fuzz (位置ズレ補正) は使わない。git merge と同様に厳密にマッチングし、
+  // コンテキストが合わない hunk は必ずマーカーで明示する。
   return mergeWithPerHunkMarkers(base, local, template);
 }
 
@@ -800,9 +783,16 @@ function mergeWithPerHunkMarkers(base: string, local: string, template: string):
 }
 
 /**
- * 単一の hunk をローカル行に適用する。
- * コンテキスト行が一致し、削除行が存在する場合に適用成功として新しい行を返す。
- * 一致しない場合は null を返す。
+ * 単一の hunk をローカル行に適用する（git merge ライクな行レベル判定）。
+ *
+ * git merge と同様に、コンフリクト判定は **変更行のみ** で行う:
+ *   - コンテキスト行（` ` prefix）: ローカルが変更していても許容。
+ *     ローカルの行をそのまま採用する（ローカルの独立した変更を保持）。
+ *   - 削除行（`-` prefix）: ベースの行を削除してテンプレートの行に置換する操作。
+ *     ローカルが同じ行を別の値に変更していたら真のコンフリクト → null を返す。
+ *   - 追加行（`+` prefix）: テンプレートの追加行。結果にそのまま挿入。
+ *
+ * @returns 適用成功時は新しい行の配列。コンフリクト時は null。
  */
 function tryApplyHunk(
   localLines: string[],
@@ -810,36 +800,48 @@ function tryApplyHunk(
 ): string[] | null {
   const startIdx = hunk.oldStart - 1;
 
-  // hunk の old 側の行を構築して照合
-  const expectedOldLines: string[] = [];
-  const newLines: string[] = [];
+  // hunk の old 側の行数を算出（コンテキスト行 + 削除行）
+  let oldLineCount = 0;
+  for (const line of hunk.lines) {
+    if (line[0] === " " || line[0] === "-") {
+      oldLineCount++;
+    }
+  }
+
+  if (startIdx + oldLineCount > localLines.length) {
+    return null;
+  }
+
+  // hunk を走査して結果を構築。
+  // 変更行（`-`）はローカルとの一致を厳密にチェック。
+  // コンテキスト行（` `）はローカルの独立した変更を許容。
+  const resultLines: string[] = [];
+  let oldIdx = 0;
 
   for (const line of hunk.lines) {
     const op = line[0];
     const content = line.slice(1);
 
     if (op === " ") {
-      expectedOldLines.push(content);
-      newLines.push(content);
+      // コンテキスト行: ローカルの行を採用（独立した変更を保持）
+      resultLines.push(localLines[startIdx + oldIdx]);
+      oldIdx++;
     } else if (op === "-") {
-      expectedOldLines.push(content);
+      // 削除行: ベースの行をテンプレートが削除/変更する操作。
+      // ローカルが同じ行を変更していたら真のコンフリクト。
+      if (localLines[startIdx + oldIdx] !== content) {
+        return null;
+      }
+      // 一致 → この行は削除される（resultLines に追加しない）
+      oldIdx++;
     } else if (op === "+") {
-      newLines.push(content);
+      // 追加行: テンプレートの変更をそのまま挿入
+      resultLines.push(content);
     }
+    // `\` (No newline at end of file) 等はスキップ
   }
 
-  // ローカル行と hunk の old 側が一致するかチェック
-  if (startIdx + expectedOldLines.length > localLines.length) {
-    return null;
-  }
-
-  for (let i = 0; i < expectedOldLines.length; i++) {
-    if (localLines[startIdx + i] !== expectedOldLines[i]) {
-      return null;
-    }
-  }
-
-  return newLines;
+  return resultLines;
 }
 
 // Note: named parameters 化により、引数の入れ違いがコンパイルエラーになる
