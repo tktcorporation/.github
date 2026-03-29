@@ -51,7 +51,8 @@
         ".claude/statusline.sh",
         ".claude/skills/ui-design-research",
         ".claude/skills/faithful-doc-writing",
-        ".claude/skills/autonomous-dev/SKILL.md"
+        ".claude/skills/autonomous-dev/SKILL.md",
+        ".claude/hookify.block-blind-kill.local.md"
       ],
     },
   ],
