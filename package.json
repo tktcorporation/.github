@@ -1,14 +1,5 @@
 {
   "name": "tktcorporation-github",
   "private": true,
-  "scripts": {
-    "version": "changeset version && pnpm --filter ziku run docs",
-    "release": "changeset publish"
-  },
-  "devDependencies": {
-    "@changesets/changelog-github": "^0.5.2",
-    "@changesets/cli": "^2.29.8",
-    "rollup": "^4.59.0"
-  },
   "packageManager": "pnpm@10.25.0"
 }
