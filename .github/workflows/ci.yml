@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  validate:
+    name: Validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Check bin.mjs syntax
+        run: node --check packages/ziku-cli/bin.mjs
+
+      - name: Validate modules.jsonc
+        run: |
+          node -e "
+            const fs = require('fs');
+            let text = fs.readFileSync('.ziku/modules.jsonc', 'utf8');
+            // Strip single-line comments and multi-line comments
+            text = text.replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '');
+            // Strip trailing commas
+            text = text.replace(/,\s*([\]}])/g, '\$1');
+            JSON.parse(text);
+            console.log('modules.jsonc is valid');
+          "
