@@ -1,0 +1,27 @@
+{
+  "name": "@tktco/ziku",
+  "version": "0.22.6",
+  "description": "Wrapper for ziku CLI (use 'npx ziku' instead)",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tktcorporation/.github.git"
+  },
+  "bin": {
+    "ziku": "./bin.mjs"
+  },
+  "files": [
+    "bin.mjs"
+  ],
+  "type": "module",
+  "publishConfig": {
+    "access": "public",
+    "provenance": true,
+    "registry": "https://registry.npmjs.org/"
+  },
+  "dependencies": {
+    "ziku": "^0.22.6"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
