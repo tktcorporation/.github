@@ -39,19 +39,8 @@ jobs:
         id: changesets
         uses: changesets/action@v1
         with:
-          version: pnpm run version
-          publish: pnpm run release
+          version: pnpm changeset version
+          publish: pnpm changeset publish
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_CONFIG_PROVENANCE: true
-
-    outputs:
-      hasChangesets: ${{ steps.changesets.outputs.hasChangesets }}
-      pullRequestNumber: ${{ steps.changesets.outputs.pullRequestNumber }}
-
-  # Run CI on changeset release PR since GITHUB_TOKEN commits don't trigger workflows
-  ci-on-release-pr:
-    name: CI on Release PR
-    needs: release
-    if: needs.release.outputs.hasChangesets == 'true' && needs.release.outputs.pullRequestNumber != ''
-    uses: ./.github/workflows/ci.yml

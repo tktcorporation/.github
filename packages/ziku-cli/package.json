@@ -19,7 +19,7 @@
     "registry": "https://registry.npmjs.org/"
   },
   "dependencies": {
-    "ziku": "workspace:*"
+    "ziku": "^0.22.6"
   },
   "engines": {
     "node": ">=20.0.0"
