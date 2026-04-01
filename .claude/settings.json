@@ -1,6 +1,11 @@
 {
   "permissions": {
-    "allow": ["Bash(find:*)", "Bash(rg:*)", "Bash(grep:*)", "Bash(ls:*)"],
+    "allow": [
+      "Bash(find:*)",
+      "Bash(rg:*)",
+      "Bash(grep:*)",
+      "Bash(ls:*)"
+    ],
     "deny": [
       "Read(./secrets/**)",
       "Write(./secrets/**)",
@@ -11,7 +16,22 @@
     ]
   },
   "enableAllProjectMcpServers": true,
-  "enabledMcpjsonServers": ["chrome-devtools"],
+  "enabledMcpjsonServers": [
+    "chrome-devtools"
+  ],
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "if echo \"$CLAUDE_TOOL_INPUT\" | grep -qE 'lsof.*-ti.*\\|.*xargs.*kill|lsof.*-ti.*\\|.*kill|kill.*\\$\\(lsof|kill.*lsof|fuser.*-k'; then echo 'BLOCKED: lsof+kill / fuser+kill はポートフォワーディングプロセスを巻き込んで devcontainer を殺す。代わりに pkill -f で特定プロセス名を指定して kill すること。' >&2; exit 2; fi"
+          }
+        ]
+      }
+    ]
+  },
   "enabledPlugins": {
     "document-skills@anthropic-agent-skills": true,
     "example-skills@anthropic-agent-skills": true,
@@ -73,7 +93,8 @@
     "private-equity@financial-services-plugins": true,
     "wealth-management@financial-services-plugins": true,
     "lseg@financial-services-plugins": true,
-    "sp-global@financial-services-plugins": true
+    "sp-global@financial-services-plugins": true,
+    "sentry@claude-plugins-official": true
   },
   "extraKnownMarketplaces": {
     "anthropic-agent-skills": {
@@ -84,9 +105,5 @@
     }
   },
   "language": "japanese",
-  "plansDirectory": ".claude/plans",
-  "statusLine": {
-    "type": "command",
-    "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/statusline.sh\""
-  }
+  "plansDirectory": ".claude/plans"
 }
