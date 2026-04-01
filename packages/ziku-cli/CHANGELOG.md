@@ -1,5 +1,11 @@
 # @tktco/ziku
 
+## 0.22.7
+
+### Patch Changes
+
+- [#181](https://github.com/tktcorporation/.github/pull/181) [`72512ec`](https://github.com/tktcorporation/.github/commit/72512ec47dd2e7ce4014d6659972629f1d3e1287) Thanks [@tktcorporation](https://github.com/tktcorporation)! - ziku 依存を workspace プロトコルから npm レジストリ参照に変更
+
 ## 0.22.6
 
 ### Patch Changes
