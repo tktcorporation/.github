@@ -2,6 +2,7 @@
   "$schema": "https://raw.githubusercontent.com/tktcorporation/ziku/main/schema/modules.json",
   "modules": [
     {
+      // Root-level files (not in subdirectories)
       "name": "Root",
       "description": "MCP, mise, and other root-level config files",
       "setupDescription": "Root config files will be applied",
@@ -11,6 +12,7 @@
       "name": "DevContainer",
       "description": "VS Code DevContainer with Docker-in-Docker",
       "setupDescription": "Open in VS Code DevContainer for automatic setup",
+      // Whitelist: only files to distribute as template
       "include": [
         ".devcontainer/devcontainer.json",
         ".devcontainer/.gitignore",
@@ -28,6 +30,7 @@
         ".github/workflows/issue-link.yml",
         ".github/workflows/label.yml",
         ".github/labeler.yml"
+        // Excluded: ci.yml, release.yml (repo-specific CI/CD)
       ]
     },
     {
