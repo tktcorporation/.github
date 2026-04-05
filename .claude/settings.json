@@ -105,5 +105,8 @@
     }
   },
   "language": "japanese",
-  "plansDirectory": ".claude/plans"
+  "plansDirectory": ".claude/plans",
+  "env": {
+    "CLAUDE_CODE_NO_FLICKER": "1"
+  }
 }
