@@ -26,35 +26,34 @@ jobs:
 
       - name: Validate modules.jsonc
         run: |
-          node -e "
-            const fs = require('fs');
-            const text = fs.readFileSync('.ziku/modules.jsonc', 'utf8');
-            // jsonc-parser がなくても JSONC をパースできる簡易実装。
-            // 文字列リテラル内の // や /* を誤除去しないよう、
-            // 文字列 → 保持、コメント → 除去 の順で処理する。
-            let result = '';
-            for (let i = 0; i < text.length; i++) {
-              if (text[i] === '\"') {
-                const start = i; i++;
-                while (i < text.length && text[i] !== '\"') { if (text[i] === '\\\\') i++; i++; }
-                i++;
-                result += text.slice(start, i);
-                continue;
-              }
-              if (text[i] === '/' && text[i+1] === '/') {
-                while (i < text.length && text[i] !== '\n') i++;
-                continue;
-              }
-              if (text[i] === '/' && text[i+1] === '*') {
-                i += 2;
-                while (i < text.length && !(text[i] === '*' && text[i+1] === '/')) i++;
-                i += 2;
-                continue;
-              }
-              result += text[i];
+          node <<'SCRIPT'
+          const fs = require("fs");
+          const text = fs.readFileSync(".ziku/modules.jsonc", "utf8");
+          // JSONC → JSON 変換。文字列リテラル内の // や /* を誤除去しないよう、
+          // 文字列 → 保持、コメント → 除去 の順で処理する。
+          let result = "";
+          for (let i = 0; i < text.length; i++) {
+            if (text[i] === '"') {
+              const start = i; i++;
+              while (i < text.length && text[i] !== '"') { if (text[i] === "\\") i++; i++; }
+              i++;
+              result += text.slice(start, i);
+              continue;
             }
-            // Strip trailing commas
-            result = result.replace(/,\s*([\]}])/g, '\$1');
-            JSON.parse(result);
-            console.log('modules.jsonc is valid');
-          "
+            if (text[i] === "/" && text[i+1] === "/") {
+              while (i < text.length && text[i] !== "\n") i++;
+              continue;
+            }
+            if (text[i] === "/" && text[i+1] === "*") {
+              i += 2;
+              while (i < text.length && !(text[i] === "*" && text[i+1] === "/")) i++;
+              i += 2;
+              continue;
+            }
+            result += text[i];
+          }
+          // trailing comma 除去
+          result = result.replace(/,\s*([\]}])/g, "$1");
+          JSON.parse(result);
+          console.log("modules.jsonc is valid");
+          SCRIPT
