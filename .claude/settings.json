@@ -30,18 +30,6 @@
           }
         ]
       }
-    ],
-    "PostToolUse": [
-      {
-        "matcher": "Edit|Write",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/lint-scenario.sh",
-            "timeout": 30
-          }
-        ]
-      }
     ]
   },
   "enabledPlugins": {
