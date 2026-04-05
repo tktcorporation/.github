@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 
-const text = readFileSync(".ziku/modules.jsonc", "utf8");
+const text = readFileSync(".ziku/ziku.jsonc", "utf8");
 
 // JSONC → JSON 変換（Node.js ビルトインのみ使用）
 // 文字列リテラル内の // や /* を誤除去しないよう状態管理する
@@ -48,4 +48,4 @@ while (i < text.length) {
 result = result.replace(/,\s*([\]}])/g, "$1");
 
 JSON.parse(result);
-console.log("modules.jsonc is valid");
+console.log("ziku.jsonc is valid");
