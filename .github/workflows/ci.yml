@@ -25,12 +25,4 @@ jobs:
         run: node --check packages/ziku-cli/bin.mjs
 
       - name: Validate modules.jsonc
-        run: |
-          node --input-type=module -e "
-            import { parse } from 'jsonc-parser';
-            import { readFileSync } from 'node:fs';
-            const text = readFileSync('.ziku/modules.jsonc', 'utf8');
-            const result = parse(text);
-            if (!result || typeof result !== 'object') throw new Error('Invalid JSON');
-            console.log('modules.jsonc is valid');
-          "
+        run: node scripts/validate-jsonc.mjs
