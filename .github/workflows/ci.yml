@@ -26,10 +26,10 @@ jobs:
 
       - name: Validate modules.jsonc
         run: |
-          node -e "
-            const { parse } = require('jsonc-parser');
-            const fs = require('fs');
-            const text = fs.readFileSync('.ziku/modules.jsonc', 'utf8');
+          node --input-type=module -e "
+            import { parse } from 'jsonc-parser';
+            import { readFileSync } from 'node:fs';
+            const text = readFileSync('.ziku/modules.jsonc', 'utf8');
             const result = parse(text);
             if (!result || typeof result !== 'object') throw new Error('Invalid JSON');
             console.log('modules.jsonc is valid');
