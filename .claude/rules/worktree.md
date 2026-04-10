@@ -21,8 +21,8 @@ EnterWorktree(name: "タスク名")
 git fetch origin master
 git worktree add .claude/worktrees/<タスク名> -b <ブランチ名> origin/master
 
-# サブモジュール（例: repo/lapras）で作業する場合
-cd repo/lapras
+# サブモジュール内で作業する場合
+cd <サブモジュールのパス>
 git fetch origin master
 git worktree add .claude/worktrees/<タスク名> -b <ブランチ名> origin/master
 ```

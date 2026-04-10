@@ -74,10 +74,10 @@ git worktree add .claude/worktrees/<タスク概要> -b <ブランチ名> origin
 ```bash
 # jj の場合
 jj workspace forget ws-<タスク概要>
-rm -rf .worktrees/<タスク概要>
+rm -rf .claude/worktrees/<タスク概要>
 
 # git の場合
-git worktree remove .worktrees/<タスク概要>
+git worktree remove .claude/worktrees/<タスク概要>
 ```
 
 ---
