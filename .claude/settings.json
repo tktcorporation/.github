@@ -1,12 +1,5 @@
 {
   "effortLevel": "high",
-  "env": {
-    "CLAUDE_CODE_NO_FLICKER": "1",
-    "CLAUDE_CODE_DISABLE_1M_CONTEXT": "1",
-    "CLAUDE_CODE_DISABLE_ADAPTIVE_THINKING": "1",
-    "CLAUDE_CODE_DISABLE_AUTO_MEMORY": "1",
-    "CLAUDE_CODE_SUBAGENT_MODEL": "sonnet"
-  },
   "permissions": {
     "allow": ["Bash(find:*)", "Bash(rg:*)", "Bash(grep:*)", "Bash(ls:*)"],
     "deny": [
@@ -40,6 +33,40 @@
           {
             "type": "command",
             "command": "if echo \"$CLAUDE_TOOL_INPUT\" | grep -qE 'gh\\s+pr\\s+create'; then \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/require-pr-self-review.sh; fi"
+          }
+        ]
+      },
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/protect-config.sh",
+            "statusMessage": "Checking if file is a protected config..."
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/post-lint.sh",
+            "statusMessage": "Running lint on edited file..."
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/stop-verify.sh",
+            "statusMessage": "Running lint + test verification before completion..."
           }
         ]
       }
