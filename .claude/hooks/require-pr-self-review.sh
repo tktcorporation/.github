@@ -32,7 +32,7 @@ if [[ "$count" -lt "$REQUIRED_REVIEWS" ]]; then
   "hookSpecificOutput": {
     "hookEventName": "PreToolUse",
     "permissionDecision": "deny",
-    "permissionDecisionReason": "PR作成をブロックしました。セルフレビューがあと${remaining}回必要です（現在 ${count}/${REQUIRED_REVIEWS} 回完了）。次の手順を実行してください: 1) codex review --uncommitted を Bash で実行してレビュー結果を確認する 2) 指摘事項があれば修正する 3) .claude/hooks/record-pr-review.sh を実行してレビュー完了を記録する 4) 必要回数に達するまで 1-3 を繰り返す 5) 再度 gh pr create を試みる"
+    "permissionDecisionReason": "PR作成をブロックしました。セルフレビューがあと${remaining}回必要です（現在 ${count}/${REQUIRED_REVIEWS} 回完了）。次の手順を実行してください: 1) codex review -c sandbox_mode='\"danger-full-access\"' --uncommitted を Bash で実行してレビュー結果を確認する（devcontainer ではフラグ必須、理由は .claude/rules/codex-pairing.md 参照） 2) 指摘事項があれば修正する 3) .claude/hooks/record-pr-review.sh を実行してレビュー完了を記録する 4) 必要回数に達するまで 1-3 を繰り返す 5) 再度 gh pr create を試みる"
   }
 }
 DENY_JSON
