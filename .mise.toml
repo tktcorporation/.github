@@ -1,8 +1,21 @@
 [tools]
-node = ["22", "24"]
+# Node の exact runtime pin の SSOT は .node-version (cross-tool 標準)。template で
+# 参照することで、.node-version 1 ファイルの変更が mise / vp / CI
+# (node-version-file: .node-version) 全てに伝搬する。
+# package.json#engines.node は別 semantic (pnpm engine check 用の compat range "22")
+# として独立管理する。Node major version 移行時 (例: 22→26 LTS) は両方更新する。
+node = "{{ read_file(path='.node-version') | trim }}"
 uv = "latest"
 python = "3.14"
-pnpm = "10"
+# pnpm は default の aqua backend を使うと pnpm v11 の release asset 形式変更
+# (binary 単体配布 → tar.gz 圧縮のみ) に aqua registry が追従していないため
+# `no asset found: pnpm-linux-arm64` で install が必ず失敗する (x64 も同様)。
+# npm backend で固定して環境差を排除する。
+"npm:pnpm" = "11"
+# Rust toolchain. CI (.github/workflows/lint.yml) と揃えてバージョン固定する。
+rust = "1.94.0"
+# CI で使う高速テストランナー。ローカルでも cargo nextest run を再現できるようにする。
+"cargo:cargo-nextest" = "latest"
 jj = "latest"
 process-compose = "latest"
 stripe-cli = "latest"
@@ -24,6 +37,14 @@ age = "latest"
 # Browser automation
 "npm:playwright" = "latest"
 
+
+[env]
+# vite-plus は cwd が依存パッケージ配下に入ると、その package.json#engines.node を
+# 見て最高 Node バージョンを選ぶため、native module の postinstall (better-sqlite3 等) が
+# tests 実行時の Node と違う ABI でビルドされて NODE_MODULE_VERSION mismatch で壊れる。
+# ルートに .node-version を置いても vp は依存パッケージの engines.node を優先するので、
+# VP_NODE_VERSION で全コンテキストの Node を pin する。値は .node-version を SSOT とする。
+VP_NODE_VERSION = "{{ read_file(path='.node-version') | trim }}"
 
 [settings]
 experimental = true
