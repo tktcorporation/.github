@@ -15,10 +15,12 @@ PR を作成したいとき、以下を自動的に実行する:
 ### 1. セルフレビュー（1回目）
 
 ```bash
-codex review --uncommitted
+codex review -c sandbox_mode='"danger-full-access"' --uncommitted
 # OR
 /superpowers:requesting-code-review
 ```
+
+フラグ要件の理由は `.claude/rules/codex-pairing.md` 参照。
 
 結果を確認し、指摘事項があれば修正する。
 
@@ -33,7 +35,7 @@ bash .claude/hooks/record-pr-review.sh
 1回目の修正を反映した状態で再度レビューする:
 
 ```bash
-codex review --uncommitted
+codex review -c sandbox_mode='"danger-full-access"' --uncommitted
 # OR
 /superpowers:requesting-code-review
 ```
