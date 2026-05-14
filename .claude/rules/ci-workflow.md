@@ -16,7 +16,11 @@
 
 ## Changeset
 
-バージョンに影響する変更を含む PR では `.changeset/` にファイルを作成する。パッケージ名は `package.json` の `name` を参照。ドキュメントのみ・リファクタ等は不要。
+詳細ポリシーは [`changeset-policy.md`](./changeset-policy.md)。要点:
+
+- runtime artifact (Rust binary / Workers / Web UI) の挙動が変わる PR では **bump 付き**の changeset を必ず作る (`fixed` 3 package を同 level で列挙)
+- CI / docs / dev tooling だけの変更は空 frontmatter
+- Rust-only 変更でも binary 挙動が変わるなら JS package を bump する。`sync-cargo-version.mjs` の連鎖が止まると Rust binary が release されない
 
 ## 禁止事項
 
