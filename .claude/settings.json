@@ -1,7 +1,14 @@
 {
-  "effortLevel": "high",
+  "effortLevel": "xhigh",
   "permissions": {
-    "allow": ["Bash(find:*)", "Bash(rg:*)", "Bash(grep:*)", "Bash(ls:*)"],
+    "allow": [
+      "Bash(find:*)",
+      "Bash(rg:*)",
+      "Bash(grep:*)",
+      "Bash(ls:*)",
+      "Bash(codex exec -c sandbox_mode=*:*)",
+      "Bash(codex review -c sandbox_mode=*:*)"
+    ],
     "deny": [
       "Read(./secrets/**)",
       "Write(./secrets/**)",
@@ -33,6 +40,10 @@
           {
             "type": "command",
             "command": "if echo \"$CLAUDE_TOOL_INPUT\" | grep -qE 'gh\\s+pr\\s+create'; then \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/require-pr-self-review.sh; fi"
+          },
+          {
+            "type": "command",
+            "command": "if echo \"$CLAUDE_TOOL_INPUT\" | grep -qE 'wrangler\\s+deploy|pnpm\\s+(run\\s+)?deploy:(stg|prod|staging|production)|flyctl\\s+deploy|fly\\s+deploy|ci-deploy\\.sh'; then echo 'BLOCKED: ローカルからの deploy は禁止。Worker は CI (Cloudflare Workers Builds) 経由、Fly machine は GitHub Actions 経由でのみデプロイすること。PR をマージすればパイプラインが走る。' >&2; exit 2; fi"
           }
         ]
       },
