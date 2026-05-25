@@ -1,7 +1,12 @@
 {
-  "effortLevel": "high",
+  "effortLevel": "xhigh",
   "permissions": {
-    "allow": ["Bash(find:*)", "Bash(rg:*)", "Bash(grep:*)", "Bash(ls:*)"],
+    "allow": [
+      "Bash(find:*)",
+      "Bash(rg:*)",
+      "Bash(grep:*)",
+      "Bash(ls:*)"
+    ],
     "deny": [
       "Read(./secrets/**)",
       "Write(./secrets/**)",
@@ -12,7 +17,9 @@
     ]
   },
   "enableAllProjectMcpServers": true,
-  "enabledMcpjsonServers": ["chrome-devtools"],
+  "enabledMcpjsonServers": [
+    "chrome-devtools"
+  ],
   "hooks": {
     "PreToolUse": [
       {
@@ -33,6 +40,10 @@
           {
             "type": "command",
             "command": "if echo \"$CLAUDE_TOOL_INPUT\" | grep -qE 'gh\\s+pr\\s+create'; then \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/require-pr-self-review.sh; fi"
+          },
+          {
+            "type": "command",
+            "command": "if [ -x \"$CLAUDE_PROJECT_DIR/.claude/hooks/project/block-redash-direct-exec.sh\" ]; then \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/project/block-redash-direct-exec.sh; fi"
           }
         ]
       },
@@ -48,6 +59,15 @@
       }
     ],
     "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "if echo \"$CLAUDE_TOOL_INPUT\" | grep -qE 'gh\\s+pr\\s+create'; then echo '{\"hookSpecificOutput\":{\"hookEventName\":\"PostToolUse\",\"additionalContext\":\"PR を作成した。続けて必ず次の2つを実行し、指摘があれば直すこと: (1) pr-first-reader-check スキルで、PRタイトル・本文・コミットメッセージ・差分のコメント/識別子に、初見のレビュアーへ通じない語（issue/PR 限定の呼び名・PR外参照・未定義略語・暗黙の前提）が無いか検査。 (2) evergreen-comment チェック（.claude/rules/code-intent-documentation.md）で、差分のコメントが現在のWHYだけか（履歴・WHAT重複・コードに無いものへの言及が無いか）検査。\"}}'; fi"
+          }
+        ]
+      },
       {
         "matcher": "Write|Edit",
         "hooks": [
@@ -111,7 +131,6 @@
     "playwright@claude-plugins-official": false,
     "serena@claude-plugins-official": false,
     "claude-api@anthropic-agent-skills": false,
-    "adspirer-ads-agent@claude-plugins-official": false,
     "legalzoom@claude-plugins-official": false,
     "data@claude-plugins-official": false,
     "productivity@knowledge-work-plugins": false,
@@ -135,7 +154,9 @@
     "lseg@financial-services-plugins": false,
     "sp-global@financial-services-plugins": false,
     "sentry@claude-plugins-official": true,
-    "intercom@claude-plugins-official": false
+    "intercom@claude-plugins-official": false,
+    "slack@claude-plugins-official": true,
+    "datadog@claude-plugins-official": true
   },
   "extraKnownMarketplaces": {
     "anthropic-agent-skills": {
