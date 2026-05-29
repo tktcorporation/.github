@@ -1,5 +1,7 @@
 {
-  "effortLevel": "ultracode",
+  "effortLevel": "xhigh",
+  "ultracode": true,
+  "enableWorkflows": true,
   "permissions": {
     "allow": [
       "Bash(find:*)",
