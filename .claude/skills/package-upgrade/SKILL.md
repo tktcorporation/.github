@@ -53,7 +53,7 @@ cargo audit                     # Rust を含むなら (cargo-audit 未導入な
 ```bash
 pnpm outdated -r                # workspace 全体の outdated 一覧
 pnpm --filter <pkg> outdated    # 個別ワークスペース
-cargo outdated                  # Rust を含むなら
+cargo outdated                  # Rust を含むなら (cargo-outdated 未導入なら cargo install cargo-outdated)
 ```
 
 脆弱性が絡まない単なる古さは優先度を下げる。major 跨ぎは breaking change のレビューコストが高いので、脆弱性 or 明確な必要性がない限り見送ってよい。
