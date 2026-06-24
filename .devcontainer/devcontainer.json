@@ -116,10 +116,11 @@
     // Node.js のバージョン管理は mise に一任するため vp に shim (node/npm/npx) を作らせない。
     // VP_NODE_MANAGER=no は CI/devcontainer 自動有効化より優先されるオプトアウト。
     // CI=true は失敗時にインストールログを標準出力にインライン出力させるため (devcontainer ビルドログで追跡しやすくする)。
+    // env はパイプ右の bash に付与する。インストーラはこの bash 内で走るため、左の curl に付けると bash へ届かず opt-out が無効化される。
     "install-vite-plus": [
       "bash",
       "-c",
-      "VP_NODE_MANAGER=no CI=true curl -fsSL https://vite.plus | bash"
+      "curl -fsSL https://vite.plus | VP_NODE_MANAGER=no CI=true bash"
     ]
   },
   "postCreateCommand": {
