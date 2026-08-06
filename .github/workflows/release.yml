@@ -30,9 +30,11 @@ jobs:
           cache: "pnpm"
 
       # npm@latest だと npm のメジャーアップデートで registry 応答の形式が変わり、
-      # changesets の公開済みバージョン検出が壊れることがある(package.json#engines.npm を SSOT とし、動作確認済みの版に固定する)。
+      # changesets の公開済みバージョン検出が壊れることがある(package.json#releaseNpmVersion を SSOT とし、動作確認済みの版に固定する)。
+      # engines.npm ではなく専用フィールドにしているのは、npm/pnpm の EBADENGINE 警告(engines は
+      # 互換範囲の宣言用で、単一バージョン固定と意味が衝突する)を避けるため。
       - name: Upgrade npm for OIDC support
-        run: npm install -g npm@"$(node -p "require('./package.json').engines.npm")"
+        run: npm install -g npm@"$(node -p "require('./package.json').releaseNpmVersion")"
 
       - name: Install Dependencies
         run: pnpm install --frozen-lockfile
