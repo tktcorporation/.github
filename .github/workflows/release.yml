@@ -30,9 +30,10 @@ jobs:
           cache: "pnpm"
 
       # npm@latest だと npm のメジャーアップデートで registry 応答の形式が変わり、
-      # changesets の公開済みバージョン検出が壊れることがある(package.json#releaseNpmVersion を SSOT とし、動作確認済みの版に固定する)。
-      # engines.npm ではなく専用フィールドにしているのは、npm/pnpm の EBADENGINE 警告(engines は
-      # 互換範囲の宣言用で、単一バージョン固定と意味が衝突する)を避けるため。
+      # changesets の公開済みバージョン検出が壊れることがある。動作確認済みのバージョンを
+      # package.json#releaseNpmVersion に SSOT として宣言し、ここで読み取って固定する。
+      # engines.npm を使わないのは、engines が互換範囲の宣言用フィールドであり、単一バージョン
+      # 固定に使うと npm/pnpm の EBADENGINE 警告と意味が衝突するため。
       - name: Upgrade npm for OIDC support
         run: npm install -g npm@"$(node -p "require('./package.json').releaseNpmVersion")"
 
