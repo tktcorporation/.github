@@ -29,8 +29,13 @@ jobs:
           registry-url: "https://registry.npmjs.org"
           cache: "pnpm"
 
+      # npm@latest だと npm のメジャーアップデートで registry 応答の形式が変わり、
+      # changesets の公開済みバージョン検出が壊れることがある。動作確認済みのバージョンを
+      # package.json#releaseNpmVersion に SSOT として宣言し、ここで読み取って固定する。
+      # npm の engines フィールドは互換範囲の宣言用であり、単一バージョンの固定に使うと
+      # npm/pnpm の EBADENGINE 警告と意味が衝突するため、専用フィールドにしている。
       - name: Upgrade npm for OIDC support
-        run: npm install -g npm@latest
+        run: npm install -g npm@"$(node -p "require('./package.json').releaseNpmVersion")"
 
       - name: Install Dependencies
         run: pnpm install --frozen-lockfile
