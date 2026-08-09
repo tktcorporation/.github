@@ -24,19 +24,24 @@ EnterWorktree(name: "タスク名")
 
 - `.claude/worktrees/<タスク名>` に自動作成される
 - セッション終了時に keep/remove を聞いてくれるので掃除忘れを防げる
-- **ただし HEAD ベースで切るため、事前に `git fetch origin master` して origin/master 上にいることを確認する**
+- **ただし HEAD ベースで切るため、事前に origin の default branch を fetch し、その上にいることを確認する（コマンドは下の「手動で作る場合」を参照）**
 
 ### 手動で作る場合
 
 ```bash
+# default branch 名は repo により main / master 等で異なるため origin/HEAD から動的に取得する。
+# origin/HEAD が未設定なら一度だけ: git remote set-head origin --auto
+default_branch="$(git symbolic-ref --short refs/remotes/origin/HEAD | sed 's@^origin/@@')"
+
 # プロジェクトルートで作業する場合
-git fetch origin master
-git worktree add .claude/worktrees/<タスク名> -b <ブランチ名> origin/master
+git fetch origin "$default_branch"
+git worktree add .claude/worktrees/<タスク名> -b <ブランチ名> "origin/$default_branch"
 
 # サブモジュール内で作業する場合
 cd <サブモジュールのパス>
-git fetch origin master
-git worktree add .claude/worktrees/<タスク名> -b <ブランチ名> origin/master
+default_branch="$(git symbolic-ref --short refs/remotes/origin/HEAD | sed 's@^origin/@@')"
+git fetch origin "$default_branch"
+git worktree add .claude/worktrees/<タスク名> -b <ブランチ名> "origin/$default_branch"
 ```
 
 ```bash
@@ -47,18 +52,19 @@ git worktree add /tmp/<タスク名> ...
 
 ## ベースブランチ（CRITICAL）
 
-**Worktree は必ず origin の default branch（`main` / `master`）から切ること。**
+**Worktree は必ず origin の default branch（repo により `main` / `master` 等）から切ること。** ブランチ名はハードコードせず、`origin/HEAD` から動的に導出する。
 
 ```bash
-git fetch origin master
+default_branch="$(git symbolic-ref --short refs/remotes/origin/HEAD | sed 's@^origin/@@')"
+git fetch origin "$default_branch"
 ```
 
 HEAD やトピックブランチから切ると、他の作業の未マージコミットが混入し、CI が無関係なエラーで失敗する。
 
 `EnterWorktree` は HEAD ベースで切るため、実行前に必ず以下を確認すること:
 
-1. `git fetch origin master` でリモートを最新にする
-2. 現在の HEAD が origin/master と同じであること（サブモジュールの場合は `cd` してから）
+1. `default_branch` を導出して `git fetch origin "$default_branch"` でリモートを最新にする
+2. 現在の HEAD が origin の default branch と同じであること（サブモジュールの場合は `cd` してから）
 
 ## サブモジュールでの `.gitignore`
 
