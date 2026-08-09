@@ -4,8 +4,8 @@
 # このファイルは ziku で全 project に sync される (.ziku/ziku.jsonc 参照)。
 #
 # mise は同一ディレクトリ内で `.mise.toml` と `.config/mise/conf.d/*.toml`
-# を両方読み込み、後者が前者を override する。tool / setting / task の
-# 名前が衝突しなければ単純 merge される。
+# を両方読み込み、`.mise.toml` が `conf.d/*.toml` を override する。tool /
+# setting / task の名前が衝突しなければ単純 merge される。
 
 [tools]
 # Python の polyglot pkg manager。`pipx.uvx` 経由でも使う。
