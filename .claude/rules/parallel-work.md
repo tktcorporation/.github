@@ -14,16 +14,16 @@
 
 ## Worktree 運用
 
-**必ず `.claude/worktrees/` 配下に作成**（hook で強制）。**必ず `origin/main` から切る**（未マージコミット混入防止）。
+**必ず `.claude/worktrees/` 配下に作成**（hook で強制）。**必ず origin の default branch から切る**（未マージコミット混入防止）。default branch 名は repo により異なるため `origin/HEAD` から動的に導出する。
 
 ```bash
-# 推奨
-git fetch origin main
-EnterWorktree(name: "タスク名")
+# default branch 名を取得（origin/HEAD 未設定なら一度だけ: git remote set-head origin --auto）
+default_branch="$(git symbolic-ref --short refs/remotes/origin/HEAD | sed 's@^origin/@@')"
+git fetch origin "$default_branch"
 
-# 手動
-git fetch origin main
-git worktree add .claude/worktrees/<タスク名> -b <ブランチ名> origin/main
+# 推奨: 上記 fetch 後、default branch 上で EnterWorktree(name: "タスク名") ツールを使う
+# 手動:
+git worktree add .claude/worktrees/<タスク名> -b <ブランチ名> "origin/$default_branch"
 ```
 
 - 作成後 `node_modules` がなければ `pnpm install` を実行
