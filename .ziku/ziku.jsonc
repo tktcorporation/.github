@@ -34,7 +34,6 @@
     ".github/workflows/label.yml",
     ".github/labeler.yml",
     ".mcp.json",
-    ".mise.toml",
     ".claude/rules/conclusion-only-output.md",
     ".claude/skills/pr-deep-review",
     ".claude/skills/technical-writing-style",
