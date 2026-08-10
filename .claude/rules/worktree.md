@@ -66,6 +66,10 @@ HEAD やトピックブランチから切ると、他の作業の未マージコ
 1. `default_branch` を導出して `git fetch origin "$default_branch"` でリモートを最新にする
 2. 現在の HEAD が origin の default branch と同じであること（サブモジュールの場合は `cd` してから）
 
+## 作成後の依存インストール
+
+worktree は元のチェックアウトの `node_modules` を共有しない。作成後に無ければ依存をインストールしてから作業を始める。
+
 ## サブモジュールでの `.gitignore`
 
 サブモジュール内で worktree を作る場合、そのリポジトリの `.gitignore` に `.claude/worktrees/` が含まれていることを確認する。なければ追加してから worktree を作成すること。
