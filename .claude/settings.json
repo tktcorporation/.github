@@ -68,6 +68,11 @@
         "hooks": [
           {
             "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/docs-lifecycle-guard.sh",
+            "statusMessage": "Checking doc placement..."
+          },
+          {
+            "type": "command",
             "command": "bash \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/post-lint.sh",
             "statusMessage": "Running lint on edited file..."
           }
