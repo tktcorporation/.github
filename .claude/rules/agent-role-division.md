@@ -58,3 +58,4 @@
 - `agent-work-discipline.md` — ツール結果の捏造禁止、名指しされた対象の実行
 - `worktree.md` — 並列でファイルを書き換えるときの作業場所
 - `.claude/skills/autonomous-dev` — 委譲する実装作業そのものの進め方
+

@@ -65,9 +65,9 @@ function getData(): Result<Data, GetDataError>;
 
 言語・ライブラリによって手段は変わるが、代表的な組み合わせは次のとおり。
 
-| 原則                       | パターンの例                                                                                                                     |
+| 原則                       | パターンの例                                                                                                                       |
 | -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| 予期されたエラーを値で返す | Result / Either 型で返す（例: TypeScript + Effect の `Effect<T, E>`、Rust の `Result<T, E>`、関数型ライブラリの `Either`）        |
+| 予期されたエラーを値で返す | Result / Either 型で返す（例: TypeScript + Effect の `Effect<T, E>`、Rust の `Result<T, E>`、関数型ライブラリの `Either`）         |
 | 捕捉した例外の分類         | 網羅的なパターンマッチで分類し、未知のケースは再スローする（例: ts-pattern の `match().otherwise()`、Rust の `match`）             |
 | 原則の自動強制             | 静的解析ルールで違反パターン（cause 無しの再スロー・握りつぶし・曖昧なエラー型など）を検知する（例: ast-grep, ESLint custom rule） |
 
