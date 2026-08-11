@@ -46,6 +46,8 @@
     ".claude/rules/*.md",
     ".claude/skills/upstream-fix",
     ".claude/skills/evergreen-writing",
-    ".claude/skills/package-upgrade/SKILL.md"
+    ".claude/skills/package-upgrade/SKILL.md",
+    ".claude/skills/pr-review-loop",
+    ".claude/rules/template-sync-boundary.md"
   ]
 }
