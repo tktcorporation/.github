@@ -4,7 +4,7 @@ Codex CLI (`codex`) はセカンドオピニオンを得るためのツール。
 
 ## 必ず使う場面（MUST）
 
-- **PR 作成・push 前のレビュー**: `codex review --uncommitted` / `codex review --base main`
+- **PR 作成・push 前のレビュー**: `codex review --uncommitted` / `codex review --base <default-branch>`
 - **設計方針が2つ以上あり迷う**: `codex exec "2案のトレードオフを分析して: ..."`
 - **バグ原因が10分以上特定できない**: `codex exec "このエラーの原因を調査して: ..."`
 
@@ -17,13 +17,13 @@ Codex CLI (`codex`) はセカンドオピニオンを得るためのツール。
 ```bash
 codex exec -c sandbox_mode='"danger-full-access"' "プロンプト"                        # 非インタラクティブ実行
 codex review -c sandbox_mode='"danger-full-access"' --uncommitted                     # ワークツリーのレビュー
-codex review -c sandbox_mode='"danger-full-access"' --base main                       # main差分レビュー
+codex review -c sandbox_mode='"danger-full-access"' --base <default-branch>            # default branch 差分のレビュー
 codex exec -c sandbox_mode='"danger-full-access"' "エッジケースを洗い出して" < file   # ファイル渡し
 ```
 
-### `-c sandbox_mode='"danger-full-access"'` は devcontainer では必須
+### `-c sandbox_mode='"danger-full-access"'` はコンテナ内では必須
 
-devcontainer (orbstack) は kernel が nested user namespace を許可しないため、Codex 内蔵の bubblewrap が `bwrap: No permissions to create a new namespace` で exit 1 し、`codex review` の子コマンド（`git status` 等）が全滅する。devcontainer 自体が外部サンドボックスとして host から隔離されているので、Codex 側のサンドボックスは委譲して無効化する。
+kernel が nested user namespace を許可しないコンテナ環境では、Codex 内蔵の bubblewrap が `bwrap: No permissions to create a new namespace` で exit 1 し、`codex review` の子コマンド（`git status` 等）が全滅する。コンテナ自体が外部サンドボックスとして host から隔離されているので、Codex 側のサンドボックスは委譲して無効化する。
 
 `-c` で config を上書きする方式に統一する理由: `--dangerously-bypass-approvals-and-sandbox` フラグは `codex exec` 限定で、`codex review` には対応フラグが無く `-c` でしか sandbox を切り替えられない。書き分けると writeup と allowlist が増えるので、両サブコマンドで通る `-c sandbox_mode='"danger-full-access"'` に揃える。`approval_policy` は非インタラクティブ実行で default `never` のため省略。
 
