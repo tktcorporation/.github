@@ -30,7 +30,7 @@
           },
           {
             "type": "command",
-            "command": "cmd=\"$(jq -r '.tool_input.command // empty' 2>/dev/null || true)\"; if echo \"$cmd\" | grep -qE 'git\\s+checkout\\s+--\\s+\\.|git\\s+restore\\s+\\.|git\\s+reset\\s+--hard|git\\s+clean\\s+-[a-z]*f|jj\\s+restore\\s+--(from|to|changes-in)'; then echo 'BLOCKED: 全ファイル対象の revert/reset は他プロセスの変更を巻き込む。特定ファイルを指定するか、ワークスペース (jj workspace add / git worktree add) を作成して作業すること。' >&2; exit 2; fi"
+            "command": "cmd=\"$(jq -r '.tool_input.command // empty' 2>/dev/null || true)\"; if echo \"$cmd\" | grep -qE 'git\\s+checkout\\s+--\\s+\\.|git\\s+restore\\s+\\.|git\\s+reset\\s+--hard|git\\s+clean\\s+-[a-z]*f'; then echo 'BLOCKED: 全ファイル対象の revert/reset は他プロセスの変更を巻き込む。特定ファイルを指定するか、ワークスペース (git worktree add) を作成して作業すること。' >&2; exit 2; fi"
           },
           {
             "type": "command",

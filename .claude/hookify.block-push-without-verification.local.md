@@ -2,7 +2,7 @@
 name: block-push-without-verification
 enabled: true
 event: bash
-pattern: (jj\s+git\s+push|git\s+push)
+pattern: (git\s+push)
 action: warn
 ---
 

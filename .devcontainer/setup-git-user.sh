@@ -5,9 +5,6 @@
 #   1. 環境変数 GIT_USER_NAME / GIT_USER_EMAIL（.env.devcontainer で指定可能）
 #   2. 既存の git config --global（VS Code がホストからコピーした場合）
 #   3. Codespaces の GITHUB_USER 環境変数（Codespaces が自動設定）
-#
-# jj は git config または ~/.jjconfig.toml を参照するため、
-# git config が正しく設定されていれば jj 側の追加設定は不要。
 
 set -euo pipefail
 

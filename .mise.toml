@@ -3,7 +3,6 @@ node = ["22", "24"]
 uv = "latest"
 python = "3.14"
 pnpm = "10"
-jj = "latest"
 process-compose = "latest"
 stripe-cli = "latest"
 opentofu = "latest"

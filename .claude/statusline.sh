@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Claude Code statusline script (project scope)
-# 公式JSON fields + jj情報 + セッション要約を表示
+# 公式JSON fields + セッション要約を表示
 # set -e を使わない: ステータスラインは部分的失敗でも表示を続けるべき
 
 input=$(cat)
@@ -42,36 +42,13 @@ if [ -n "$transcript" ] && [ -f "$transcript" ]; then
     | head -c 200)
 fi
 
-# --- jj 情報 ---
-jj_info=""
-if command -v jj >/dev/null 2>&1; then
-  # bookmark（現在のチェンジに付いているもの）
-  bm=$(jj log -r @ --no-graph -T 'bookmarks' 2>/dev/null | head -1 || echo "")
-  ch=$(jj log -r @ --no-graph -T 'change_id.shortest()' 2>/dev/null || echo "")
-  ws=$(jj workspace list 2>/dev/null | wc -l | tr -d ' ' || echo "1")
-
-  if [ -n "$bm" ]; then
-    jj_info="$bm"
-  elif [ -n "$ch" ]; then
-    jj_info="@$ch"
-  fi
-
-  if [ "$ws" -gt 1 ] 2>/dev/null; then
-    jj_info="$jj_info(ws:$ws)"
-  fi
-fi
-
 # --- 組み立て ---
-# 1行目: model [bar] pct% | +add/-del | jj:xxx
+# 1行目: model [bar] pct% | +add/-del
 # 2行目: Topic: セッションの最初のユーザーメッセージ
 line1="$model [$bar] ${pct}%"
 
 if [ "$lines_add" -gt 0 ] || [ "$lines_del" -gt 0 ]; then
   line1="$line1 | +${lines_add}/-${lines_del}"
-fi
-
-if [ -n "$jj_info" ]; then
-  line1="$line1 | jj:$jj_info"
 fi
 
 if [ -n "$topic" ]; then
