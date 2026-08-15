@@ -56,9 +56,11 @@ DENY_JSON
   fi
 done
 
-# ast-grep ルールファイルも保護（rules/*.yml）
+# ast-grep ルールファイルも保護（リポジトリ直下の rules/*.yml、または .ast-grep/rules/*.yml
+# に絞る。ネストの深さを問わず */rules/*.yml まで含めると、業務ドメインの
+# rules/*.yml のような無関係なディレクトリまで誤検知してブロックしてしまう）。
 case "$file" in
-  */rules/*.yml|rules/*.yml)
+  rules/*.yml|.ast-grep/rules/*.yml)
     cat <<DENY_JSON
 {
   "hookSpecificOutput": {
