@@ -56,10 +56,17 @@ DENY_JSON
   fi
 done
 
-# ast-grep ルールファイルも保護（リポジトリ直下の rules/*.yml、または .ast-grep/rules/*.yml
-# に絞る。ネストの深さを問わず */rules/*.yml まで含めると、業務ドメインの
-# rules/*.yml のような無関係なディレクトリまで誤検知してブロックしてしまう）。
-case "$file" in
+# ast-grep ルールファイルも保護する。file_path は絶対パスで渡されるため、
+# リポジトリルート（CLAUDE_PROJECT_DIR）からの相対パスに変換してから判定する。
+# 相対パスにせず「パスのどこかに rules/ を含む」形で判定すると、ネストした
+# 無関係なディレクトリ（業務ドメインの rules/*.yml 等）まで誤って一致してしまう。
+project_dir="${CLAUDE_PROJECT_DIR:-}"
+rel_file="$file"
+if [[ -n "$project_dir" && "$file" == "$project_dir"/* ]]; then
+  rel_file="${file#"$project_dir"/}"
+fi
+
+case "$rel_file" in
   rules/*.yml|.ast-grep/rules/*.yml)
     cat <<DENY_JSON
 {
