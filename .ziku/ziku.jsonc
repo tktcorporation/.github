@@ -3,6 +3,7 @@
   "include": [
     ".claude/.gitignore",
     ".claude/settings.json",
+    ".claude/output-styles/*.md",
     ".claude/hooks/*.sh",
     ".claude/rules/*.md",
     ".claude/hookify.block-blind-kill.local.md",
