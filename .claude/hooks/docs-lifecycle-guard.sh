@@ -3,7 +3,7 @@
 # 直後に、SSOT の判断と消費タイミングを Claude へ問い直す。
 #
 # なぜ lint ではなく hook か: 「その記述の SSOT はコードではないか」は正規表現で
-# 判定できない。lint（pnpm lint:docs）は鮮度とリンク切れという機械的に判定できる
+# 判定できない。lint（mise run lint-docs）は鮮度とリンク切れという機械的に判定できる
 # 部分だけを担い、書く前の判断はここで促す。
 #
 # 発火条件は `.config/docs-lifecycle.json` の scan から導出するため、対象ディレクトリを
@@ -51,6 +51,6 @@ jq -Rn --arg file "$file" '{
       "2. .md を作らずに済まないか（1 PR で終わるなら PR description、段階実装なら issue、確定した設計判断ならコードコメント、作業計画なら .claude/plans/）\n" +
       "3. 使い捨ての plan / spec なら、どの PR で消費して削除するかを決めたか\n" +
       "4. 長期保持する WHY 集約 doc なら frontmatter に lifecycle: durable を宣言したか\n" +
-      "鮮度チェックの閾値を超えると pnpm lint:docs が fail する。")
+      "鮮度チェックの閾値を超えると mise run lint-docs が失敗として報告する。")
   }
 }'
