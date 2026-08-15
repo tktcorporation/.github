@@ -1,5 +1,5 @@
 /**
- * docs のライフサイクル lint CLI（`pnpm lint:docs`、pnpm check に組み込み）。
+ * docs のライフサイクル lint CLI（`mise run lint-docs`）。
  *
  * 実装と乖離した設計 doc が残り続けるのを防ぐため、「触られていない期間」を
  * 機械的な指標にして見直しを強制する。判定ロジックは scripts/lib/docs-lifecycle/ を参照。
@@ -9,17 +9,19 @@
  *   --list  違反していない doc も含めて鮮度一覧を出す（棚卸し作業用）
  *   --json  機械可読な出力（他ツール連携用）
  *
- * 他リポジトリへ ziku で配ったときの導入手順。実装と `.config/docs-lifecycle.json` は
- * pull で届くが、ziku は package.json を同期しないので依存とスクリプトは各リポジトリで足す:
- *   1. 実行に要る依存を devDependencies に入れる。メジャーバージョンを添えているのは
- *      API に依存しているため（`zod` は v4 の `z.strictObject`、`mdast-util-from-markdown`
- *      は v2 の AST 形状）:
- *      `tsx@4`（実行）・`luxon@3`（日付）・`zod@4`（設定検証）・`yaml@2`（frontmatter）・
- *      `mdast-util-from-markdown@2` + `unist-util-visit@5`（リンク抽出）
- *   2. package.json に `"lint:docs": "tsx scripts/docs-lifecycle.ts"` を足し、集約 lint に連結する
- *      （この 2 手が済むまでチェックは動かない。設定ファイルが無い場合も no-op で終わる）
+ * 実行に要るものは ziku で配る範囲に収めてある。この実装・`.config/docs-lifecycle.json`・
+ * mise の `lint-docs` タスクが届けば動き、配布先に package.json も node_modules も要らない:
+ *   1. bun で実行する。npm パッケージを import した TypeScript を、node_modules も
+ *      package.json も無いまま走らせられるのが理由（bun の auto-install が依存を
+ *      グローバルキャッシュへ解決する）。bun 自体は `.config/mise/conf.d/shared.toml` の
+ *      `lint-docs` タスクが要求するので、そのタスク経由で呼べば入る
+ *   2. `.config/docs-lifecycle.json` を置く（無ければ警告を出して何もしない）
  *   3. この lint を回す全ワークフローの checkout に `fetch-depth: 0` を指定する
  *      （shallow clone では鮮度チェックが警告付きでスキップされ、検知が効かない）
+ *
+ * auto-install は依存の最新版を解決する。この実装は `zod` v4 の `z.strictObject` と
+ * `mdast-util-from-markdown` v2 の AST 形状に依存しているので、そのメジャーが上がると
+ * 壊れうる。壊れたときは import 指定子へ version を添えて固定する。
  *
  * 届いた設定はそのまま使える形にしてある。リポジトリ固有の事情は設定ではなく doc 側の
  * frontmatter で表す（生成物なら `lifecycle: generated`、進行中なら `review-by`）。
