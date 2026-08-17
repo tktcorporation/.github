@@ -9,7 +9,21 @@
 
 set -euo pipefail
 
-REVIEW_COUNT_FILE="${CLAUDE_PROJECT_DIR:-.}/.claude/.pr-review-count"
+# require-pr-self-review.sh と同じ解決ロジック。CLAUDE_PROJECT_DIR は hook
+# 実行時にのみ設定され、このスクリプトを worktree 内から手動で呼ぶときは
+# 未設定になるため、"." フォールバックだと require-pr-self-review.sh が見る
+# ファイルと分裂する（worktree.md 参照）。
+resolve_project_dir() {
+  if [[ -n "${CLAUDE_PROJECT_DIR:-}" ]]; then
+    printf '%s' "$CLAUDE_PROJECT_DIR"
+    return
+  fi
+  local common_dir
+  common_dir="$(git rev-parse --git-common-dir 2>/dev/null)" || { printf '.'; return; }
+  (cd "$common_dir/.." && pwd)
+}
+
+REVIEW_COUNT_FILE="$(resolve_project_dir)/.claude/.pr-review-count"
 
 count=0
 if [[ -f "$REVIEW_COUNT_FILE" ]]; then

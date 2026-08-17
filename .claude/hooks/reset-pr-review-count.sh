@@ -8,6 +8,19 @@
 
 set -euo pipefail
 
-REVIEW_COUNT_FILE="${CLAUDE_PROJECT_DIR:-.}/.claude/.pr-review-count"
+# require-pr-self-review.sh / record-pr-review.sh と同じ解決ロジック。
+# ここが揃っていないと、worktree 側に残ったカウンタファイルが削除されず、
+# 次回 PR 作成時のセルフレビュー回数として誤って引き継がれる（worktree.md 参照）。
+resolve_project_dir() {
+  if [[ -n "${CLAUDE_PROJECT_DIR:-}" ]]; then
+    printf '%s' "$CLAUDE_PROJECT_DIR"
+    return
+  fi
+  local common_dir
+  common_dir="$(git rev-parse --git-common-dir 2>/dev/null)" || { printf '.'; return; }
+  (cd "$common_dir/.." && pwd)
+}
+
+REVIEW_COUNT_FILE="$(resolve_project_dir)/.claude/.pr-review-count"
 rm -f "$REVIEW_COUNT_FILE"
 exit 0
