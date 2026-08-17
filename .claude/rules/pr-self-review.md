@@ -88,5 +88,5 @@ bash .claude/hooks/record-pr-review.sh
 ## 注意
 
 - レビュー回数のカウンターは `.claude/.pr-review-count` に記録される（gitignore 済み）
-- PR 作成が許可された時点でカウンターは自動リセットされる
+- カウンターのリセットは `.claude/hooks/reset-pr-review-count.sh`（PostToolUse）が行う。`gh pr create` が exit 0 で完了した場合にのみ発火するため、実際に PR を作成できたときだけリセットされる
 - `codex review` が使えない環境では、Agent ツールの code-reviewer サブエージェントを代替として使う
