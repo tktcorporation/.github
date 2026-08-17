@@ -15,7 +15,22 @@
 
 set -euo pipefail
 
-REVIEW_COUNT_FILE="${CLAUDE_PROJECT_DIR:-.}/.claude/.pr-review-count"
+# CLAUDE_PROJECT_DIR は hook 実行時にのみ設定される。record-pr-review.sh が
+# worktree 内から手動で呼ばれるときは未設定になり、"." フォールバックだと
+# worktree 側のカウンタファイルを見てしまい、この hook が見るファイルと
+# 分裂する（worktree.md 参照）。git の共通 .git ディレクトリは全 worktree で
+# 共有されるため、そこから親ディレクトリを逆算して揃える。
+resolve_project_dir() {
+  if [[ -n "${CLAUDE_PROJECT_DIR:-}" ]]; then
+    printf '%s' "$CLAUDE_PROJECT_DIR"
+    return
+  fi
+  local common_dir
+  common_dir="$(git rev-parse --git-common-dir 2>/dev/null)" || { printf '.'; return; }
+  (cd "$common_dir/.." && pwd)
+}
+
+REVIEW_COUNT_FILE="$(resolve_project_dir)/.claude/.pr-review-count"
 REQUIRED_REVIEWS=2
 
 # カウンターファイルが無ければ 0
