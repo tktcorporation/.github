@@ -54,8 +54,6 @@
     ".claude/rules/pr-writing-style.md",
     ".claude/rules/template-sync-boundary.md",
     ".claude/skills/functional-ddd/SKILL.md",
-    ".claude/skills/autonomous-dev/SKILL.md",
-    "AGENTS.md",
     ".codex/config.toml",
     ".codex/hooks.json",
     ".codex/run-shared-hook.sh"
