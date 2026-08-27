@@ -19,7 +19,6 @@
     ".github/workflows/label.yml",
     ".github/labeler.yml",
     ".mcp.json",
-    ".mise.toml",
     ".config/mise/conf.d/shared.toml",
     ".claude/skills/upstream-fix",
     ".claude/skills/evergreen-writing",
@@ -56,6 +55,7 @@
     ".claude/skills/functional-ddd/SKILL.md",
     ".codex/config.toml",
     ".codex/hooks.json",
-    ".codex/run-shared-hook.sh"
+    ".codex/run-shared-hook.sh",
+    "AGENTS.md"
   ]
 }
