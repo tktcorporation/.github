@@ -57,5 +57,3 @@
 - `subagent-resource-limits.md` — 検証コマンドを回すサブエージェントの同時実行数の上限
 - `agent-work-discipline.md` — ツール結果の捏造禁止、名指しされた対象の実行
 - `worktree.md` — 並列でファイルを書き換えるときの作業場所
-- `.claude/skills/autonomous-dev` — 委譲する実装作業そのものの進め方
-
