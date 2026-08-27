@@ -8,6 +8,3 @@ approvals_reviewer = "auto_review"
 command = "bash"
 args = [".devcontainer/run-chrome-devtools-mcp.sh"]
 cwd = ".."
-
-[agents]
-max_concurrent_threads_per_session = 2
