@@ -17,7 +17,9 @@ fi
 
 mapfile -t files < <(
   jq -r '.tool_input' <<<"$input" |
-    sed -nE 's/^\*\*\* (Add|Update|Delete) File: (.*)$/\2/p' |
+    sed -nE \
+      -e 's/^\*\*\* (Add|Update|Delete) File: (.*)$/\2/p' \
+      -e 's/^\*\*\* Move to: (.*)$/\1/p' |
     awk '!seen[$0]++'
 )
 
