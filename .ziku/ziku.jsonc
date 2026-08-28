@@ -56,6 +56,7 @@
     ".codex/config.toml",
     ".codex/hooks.json",
     ".codex/run-shared-hook.sh",
-    "AGENTS.md"
+    "AGENTS.md",
+    ".herdr/config.toml"
   ]
 }
