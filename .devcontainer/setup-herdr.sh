@@ -7,8 +7,9 @@ readonly HERDR_CONFIG_FILE="${HERDR_CONFIG_DIR}/config.toml"
 readonly HERDR_CONFIG_BACKUP="${HERDR_CONFIG_DIR}/config.toml.before-workspace-config"
 readonly WORKSPACE_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 readonly WORKSPACE_CONFIG_FILE="${WORKSPACE_ROOT}/.herdr/config.toml"
+readonly CODEX_CONFIG_DIR="${CODEX_HOME:-${HOME}/.codex}"
 
-mkdir -p "${HERDR_CONFIG_DIR}"
+mkdir -p "${HERDR_CONFIG_DIR}" "${CODEX_CONFIG_DIR}"
 
 if [[ -e "${HERDR_CONFIG_FILE}" && ! -L "${HERDR_CONFIG_FILE}" ]]; then
   if [[ -e "${HERDR_CONFIG_BACKUP}" ]]; then
