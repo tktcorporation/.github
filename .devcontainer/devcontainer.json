@@ -139,7 +139,7 @@
     "vp-env-system-first": ["bash", "-lc", "vp env off || true"],
     "git-performance": "git config status.submoduleSummary false && git config diff.ignoreSubmodules all && git config fetch.recurseSubmodules false && git config submodule.recurse false",
     "install-gh-extensions": "gh extension install agbiotech/gh-sub-issue 2>/dev/null || true",
-    "mise-install": ["bash", "-lc", "mise install"],
+    "mise-install": ["bash", "-lc", "mise install && bash .devcontainer/setup-herdr.sh"],
     // ~/.claude.json は volume 外（ホームディレクトリ直下）のため、rebuild で消える
     // volume 内のバックアップからリストアする（postStartCommand で毎回バックアップされる）
     // 初回（バックアップなし）は onboarding 済みの最小ファイルを作成
