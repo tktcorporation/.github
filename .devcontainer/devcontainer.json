@@ -19,38 +19,21 @@
     // mise インストール済みツールを DevContainer 間で共有
     // 全コンテナが Linux なのでバイナリ互換性あり。ワークスペース名を含めず共有 volume にする
     // ホスト (macOS) とは OS が異なるためバインドマウントではなく named volume を使う
-    "source=devcontainer-shared-mise-data,target=/home/vscode/.local/share/mise,type=volume",
-
-    // EC2 への SSH 公開鍵認証を 1Password SSH Agent に委譲する。
-    // VS Code がコンテナへ転送する SSH agent ソケットには 1Password の鍵が乗らないため、
-    // ホストの 1Password agent ソケットを直接 bind mount して参照する。
-    // ソケットファイル単体ではなく親ディレクトリを mount する: 1Password がソケットを
-    // 再生成 (unlink して同名で作り直す) しても、ディレクトリ越しの参照なら新しい実体に追随する。
-    // また bind mount は source がホストに実在しないと docker create ごと失敗するため、
-    // 1Password 未導入のホストでも initializeCommand が事前に空ディレクトリを用意しておくことで
-    // devcontainer 自体は起動できるようにしている (agent が使えないだけで済む)。
-    // パスに空白 (Group Containers) を含むため、他要素と異なりオブジェクト形式で記述する。
-    {
-      "source": "${localEnv:HOME}/Library/Group Containers/2BUA8C4S2C.com.1password/t",
-      "target": "/tmp/1password-agent",
-      "type": "bind"
-    }
+    "source=devcontainer-shared-mise-data,target=/home/vscode/.local/share/mise,type=volume"
   ],
   "features": {
-    "ghcr.io/devcontainers/features/docker-in-docker:2": {
-      "version": "latest",
-      "enableNonRootDocker": "true",
-      "moby": "true"
-    },
+    // "ghcr.io/devcontainers/features/docker-in-docker:2": {
+    //   "version": "latest",
+    //   "enableNonRootDocker": "true",
+    //   "moby": "true"
+    // },
+    "ghcr.io/devcontainers/features/aws-cli:1": {},
     "ghcr.io/devcontainers/features/github-cli:1": {},
     "ghcr.io/devcontainers-extra/features/mise:1": {
       "version": "2026.4.10"
     }
   },
   "runArgs": ["--env-file", ".devcontainer/.env.devcontainer"],
-  // remoteEnv ではなく containerEnv にする: VS Code のターミナル以外（バックグラウンドプロセスや
-  // postCreateCommand 等）からの SSH 接続にも 1Password agent ソケットを見せる必要があるため。
-  "containerEnv": { "SSH_AUTH_SOCK": "/tmp/1password-agent/agent.sock" },
   "customizations": {
     "vscode": {
       "extensions": [
@@ -141,7 +124,6 @@
   },
   "postCreateCommand": {
     "fix-pnpm-store-permissions": ["bash", "-lc", "sudo chown -R $(whoami) .pnpm-store"],
-    "setup-ssh-config": ["bash", "-l", ".devcontainer/project/setup-ssh-config.sh"],
     // vp の Node マネージャを system-first モードにする（Node/グローバルツールは mise に一任する方針）。
     // 背景: vp には「パッケージ管理だけを切る」インストールオプション（VP_NODE_MANAGER=no の package 版）は
     // 存在しない。一方で実際に mise を shadow し得るのは vp の node/npm/npx shim（= Node マネージャ管轄）であり、
@@ -185,12 +167,6 @@
     ]
   },
   // initializeCommand はホスト側で実行される
-  "initializeCommand": {
-    // .env.devcontainer が無ければ空ファイルを作成（runArgs --env-file の失敗防止）
-    "touch-env-file": "touch .devcontainer/.env.devcontainer",
-    // 1Password の Group Containers ディレクトリをホスト側に事前に用意する。mounts の
-    // bind mount は source が実在しないと docker create ごと失敗するため、1Password 未導入の
-    // ホストでもここで空ディレクトリを作っておけば devcontainer 自体は起動できる。
-    "ensure-1password-agent-dir": "mkdir -p \"${localEnv:HOME}/Library/Group Containers/2BUA8C4S2C.com.1password/t\""
-  }
+  // .env.devcontainer が無ければ空ファイルを作成（runArgs --env-file の失敗防止）
+  "initializeCommand": "touch .devcontainer/.env.devcontainer"
 }
