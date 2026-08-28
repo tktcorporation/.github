@@ -89,18 +89,17 @@
       "-c",
       "set -e; sudo apt-get update && sudo apt-get install -y build-essential fzf ripgrep bc gpg ca-certificates curl tmux"
     ],
-    // named volume は root 所有で作成されるため、vscode ユーザーに権限を付与する
-    // 対象:
-    //   .pnpm-store: pnpm のパッケージキャッシュ (named volume)
-    //   ~/.local/share/mise: mise のインストール済みツール (named volume)
-    //   ~/.local/share/pnpm: pnpm のツールキャッシュ（oxfmt 等）
-    //   ~/.local/state/mise: mise trust の trusted-configs 保存先
-    //   ~/.cache/mise: mise のダウンロードキャッシュ
-    //   ~/.claude: Claude Code データ全体 (named volume)
+    // Docker は深いパスへ volume を mount すると、存在しない親ディレクトリも root 所有で作る。
+    // ~/.local/share/mise の兄弟へツールを追加できるよう、XDG の親ディレクトリ自体を
+    // vscode ユーザー所有にした上で、named volume の中身だけを再帰的に補正する。
+    // 対象の named volume:
+    //   .pnpm-store: pnpm のパッケージキャッシュ
+    //   ~/.local/share/mise: mise のインストール済みツール
+    //   ~/.claude: Claude Code データ全体
     "fix-volume-permissions": [
       "bash",
       "-c",
-      "set -e; sudo mkdir -p ~/.local/state/mise ~/.cache/mise ~/.local/share/pnpm && sudo chown -R $(whoami) .pnpm-store ~/.local/share/mise ~/.local/share/pnpm ~/.local/state/mise ~/.cache/mise ~/.claude"
+      "set -e; uid=$(id -u); gid=$(id -g); sudo install -d -o \"$uid\" -g \"$gid\" \"$HOME/.local\" \"$HOME/.local/share\" \"$HOME/.local/state\" \"$HOME/.cache\" \"$HOME/.local/share/pnpm\" \"$HOME/.local/state/mise\" \"$HOME/.cache/mise\"; sudo chown -R \"$uid:$gid\" \"$PWD/.pnpm-store\" \"$HOME/.local/share/mise\" \"$HOME/.claude\""
     ]
   },
   "updateContentCommand": {
