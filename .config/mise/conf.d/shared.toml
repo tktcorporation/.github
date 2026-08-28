@@ -16,6 +16,7 @@ uv = "latest"
 "npm:@anthropic-ai/claude-code" = "latest"
 "npm:@openai/codex" = "latest"
 "npm:@google/gemini-cli" = "latest"
+"github:herdrdev/herdr" = "latest"
 
 [settings]
 experimental = true
