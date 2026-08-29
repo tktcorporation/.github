@@ -64,3 +64,4 @@ jq -Rn --arg msg "$diag" '{
     additionalContext: ("⚠ post-edit check failed:\n" + $msg + "\nFix these issues before proceeding.")
   }
 }'
+
