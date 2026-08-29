@@ -57,6 +57,7 @@
     ".codex/hooks.json",
     ".codex/run-shared-hook.sh",
     "AGENTS.md",
-    ".herdr/config.toml"
+    ".herdr/config.toml",
+    ".claude/skills/autonomous-dev/SKILL.md"
   ]
 }
