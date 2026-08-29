@@ -53,3 +53,4 @@ jq -Rn --arg msg "$errors" '{
   decision: "block",
   reason: ("🛑 Stop hook: 以下の問題が未解決です。修正してから完了してください:\n\n" + $msg)
 }'
+
