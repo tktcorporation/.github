@@ -13,10 +13,16 @@ uv = "latest"
 # npm / yarn / pnpm を抽象化する pkg manager wrapper (`ni` / `nr` / `nx`)。
 "npm:@antfu/ni" = "latest"
 # AI CLI 群。
-"npm:@anthropic-ai/claude-code" = "latest"
+"aqua:anthropics/claude-code" = "latest"
 "npm:@openai/codex" = "latest"
 "npm:@google/gemini-cli" = "latest"
+"npm:chrome-devtools-mcp" = "latest"
 "github:herdrdev/herdr" = "latest"
+# Vite / Vitest / Oxlint / Oxfmt / Rolldown / tsdown を束ねた開発ツールチェーン (`vp`)。
+# GitHub リリースのスタンドアロンバイナリを取る。npm 版は Node スクリプトから
+# optionalDependencies のネイティブアドオンを読む形で、optional を既定で入れない npm
+# backend では動かない。アーカイブ内の実行ファイル名が repo 名と違うので exe で示す。
+"github:voidzero-dev/vite-plus[exe=vp]" = "latest"
 
 [settings]
 experimental = true
