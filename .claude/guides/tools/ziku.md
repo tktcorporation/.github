@@ -25,7 +25,7 @@
 
 ## 落とし穴
 
-- **wildcard include は直下のみ**: `.claude/hooks/*.sh` や `.claude/rules/*.md` はサブディレクトリにマッチしない。プロジェクト固有ファイル（テンプレに流したくないもの）は `hooks/project/` `rules/data-analysis/` のようにサブディレクトリへ退避して同期対象から外す。
+- **wildcard include は直下のみ**: `.claude/hooks/*.ts` や `.claude/rules/*.md` はサブディレクトリにマッチしない。プロジェクト固有ファイル（テンプレに流したくないもの）は `hooks/project/` `rules/data-analysis/` のようにサブディレクトリへ退避して同期対象から外す。
 - **社内固有の呼称をテンプレに流さない**: push するファイルから社内限定の略語・呼称を排除し、架空例に置き換えてから push する（初見レビュアーに通じる状態を保つ）。
 - `pull` の auto-merge はローカルの差分を巻き込むことがある。push 前に `status` で差分を確認する。
 
@@ -54,9 +54,9 @@ npx ziku push
 npx ziku push --yes --files=<path[,path...]> -m "<PR title>"
 ```
 
-| 操作 | `--files` の効き方 |
-|------|------------------|
-| 実 push | **厳密に絞る**（指定ファイルだけが対象） |
+| 操作            | `--files` の効き方                                             |
+| --------------- | -------------------------------------------------------------- |
+| 実 push         | **厳密に絞る**（指定ファイルだけが対象）                       |
 | `push --dryRun` | **`--files` を無視して全候補を表示**（スコープ確認に使えない） |
 
 スコープ確認は dry-run ではなく、**実 push 直前に出る「N file(s) selected via --files」とファイル表**で行う。`mise.toml` / `settings.json` / `devcontainer.json` のようなローカル固有ファイルを共有テンプレに漏らさないため、skill / rules だけを `--files` で明示指定する。
@@ -80,4 +80,3 @@ gh api repos/tktcorporation/.github/contents/<path> --jq .content | base64 -d | 
 - 新規ルール等は `npx ziku track <path>` で include に追記してから push する。未 track でも wildcard `.claude/rules/*.md` でマッチはするが、`status` では modified・`diff` では untracked と表示が割れるため、明示 track が確実。
 - `npx ziku` を `/tmp` 等のラッパーシェルスクリプト経由で実行すると auto-mode classifier に拒否される。`npx ziku <cmd>` を直接コマンドとして叩く。
 - ziku ツール自体の改善要望は `tktcorporation/ziku` リポジトリに Issue を出す（業務 Issue の集約先とは別）。
-
