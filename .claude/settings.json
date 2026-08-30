@@ -2,19 +2,14 @@
   "ultracode": true,
   "enableWorkflows": true,
   "workflowSizeGuideline": "medium",
-  "outputStyle": "delegating",
+  "outputStyle": "workspace-default",
   "env": {
     "CLAUDE_CODE_MAX_OUTPUT_TOKENS": "30000",
     "CLAUDE_CODE_SUBAGENT_MODEL": "sonnet",
     "BASH_MAX_OUTPUT_LENGTH": "30000"
   },
   "permissions": {
-    "allow": [
-      "Bash(find:*)",
-      "Bash(rg:*)",
-      "Bash(grep:*)",
-      "Bash(ls:*)"
-    ],
+    "allow": ["Bash(find:*)", "Bash(rg:*)", "Bash(grep:*)", "Bash(ls:*)"],
     "deny": [
       "Read(./secrets/**)",
       "Write(./secrets/**)",
@@ -28,9 +23,7 @@
     ]
   },
   "enableAllProjectMcpServers": true,
-  "enabledMcpjsonServers": [
-    "chrome-devtools"
-  ],
+  "enabledMcpjsonServers": ["chrome-devtools"],
   "hooks": {
     "PreToolUse": [
       {
@@ -38,7 +31,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/pre-bash-guard.sh"
+            "command": "bun \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/pre-bash-guard.ts"
           }
         ]
       },
@@ -47,7 +40,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/protect-config.sh",
+            "command": "bun \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/protect-config.ts",
             "statusMessage": "Checking if file is a protected config..."
           }
         ]
@@ -59,7 +52,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/post-bash-pr.sh"
+            "command": "bun \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/post-bash-pr.ts"
           }
         ]
       },
@@ -68,12 +61,12 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/docs-lifecycle-guard.sh",
+            "command": "bun \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/docs-lifecycle-guard.ts",
             "statusMessage": "Checking doc placement..."
           },
           {
             "type": "command",
-            "command": "bash \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/post-lint.sh",
+            "command": "bun \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/post-lint.ts",
             "statusMessage": "Running lint on edited file..."
           }
         ]
@@ -85,7 +78,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/stop-verify.sh",
+            "command": "bun \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/stop-verify.ts",
             "statusMessage": "Running lint + test verification before completion..."
           }
         ]
