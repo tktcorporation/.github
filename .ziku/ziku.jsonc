@@ -57,6 +57,13 @@
     ".codex/hooks.json",
     ".codex/run-shared-hook.sh",
     "AGENTS.md",
-    ".herdr/config.toml"
+    ".herdr/config.toml",
+    ".claude/hooks/*.ts",
+    ".devcontainer/run-chrome-devtools-mcp.ts",
+    ".devcontainer/setup-*.ts",
+    ".devcontainer/test-*.ts",
+    ".claude/hooks/record-pr-review.ts",
+    ".claude/hooks/require-pr-self-review.ts",
+    ".codex/run-shared-hook.ts"
   ]
 }

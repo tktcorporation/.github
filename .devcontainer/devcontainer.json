@@ -4,6 +4,12 @@
   "workspaceMount": "source=${localWorkspaceFolder},target=/workspaces/${localWorkspaceFolderBasename},type=bind,consistency=cached",
   "workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}",
 
+  // mise shims resolve the tool version from the nearest .mise.toml, for every process in the container, including IDEs and hook runners.
+  // containerEnv cannot expand ${containerEnv:PATH}; keep the image's standard executable paths explicitly.
+  "containerEnv": {
+    "PATH": "/home/vscode/.local/share/mise/shims:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+  },
+
   // Volume name must start with [a-zA-Z0-9] to comply with Docker naming rules
   // Using 'devcontainer-' prefix so ${localWorkspaceFolderBasename} ('.github') doesn't start the name
   "mounts": [
@@ -27,10 +33,9 @@
     //   "enableNonRootDocker": "true",
     //   "moby": "true"
     // },
-    "ghcr.io/devcontainers/features/aws-cli:1": {},
     "ghcr.io/devcontainers/features/github-cli:1": {},
     "ghcr.io/devcontainers-extra/features/mise:1": {
-      "version": "2026.4.10"
+      "version": "2026.8.14"
     }
   },
   "runArgs": ["--env-file", ".devcontainer/.env.devcontainer"],
@@ -108,38 +113,34 @@
       "-c",
       "set -e; curl -fsSL https://raw.githubusercontent.com/nodejs/release-keys/b362bd15f2ac7ce350d7563fc03e0c625e455e5f/cli.sh | bash -s import"
     ],
-    "setup-mise-bash": ["bash", "-c", "echo 'eval \"$(mise activate bash)\"' >> ~/.bashrc"],
-    "trust-mise": ["bash", "-lc", "mise trust"],
-    "setup-git-user": ["bash", "-l", ".devcontainer/setup-git-user.sh"],
-    // vite-plus (vp) CLI: Vite, Vitest, Oxlint, Oxfmt, Rolldown, tsdown を統合した開発ツールチェーン
-    // Node.js のバージョン管理は mise に一任するため vp に shim (node/npm/npx) を作らせない。
-    // VP_NODE_MANAGER=no は CI/devcontainer 自動有効化より優先されるオプトアウト。
-    // CI=true は失敗時にインストールログを標準出力にインライン出力させるため (devcontainer ビルドログで追跡しやすくする)。
-    // env はパイプ右の bash に付与する。インストーラはこの bash 内で走るため、左の curl に付けると bash へ届かず opt-out が無効化される。
-    "install-vite-plus": [
+    "setup-mise-shell": [
       "bash",
       "-c",
-      "curl -fsSL https://vite.plus | VP_NODE_MANAGER=no CI=true bash"
+      "grep -qxF 'eval \"$(mise activate bash --shims)\"' ~/.bash_profile 2>/dev/null || echo 'eval \"$(mise activate bash --shims)\"' >> ~/.bash_profile; grep -qxF 'eval \"$(mise activate bash)\"' ~/.bashrc 2>/dev/null || echo 'eval \"$(mise activate bash)\"' >> ~/.bashrc"
     ]
+    // Bun を使うセットアップは、mise install の完了後に実行する必要があるため postCreateCommand に置く。
+    // updateContentCommand の object 内は並列実行されるので、ここから起動すると setup-mise-shell と競合する。
   },
   "postCreateCommand": {
-    "fix-pnpm-store-permissions": ["bash", "-lc", "sudo chown -R $(whoami) .pnpm-store"],
+    "fix-pnpm-store-permissions": ["bash", "-c", "sudo chown -R $(whoami) .pnpm-store"],
     // vp の Node マネージャを system-first モードにする（Node/グローバルツールは mise に一任する方針）。
-    // 背景: vp には「パッケージ管理だけを切る」インストールオプション（VP_NODE_MANAGER=no の package 版）は
-    // 存在しない。一方で実際に mise を shadow し得るのは vp の node/npm/npx shim（= Node マネージャ管轄）であり、
-    // vp は既定で pnpm の shim は作らないため pnpm 自体は mise のまま奪われない。
-    // VP_NODE_MANAGER=no は「その 1 回の install 限り」の抑止なので、`vp install -g` 等で shim が再生成され得る。
+    // mise を shadow し得るのは vp の node/npm/npx shim（= Node マネージャ管轄）で、vp は既定で pnpm の
+    // shim を作らないため pnpm 自体は mise のまま奪われない。
     // `vp env off` を入れておくと、shim が存在しても system(mise) の Node を優先し、無い時だけ vp 管理版へ fallback する。
     // スコープ注意: `vp env off` が効くのは node/npm/npx shim の解決のみで、vp 自身のサブコマンド内部の
     // Node 解決には及ばない（upstream の既知の制約）。`vp dev`/`build`/`test`/`lint`/`fmt` 用途では実害なし。
-    // 実行 Node が mise に切り替わるには mise-install 完了が前提。postCreate は object 形式で各ステップ並列実行
-    // だが、mise ツールは共有 volume(devcontainer-shared-mise-data)に永続するため初回以外は即時で競合しない。
+    // 実行 Node が mise に切り替わるには mise install 完了が前提。
     // 注意: 再生成の主因である `vp install -g <pkg>` は使わず、グローバル CLI は .mise.toml に集約すること。
-    // vp が未導入/PATH 未解決でも postCreate 全体を止めないよう `|| true`。
-    "vp-env-system-first": ["bash", "-lc", "vp env off || true"],
     "git-performance": "git config status.submoduleSummary false && git config diff.ignoreSubmodules all && git config fetch.recurseSubmodules false && git config submodule.recurse false",
     "install-gh-extensions": "gh extension install agbiotech/gh-sub-issue 2>/dev/null || true",
-    "mise-install": ["bash", "-lc", "mise install && bash .devcontainer/setup-herdr.sh"],
+    // postCreateCommand の object 内は並列実行される。mise の trust/install/upgrade、Bun を使う初期設定、
+    // Vite+ の切り替えを同一コマンドにまとめ、fresh container でも依存順を保証する。
+    // lifecycle command では login shell を使わず、構築途中の .bash_profile を読み込まない。
+    "mise-and-project-setup": [
+      "bash",
+      "-c",
+      "mise trust && mise install && mise upgrade && mise exec -- bun .devcontainer/setup-git-user.ts && mise exec -- bun .devcontainer/setup-herdr.ts && vp env off"
+    ],
     // ~/.claude.json は volume 外（ホームディレクトリ直下）のため、rebuild で消える
     // volume 内のバックアップからリストアする（postStartCommand で毎回バックアップされる）
     // 初回（バックアップなし）は onboarding 済みの最小ファイルを作成
@@ -158,8 +159,15 @@
       "-c",
       "grep -q 'oauthAccount' ~/.claude.json 2>/dev/null && cp ~/.claude.json ~/.claude/.claude.json.bak || true"
     ],
-    "setup-chrome-devtools-mcp": ["bash", "-lc", ".devcontainer/setup-chrome-devtools-mcp.sh"],
-    "mise-upgrade": ["mise", "upgrade"],
+    "setup-chrome-devtools-mcp": [
+      "mise",
+      "exec",
+      "--",
+      "bun",
+      ".devcontainer/setup-chrome-devtools-mcp.ts"
+    ],
+    // mise のツール更新は postCreateCommand の mise install/upgrade に集約する。
+    // postStartCommand で upgrade すると、並列実行中の mise exec とインストール先が競合する。
     "check-env-file": [
       "bash",
       "-c",

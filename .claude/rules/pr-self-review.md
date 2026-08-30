@@ -6,7 +6,7 @@ Claude が作成した PR は、作成直後にセルフレビューを回すと
 
 ## 仕組み
 
-`gh pr create` は PreToolUse フック（`.claude/hooks/require-pr-self-review.sh`）でブロックされる。セルフレビューを2回完了するまで PR は作成できない。
+`gh pr create` は PreToolUse フック（`.claude/hooks/require-pr-self-review.ts`）でブロックされる。セルフレビューを2回完了するまで PR は作成できない。
 
 ## 手順
 
@@ -29,7 +29,7 @@ codex review --uncommitted
 ### 2. レビュー完了を記録
 
 ```bash
-bash .claude/hooks/record-pr-review.sh
+bun .claude/hooks/record-pr-review.ts
 ```
 
 ### 3. セルフレビュー（2回目）
@@ -47,7 +47,7 @@ codex review --uncommitted
 ### 4. レビュー完了を記録
 
 ```bash
-bash .claude/hooks/record-pr-review.sh
+bun .claude/hooks/record-pr-review.ts
 ```
 
 ### 5. PR 作成
@@ -88,5 +88,5 @@ bash .claude/hooks/record-pr-review.sh
 ## 注意
 
 - レビュー回数のカウンターは `.claude/.pr-review-count` に記録される（gitignore 済み）
-- カウンターのリセットは `.claude/hooks/reset-pr-review-count.sh`（PostToolUse）が行う。`gh pr create` が exit 0 で完了した場合にのみ発火するため、実際に PR を作成できたときだけリセットされる
+- カウンターのリセットは `.claude/hooks/reset-pr-review-count.ts`（PostToolUse）が行う。`gh pr create` が exit 0 で完了した場合にのみ発火するため、実際に PR を作成できたときだけリセットされる
 - `codex review` が使えない環境では、Agent ツールの code-reviewer サブエージェントを代替として使う

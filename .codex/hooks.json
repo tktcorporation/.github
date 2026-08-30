@@ -7,7 +7,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"$(git rev-parse --show-toplevel)/.codex/run-shared-hook.sh\" .claude/hooks/pre-bash-guard.sh"
+            "command": "bun \"$(git rev-parse --show-toplevel)/.codex/run-shared-hook.ts\" .claude/hooks/pre-bash-guard.ts"
           }
         ]
       },
@@ -16,7 +16,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"$(git rev-parse --show-toplevel)/.codex/run-shared-hook.sh\" .claude/hooks/protect-config.sh",
+            "command": "bun \"$(git rev-parse --show-toplevel)/.codex/run-shared-hook.ts\" .claude/hooks/protect-config.ts",
             "statusMessage": "Checking if file is a protected config..."
           }
         ]
@@ -28,7 +28,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"$(git rev-parse --show-toplevel)/.codex/run-shared-hook.sh\" .claude/hooks/post-bash-pr.sh"
+            "command": "bun \"$(git rev-parse --show-toplevel)/.codex/run-shared-hook.ts\" .claude/hooks/post-bash-pr.ts"
           }
         ]
       },
@@ -37,12 +37,12 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"$(git rev-parse --show-toplevel)/.codex/run-shared-hook.sh\" .claude/hooks/docs-lifecycle-guard.sh",
+            "command": "bun \"$(git rev-parse --show-toplevel)/.codex/run-shared-hook.ts\" .claude/hooks/docs-lifecycle-guard.ts",
             "statusMessage": "Checking doc placement..."
           },
           {
             "type": "command",
-            "command": "bash \"$(git rev-parse --show-toplevel)/.codex/run-shared-hook.sh\" .claude/hooks/post-lint.sh",
+            "command": "bun \"$(git rev-parse --show-toplevel)/.codex/run-shared-hook.ts\" .claude/hooks/post-lint.ts",
             "statusMessage": "Running lint on edited file..."
           }
         ]
@@ -53,7 +53,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"$(git rev-parse --show-toplevel)/.codex/run-shared-hook.sh\" .claude/hooks/stop-verify.sh",
+            "command": "bun \"$(git rev-parse --show-toplevel)/.codex/run-shared-hook.ts\" .claude/hooks/stop-verify.ts",
             "statusMessage": "Running lint + test verification before completion..."
           }
         ]
