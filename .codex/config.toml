@@ -5,5 +5,5 @@ approval_policy = "on-request"
 approvals_reviewer = "auto_review"
 
 [mcp_servers.chrome-devtools]
-command = "bash"
-args = [".devcontainer/run-chrome-devtools-mcp.sh"]
+command = "bun"
+args = [".devcontainer/run-chrome-devtools-mcp.ts"]
