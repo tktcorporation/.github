@@ -18,20 +18,24 @@ description: |
 
 ```bash
 # 変更方針をこれから決めるとき。全体像を出す
-bash .claude/skills/codebase-overview/scripts/codebase-overview.sh
+bun .claude/skills/codebase-overview/scripts/codebase-overview.ts
 
 # 変更するファイルが決まっているとき・レビューで差分の影響範囲を見たいとき。
 # 対象は複数渡せる
-bash .claude/skills/codebase-overview/scripts/codebase-overview.sh worker/src/commands/event-add.ts
+bun .claude/skills/codebase-overview/scripts/codebase-overview.ts worker/src/commands/event-add.ts
 
 # 循環や孤立だけ見たいとき。repo map を省いて依存グラフだけ出す
-CODEBASE_OVERVIEW_NO_MAP=1 bash .claude/skills/codebase-overview/scripts/codebase-overview.sh
+CODEBASE_OVERVIEW_NO_MAP=1 bun .claude/skills/codebase-overview/scripts/codebase-overview.ts
 ```
 
 初回は npx / uvx が外部ツールを取得するため待たされる。以降はキャッシュが効く。
 所要時間の大半は依存グラフの取得（ワークスペースごとの madge 起動）が占めるので、
 `CODEBASE_OVERVIEW_NO_MAP=1` で repo map を省いてもほとんど変わらない。
 出力を短くしたいときに使う。
+
+対象ディレクトリの外にあるファイルでも、`REPO_MAP_EXTENSIONS`（既定は `rs` と `py`）に
+含まれる拡張子なら受け入れる。依存グラフは持たない言語なので madge は起動せず、
+見出しの下に「依存グラフの対象外」と出したうえで repo map だけを出す。
 
 ## 出力の読み方
 
@@ -65,7 +69,10 @@ CODEBASE_OVERVIEW_NO_MAP=1 bash .claude/skills/codebase-overview/scripts/codebas
 ## 信頼できる範囲
 
 依存グラフは madge が TypeScript の import を静的に解決した結果で、**TS / TSX しか見ていない**。
-次は落ちるので、グラフに出ないことを「依存が無い」と読まない。
+これは madge の制約であり、この俯瞰スキル自体が他言語を扱えないわけではない。共有語彙
+（repo map）は tree-sitter ベースで言語を選ばないため、`REPO_MAP_EXTENSIONS` に拡張子を
+足せば対応できる（「メンテナンス」を参照）。次は落ちるので、グラフに出ないことを
+「依存が無い」と読まない。
 
 - 実行時に決まる依存（動的 `import()`、文字列でモジュール名を組み立てる箇所）
 - TS 以外のファイル（`infra/tofu` の HCL、SQL、設定ファイル）— repo map 側にだけ現れる
@@ -92,12 +99,16 @@ repo map は tree-sitter でシンボル名を抽出し、名前の一致でフ�
 
 ## メンテナンス
 
-対象ディレクトリと tsconfig の対応は `scripts/codebase-overview.sh` 冒頭の `SCOPES` が持つ。
+対象ディレクトリと tsconfig の対応は `scripts/codebase-overview.ts` 冒頭の `scopes` が持つ。
 ここにある値は導入先リポジトリのワークスペース構成を書いたものなので、別のリポジトリでこのスキルを
 使うときはまず自分のワークスペース構成に置き換える。ワークスペースを増やしたときも同様にここへ足す。
-`scripts/self-test.sh` の `scope_for`/`require_scope_root` 系のテストは `SCOPES` の値をそのまま
-期待値に持つ（設定とテストの整合性を見るテストのため）。`SCOPES` を書き換えたら、これらのテストの
+`scripts/self-test.ts` の `scopeFor` 系のテストは `scopes` の値をそのまま期待値に持つ
+（設定とテストの整合性を見るテストのため）。`scopes` を書き換えたら、これらのテストの
 期待値も合わせて書き換える。
+
+依存グラフを持たない言語を repo map の対象に含めるかどうかは、同じ場所の
+`REPO_MAP_EXTENSIONS` が持つ（既定は `rs` と `py`）。`scopes` と同様、この俯瞰スキルが対応する
+言語を増やしたいときは導入先リポジトリでこの集合に拡張子を足す。
 
 repo map から外すファイルはリポジトリルートの `.aiderignore` が持つ。生成された巨大な
 型定義は参照の数こそ多いがこのリポジトリの語彙ではなく、外さないとトークン予算を
@@ -106,5 +117,5 @@ repo map から外すファイルはリポジトリルートの `.aiderignore` �
 スクリプトを変更したら検証する:
 
 ```bash
-bash .claude/skills/codebase-overview/scripts/self-test.sh
+bun .claude/skills/codebase-overview/scripts/self-test.ts
 ```

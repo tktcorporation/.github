@@ -28,10 +28,10 @@ const child = Bun.spawn(
   ],
   { stdin: 'pipe', stdout: 'pipe', stderr: 'pipe' },
 );
-child.stdin.write(`${JSON.stringify(requests[0])}\n`);
+await child.stdin.write(`${JSON.stringify(requests[0])}\n`);
 await Bun.sleep(1000);
-child.stdin.write(`${JSON.stringify(requests[1])}\n`);
-child.stdin.write(`${JSON.stringify(requests[2])}\n`);
+await child.stdin.write(`${JSON.stringify(requests[1])}\n`);
+await child.stdin.write(`${JSON.stringify(requests[2])}\n`);
 await Bun.sleep(2000);
 await child.stdin.end();
 
