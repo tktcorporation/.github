@@ -6,14 +6,17 @@ JavaScript パッケージ構成に依存せず実行できるようにしてい
 
 ```bash
 # 検査
-bun scripts/docs-lifecycle/run.ts
+mise run lint-docs
 
 # 違反していないドキュメントも表示
-bun scripts/docs-lifecycle/run.ts --list
+mise run lint-docs -- --list
 
 # テスト
 bun scripts/docs-lifecycle/run.ts test
 ```
+
+`mise run lint-docs` は bun を用意してから `run.ts` を呼ぶ。bun が入っている環境では
+`bun scripts/docs-lifecycle/run.ts` を直接叩いてもよく、`--list` や `--json` も同じように渡せる。
 
 `run.ts` は本体やテストの起動前に `bun install --frozen-lockfile` を実行する。初回実行時は
 npm registry への接続が必要だが、依存はこのディレクトリの `node_modules` だけに置かれ、

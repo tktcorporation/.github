@@ -1,5 +1,5 @@
 /**
- * docs のライフサイクル lint CLI（`bun scripts/docs-lifecycle/run.ts`）。
+ * docs のライフサイクル lint CLI（`mise run lint-docs`）。
  *
  * 実装と乖離した設計 doc が残り続けるのを防ぐため、「触られていない期間」を
  * 機械的な指標にして見直しを強制する。判定ロジックは同じ package 内に置く。
@@ -10,8 +10,9 @@
  *   --json  機械可読な出力（他ツール連携用）
  *
  * 実行に要るものは ziku で配る package 内に収めてある:
- *   1. run.ts から実行する。bun.lock に従って package 内だけに依存を同期してから起動するため、
- *      同期先リポジトリの package.json / node_modules と分離できる
+ *   1. run.ts から実行する（`mise run lint-docs` がこれを呼ぶ）。bun.lock に従って package 内
+ *      だけに依存を同期してから起動するため、同期先リポジトリの package.json / node_modules と
+ *      分離できる
  *   2. `.config/docs-lifecycle.json` を置く（無ければ警告を出して何もしない）
  *   3. この lint を回す全ワークフローの checkout に `fetch-depth: 0` を指定する
  *      （shallow clone では鮮度チェックが警告付きでスキップされ、検知が効かない）
