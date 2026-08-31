@@ -2,26 +2,20 @@
  * docs のライフサイクル lint CLI（`mise run lint-docs`）。
  *
  * 実装と乖離した設計 doc が残り続けるのを防ぐため、「触られていない期間」を
- * 機械的な指標にして見直しを強制する。判定ロジックは scripts/lib/docs-lifecycle/ を参照。
+ * 機械的な指標にして見直しを強制する。判定ロジックは同じ package 内に置く。
  * 運用上の判断基準（消すか / 退避するか / 猶予するか）は .claude/rules/doc-placement.md。
  *
  * オプション:
  *   --list  違反していない doc も含めて鮮度一覧を出す（棚卸し作業用）
  *   --json  機械可読な出力（他ツール連携用）
  *
- * 実行に要るものは ziku で配る範囲に収めてある。この実装・`.config/docs-lifecycle.json`・
- * mise の `lint-docs` タスクが届けば動き、配布先に package.json も node_modules も要らない:
- *   1. bun で実行する。npm パッケージを import した TypeScript を、node_modules も
- *      package.json も無いまま走らせられるのが理由（bun の auto-install が依存を
- *      グローバルキャッシュへ解決する）。bun 自体は `.config/mise/conf.d/shared.toml` の
- *      `lint-docs` タスクが要求するので、そのタスク経由で呼べば入る
+ * 実行に要るものは ziku で配る package 内に収めてある:
+ *   1. run.ts から実行する（`mise run lint-docs` がこれを呼ぶ）。bun.lock に従って package 内
+ *      だけに依存を同期してから起動するため、同期先リポジトリの package.json / node_modules と
+ *      分離できる
  *   2. `.config/docs-lifecycle.json` を置く（無ければ警告を出して何もしない）
  *   3. この lint を回す全ワークフローの checkout に `fetch-depth: 0` を指定する
  *      （shallow clone では鮮度チェックが警告付きでスキップされ、検知が効かない）
- *
- * auto-install は依存の最新版を解決する。この実装は `zod` v4 の `z.strictObject` と
- * `mdast-util-from-markdown` v2 の AST 形状に依存しているので、そのメジャーが上がると
- * 壊れうる。壊れたときは import 指定子へ version を添えて固定する。
  *
  * 届いた設定はそのまま使える形にしてある。リポジトリ固有の事情は設定ではなく doc 側の
  * frontmatter で表す（生成物なら `lifecycle: generated`、進行中なら `review-by`）。
@@ -34,21 +28,21 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { DateTime } from 'luxon';
-import { type DocSource, analyze } from './lib/docs-lifecycle/analyze.ts';
-import { isScanned, parseConfig } from './lib/docs-lifecycle/config.ts';
+import { type DocSource, analyze } from './analyze.ts';
+import { isScanned, parseConfig } from './config.ts';
 import {
   collectLastCommitDates,
   grepDocReferences,
   isShallowRepository,
   listLocallyModifiedFiles,
   listRepoFiles,
-} from './lib/docs-lifecycle/git.ts';
-import { formatReport, formatStatusList } from './lib/docs-lifecycle/report.ts';
+} from './git.ts';
+import { formatReport, formatStatusList } from './report.ts';
 
 // URL.pathname はパーセントエンコードされたまま（`/tmp/my repo/` → `/tmp/my%20repo/`）なので
 // fileURLToPath でデコードする。しないと、空白や非 ASCII を含む場所に置かれた
 // チェックアウトで設定ファイルが「無い」と判定され、このチェックが黙って無効になる。
-const repoRoot = fileURLToPath(new URL('..', import.meta.url));
+const repoRoot = fileURLToPath(new URL('../..', import.meta.url));
 const configPath = join(repoRoot, '.config/docs-lifecycle.json');
 const args = new Set(process.argv.slice(2));
 

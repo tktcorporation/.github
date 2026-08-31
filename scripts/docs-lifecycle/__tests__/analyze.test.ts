@@ -1,5 +1,5 @@
 import { DateTime } from 'luxon';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'bun:test';
 import { type AnalyzeInput, type DocSource, analyze } from '../analyze.ts';
 import { parseConfig } from '../config.ts';
 

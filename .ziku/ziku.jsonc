@@ -34,8 +34,7 @@
     ".claude/skills/pr-deep-review",
     ".claude/skills/pr-review-loop",
     ".config/docs-lifecycle.json",
-    "scripts/docs-lifecycle.ts",
-    "scripts/lib/docs-lifecycle",
+    "scripts/docs-lifecycle",
     ".claude/hooks/record-pr-review.sh",
     ".claude/hooks/require-pr-self-review.sh",
     ".claude/rules/ci-workflow.md",
@@ -64,6 +63,8 @@
     ".devcontainer/test-*.ts",
     ".claude/hooks/record-pr-review.ts",
     ".claude/hooks/require-pr-self-review.ts",
-    ".codex/run-shared-hook.ts"
+    ".codex/run-shared-hook.ts",
+    "scripts/docs-lifecycle.ts",
+    "scripts/lib/docs-lifecycle"
   ]
 }

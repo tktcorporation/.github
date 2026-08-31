@@ -1,5 +1,5 @@
 import { DateTime } from 'luxon';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'bun:test';
 import type { DocMeta } from '../frontmatter.ts';
 import {
   GIT_LOG_COMMIT_MARKER,
