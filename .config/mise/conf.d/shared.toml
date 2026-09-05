@@ -50,3 +50,11 @@ description = "Run ziku CLI"
 [tasks.lint-docs]
 run = "bun run scripts/docs-lifecycle/run.ts"
 description = "docs の鮮度とリンク切れを検査する"
+
+[tasks.fleet]
+dir = "tools/agent-fleet"
+description = "agent-fleet を起動する（並列エージェント俯瞰 TUI。--json / --once も可）"
+run = """
+[ -d node_modules ] || bun install
+exec bun src/cli.tsx "$@"
+"""
