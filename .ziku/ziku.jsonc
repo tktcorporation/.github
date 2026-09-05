@@ -33,6 +33,7 @@
     ".claude/skills/data-driven-prd",
     ".claude/skills/pr-deep-review",
     ".claude/skills/pr-review-loop",
+    ".claude/skills/structured-doc-writing",
     ".config/docs-lifecycle.json",
     "scripts/docs-lifecycle",
     ".claude/hooks/record-pr-review.sh",
@@ -65,6 +66,7 @@
     ".claude/hooks/require-pr-self-review.ts",
     ".codex/run-shared-hook.ts",
     "scripts/docs-lifecycle.ts",
-    "scripts/lib/docs-lifecycle"
+    "scripts/lib/docs-lifecycle",
+    "tools/agent-fleet"
   ]
 }
