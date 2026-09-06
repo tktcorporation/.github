@@ -2,16 +2,13 @@
 import { $ } from 'bun';
 import { existsSync } from 'node:fs';
 import { relative } from 'node:path';
-const root = process.env.CLAUDE_PROJECT_DIR ?? process.cwd();
+import { readInput, workingTree } from './hook-utils.ts';
+const input = await readInput();
+if (!input) process.exit(0);
+const root = await workingTree(input);
 process.chdir(root);
 if (!existsSync('.config/docs-lifecycle.json')) process.exit(0);
-let input: { tool_input?: { file_path?: string; path?: string } };
-try {
-  input = await Bun.stdin.json();
-} catch {
-  process.exit(0);
-}
-const supplied = input?.tool_input?.file_path ?? input?.tool_input?.path;
+const supplied = input.tool_input?.file_path ?? input.tool_input?.path;
 if (!supplied || !existsSync(supplied)) process.exit(0);
 const file = supplied.startsWith(root) ? relative(root, supplied) : supplied;
 if (!/\.mdx?$/.test(file)) process.exit(0);
