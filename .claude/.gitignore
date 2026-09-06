@@ -1,4 +1,5 @@
 *.local.json
+!settings.local.json
 .session/
 plans/
 pr-review/

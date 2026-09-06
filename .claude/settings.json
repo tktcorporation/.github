@@ -1,5 +1,4 @@
 {
-  "ultracode": true,
   "enableWorkflows": true,
   "workflowSizeGuideline": "medium",
   "outputStyle": "workspace-default",
@@ -9,7 +8,6 @@
     "BASH_MAX_OUTPUT_LENGTH": "30000"
   },
   "permissions": {
-    "allow": ["Bash(find:*)", "Bash(rg:*)", "Bash(grep:*)", "Bash(ls:*)"],
     "deny": [
       "Read(./secrets/**)",
       "Write(./secrets/**)",
@@ -20,11 +18,22 @@
       "Write(./*/**/.env.*)",
       "Edit(./*/**/.env)",
       "Edit(./*/**/.env.*)"
-    ]
+    ],
+    "allow": ["Bash(find:*)", "Bash(rg:*)", "Bash(grep:*)", "Bash(ls:*)"]
   },
   "enableAllProjectMcpServers": true,
-  "enabledMcpjsonServers": ["chrome-devtools"],
   "hooks": {
+    "UserPromptSubmit": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bun \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/prompt-router.ts"
+          }
+        ]
+      }
+    ],
     "PreToolUse": [
       {
         "matcher": "Bash",
@@ -32,6 +41,10 @@
           {
             "type": "command",
             "command": "bun \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/pre-bash-guard.ts"
+          },
+          {
+            "type": "command",
+            "command": "bun \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/pre-bash-timing.ts"
           }
         ]
       },
@@ -42,6 +55,10 @@
             "type": "command",
             "command": "bun \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/protect-config.ts",
             "statusMessage": "Checking if file is a protected config..."
+          },
+          {
+            "type": "command",
+            "command": "bun \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/track-edits.ts"
           }
         ]
       }
@@ -53,12 +70,20 @@
           {
             "type": "command",
             "command": "bun \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/post-bash-pr.ts"
+          },
+          {
+            "type": "command",
+            "command": "bun \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/post-bash-timing.ts"
           }
         ]
       },
       {
         "matcher": "Write|Edit",
         "hooks": [
+          {
+            "type": "command",
+            "command": "bun \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/track-edits.ts"
+          },
           {
             "type": "command",
             "command": "bun \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/docs-lifecycle-guard.ts",
@@ -80,6 +105,11 @@
             "type": "command",
             "command": "bun \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/stop-verify.ts",
             "statusMessage": "Running lint + test verification before completion..."
+          },
+          {
+            "type": "command",
+            "command": "bun \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/stop-pr-comments.ts",
+            "statusMessage": "Checking unresolved PR review threads..."
           }
         ]
       }
@@ -148,8 +178,8 @@
     "sp-global@financial-services-plugins": false,
     "sentry@claude-plugins-official": true,
     "intercom@claude-plugins-official": false,
-    "notion@claude-plugins-official": true,
-    "chrome-devtools-mcp@claude-plugins-official": true,
+    "notion@claude-plugins-official": false,
+    "chrome-devtools-mcp@claude-plugins-official": false,
     "slack@claude-plugins-official": true,
     "datadog@claude-plugins-official": true
   },
