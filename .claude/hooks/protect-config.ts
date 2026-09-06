@@ -1,8 +1,7 @@
 #!/usr/bin/env bun
-import 'bun';
-const input: null | { tool_input?: { file_path?: string; path?: string } } = await Bun.stdin
-  .json()
-  .catch(() => null);
+import { relative } from 'node:path';
+import { readInput, workingTree } from './hook-utils.ts';
+const input = await readInput();
 const file = input?.tool_input?.file_path ?? input?.tool_input?.path;
 if (!file) process.exit(0);
 
@@ -23,9 +22,11 @@ const protectedFiles = new Set([
   'knip.json',
   'knip.ts',
 ]);
-const project = process.env.CLAUDE_PROJECT_DIR;
-const relative = project && file.startsWith(`${project}/`) ? file.slice(project.length + 1) : file;
-const astGrepRule = /^(?:rules|\.ast-grep\/rules)\/[^/]+\.yml$/.test(relative);
+// 編集中の作業ツリー（worktree を含む）を基準に相対化する。主チェックアウト基準だと
+// worktree 内の絶対パスが相対化されず、ast-grep ルールの保護をすり抜ける。
+const tree = await workingTree(input);
+const relativePath = file.startsWith(`${tree}/`) ? relative(tree, file) : file;
+const astGrepRule = /^(?:rules|\.ast-grep\/rules)\/[^/]+\.yml$/.test(relativePath);
 
 if (protectedFiles.has(basename) || astGrepRule) {
   const kind = astGrepRule
