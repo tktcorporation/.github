@@ -2,6 +2,12 @@
 /**
  * PreToolUse(Bash): 他人の作業を巻き込むコマンドと、作法に反するコマンドを実行前に止める。
  *
+ * 主防御は Claude Code の Automode とプロジェクトルールで、この hook はセキュリティ境界でも
+ * 完全な shell 解釈器でもない。通常の操作の範囲で、他者の未コミット変更や PR 作成手順など
+ * Automode だけでは確認しにくい不可逆操作に遭遇したときだけ、実行前にガードレールを見せる
+ * 補助に留める。フラグの束ね方や pathspec の全パターンまでは追わず、迂回しようと思えば
+ * 迂回できる作りを許容する。狙いは、通ろうとしたときにガードレールの存在に気づかせること。
+ *
  * 判定は command-parse.ts が認識する通常の直接コマンドに対して行う。文書 heredoc、引用された
  * 説明、外部スクリプトやラッパーの中身は対象にしない。
  *
@@ -22,7 +28,12 @@ import {
   type SimpleCommand,
 } from './command-parse.ts';
 import { dirtyFiles } from './foreign-changes.ts';
-import { ownershipFingerprint, projectDirectory, readEditedFiles } from './hook-utils.ts';
+import {
+  isPrCreateCommand,
+  ownershipFingerprint,
+  projectDirectory,
+  readEditedFiles,
+} from './hook-utils.ts';
 
 const text = await Bun.stdin.text();
 let input: { session_id?: string; cwd?: string; tool_input?: { command?: string } };
@@ -46,6 +57,7 @@ type Revert =
   | { kind: 'whole-tree'; why: string }
   | { kind: 'paths'; paths: string[]; base: string }
   | { kind: 'all-dirty'; base: string; why: string }
+  | { kind: 'confirm-required'; why: string }
   | null;
 
 const WHOLE_TREE_TARGET = /^(?:\.|:\/|\*|\.\/\*?)$/;
@@ -105,9 +117,16 @@ export function analyzeGit(command: SimpleCommand): Revert {
         ? { kind: 'whole-tree', why: 'git clean -f' }
         : null;
     case 'restore': {
-      // Staged-only restore still changes the user's index; run it through the
-      // ownership check even though the worktree bytes are untouched.
       const positional = [...positionalOf(before, ['-s', '--source']), ...after];
+      if (positional.length === 0) return null;
+      const stagesIndex = before.some((word) =>
+        ['-S', '--staged'].includes(wordValue(word) ?? ''),
+      );
+      if (stagesIndex)
+        return {
+          kind: 'confirm-required',
+          why: 'git restore --staged は索引を書き換えます（このセッションが書いた内容の指紋だけでは、ユーザーが独自に git add した索引状態かどうかを判定できません）',
+        };
       return classifyTargets(positional, base, 'git restore');
     }
     case 'switch':
@@ -159,7 +178,12 @@ export function analyzeGit(command: SimpleCommand): Revert {
         })
       )
         return null;
-      if (before.some((word) => wordValue(word) === '-a' || wordValue(word) === '--all'))
+      if (
+        before.some((word) => {
+          const value = wordValue(word);
+          return value === '--all' || Boolean(value?.startsWith('-') && value.includes('a'));
+        })
+      )
         return { kind: 'all-dirty', base, why: 'git checkout-index -f -a' };
       const positional = [...positionalOf(before, []), ...after];
       return classifyTargets(positional, base, 'git checkout-index -f');
@@ -171,7 +195,7 @@ export function analyzeGit(command: SimpleCommand): Revert {
       if (action === 'save') return { kind: 'all-dirty', base, why: 'git stash save' };
       if (!['push', '-p', '--patch'].includes(action)) return null;
       const rest = first === 'push' ? before.slice(1) : before;
-      const positional = [...positionalOf(rest, ['-m', '--message']), ...after];
+      const positional = [...positionalOf(rest, ['-m', '--message'], ['m']), ...after];
       if (positional.length === 0)
         return { kind: 'all-dirty', base, why: 'git stash（対象指定なし）' };
       return classifyTargets(positional, base, 'git stash');
@@ -193,14 +217,30 @@ function isTracked(directory: string, path: string): boolean {
   return result.exitCode === 0;
 }
 
-/** フラグとその値を除いた位置引数。valued に挙げたフラグは次の語を値として読み飛ばす。 */
-function positionalOf(words: ShellWord[], valued: string[]): ShellWord[] {
+/** フラグとその値を除いた位置引数。valued に挙げたフラグは次の語を値として読み飛ばす。
+ *  bundledValuedSuffixes に挙げた文字で終わる束ねられた短縮オプション（例: -um = -u -m）も、
+ *  次の語を値として読み飛ばす。 */
+function positionalOf(
+  words: ShellWord[],
+  valued: string[],
+  bundledValuedSuffixes: string[] = [],
+): ShellWord[] {
   const result: ShellWord[] = [];
   for (let i = 0; i < words.length; i++) {
     const word = words[i];
     const value = wordValue(word);
     if (!word) continue;
     if (value !== undefined && valued.includes(value)) {
+      i++;
+      continue;
+    }
+    if (
+      value !== undefined &&
+      value.startsWith('-') &&
+      !value.startsWith('--') &&
+      value.length > 2 &&
+      bundledValuedSuffixes.some((suffix) => value.endsWith(suffix))
+    ) {
       i++;
       continue;
     }
@@ -293,15 +333,6 @@ if ((hasLsof && hasKill) || hasFuserKill)
   block(
     'lsof+kill / fuser+kill はdevcontainerを巻き込みます。ps aux --sort=-%mem | head でPIDを確認し、kill <PID> で個別に止めてください。',
   );
-for (const entry of commands) {
-  if (!entry.direct || entry.name !== 'git') continue;
-  const target = gitTarget(entry);
-  if (wordValue(target.subcommand) !== 'worktree' || wordValue(target.args[0]) !== 'add') continue;
-  const path = wordValue(target.args[1]);
-  if (path === undefined || !path.startsWith('.claude/worktrees/'))
-    block('worktreeは.claude/worktrees/配下に作成してください。');
-}
-
 const REVERT_SUBCOMMANDS = new Set([
   'restore',
   'checkout',
@@ -331,6 +362,8 @@ for (const entry of commands) {
     block(
       `全ファイル対象のrevert/reset（${revert.why}）は禁止です。特定ファイルか専用worktreeを指定してください。`,
     );
+  if (revert.kind === 'confirm-required')
+    block(`${revert.why}。ユーザーに確認してから進めてください。`);
   const foreign = await foreignChanges(revert.kind === 'all-dirty' ? 'all' : revert.paths, [
     revert.base,
   ]);
@@ -356,15 +389,6 @@ async function run(path: string): Promise<void> {
   const status = await child.exited;
   if (status !== 0) process.exit(status);
 }
-if (
-  commands.some(
-    (entry) =>
-      entry.direct &&
-      entry.name === 'gh' &&
-      wordValue(entry.argv[1]) === 'pr' &&
-      wordValue(entry.argv[2]) === 'create',
-  )
-)
-  await run(join(import.meta.dir, 'require-pr-self-review.ts'));
+if (isPrCreateCommand(command)) await run(join(import.meta.dir, 'require-pr-self-review.ts'));
 for await (const path of new Glob('.claude/hooks/project/*.ts').scan({ cwd: root }))
   await run(join(root, path));

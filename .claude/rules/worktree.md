@@ -12,9 +12,9 @@
 2. 自分のタスクと無関係な変更が存在 → worktree を切って作業開始
 3. 判断がつかない → worktree を切る（安全側に倒す）
 
-## 作成場所（CRITICAL — hook で強制）
+## 作成場所（CRITICAL）
 
-**Worktree は必ず、作業対象の git リポジトリの `.claude/worktrees/` 配下に作成すること。**
+**Worktree は必ず、作業対象の git リポジトリの `.claude/worktrees/` 配下に作成すること。** この配置は hook では強制されておらず、Automode とレビューで守る規約になる。
 
 ### 推奨: `EnterWorktree` ツールを使う
 
@@ -45,7 +45,7 @@ git worktree add .claude/worktrees/<タスク名> -b <ブランチ名> "origin/$
 ```
 
 ```bash
-# 間違い（hook でブロックされる）
+# 間違い（このルールに反する）
 git worktree add .worktrees/<タスク名> ...
 git worktree add /tmp/<タスク名> ...
 ```

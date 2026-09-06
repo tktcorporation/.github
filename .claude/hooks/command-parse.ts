@@ -6,10 +6,13 @@
  * `cd`, control flow, and subshell cwd are modeled. Aliases, dynamic executable names, function
  * bodies, external scripts, and code produced by pipelines remain opaque deliberate bypasses.
  */
-import bash from '@ast-grep/lang-bash';
-import { parse, registerDynamicLanguage, type SgNode } from '@ast-grep/napi';
 import { basename, resolve } from 'node:path';
+import { ensureBashParserDeps } from './ensure-bash-parser-deps.ts';
+import type { SgNode } from '@ast-grep/napi';
 
+await ensureBashParserDeps(import.meta.dir);
+const bash = (await import('@ast-grep/lang-bash')).default;
+const { parse, registerDynamicLanguage } = await import('@ast-grep/napi');
 registerDynamicLanguage({ bash });
 
 export type ShellWord =

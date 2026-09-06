@@ -15,7 +15,6 @@
  * セッションを含めてレート制限とレイテンシを消費する。
  */
 import { $ } from 'bun';
-import { DateTime } from 'luxon';
 import { mkdir } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { readInput, sessionStateDir } from './hook-utils.ts';
@@ -51,7 +50,7 @@ if (throttlePath) {
       .catch(() => '0'),
     10,
   );
-  const now = DateTime.now().toMillis();
+  const now = Date.now();
   if (Number.isFinite(last) && now - last < THROTTLE_MS) process.exit(0);
   await mkdir(dirname(throttlePath), { recursive: true }).catch(() => undefined);
   await Bun.write(throttlePath, String(now)).catch(() => undefined);

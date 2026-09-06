@@ -3,3 +3,5 @@
 .session/
 plans/
 pr-review/
+hooks/package.json
+hooks/bun.lock
