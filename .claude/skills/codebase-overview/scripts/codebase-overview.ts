@@ -171,11 +171,11 @@ async function main() {
     console.log('bun codebase-overview.ts [<file>...]');
     return;
   }
+  // 対象は現在地の作業ツリー。CLAUDE_PROJECT_DIR は worktree に入っても主チェックアウトを
+  // 指したままなので、一致は求めず git が無いときの代替にだけ使う。
   const git = await $`git rev-parse --show-toplevel`.quiet().nothrow();
   const root = git.exitCode === 0 ? git.text().trim() : process.env.CLAUDE_PROJECT_DIR;
   if (!root) throw new Error('リポジトリルートを特定できない。');
-  if (process.env.CLAUDE_PROJECT_DIR && resolve(process.env.CLAUDE_PROJECT_DIR) !== resolve(root))
-    throw new Error('CLAUDE_PROJECT_DIR と cwd のチェックアウトが違う。');
   const requested = args.map((arg) => resolve(arg));
   process.chdir(root);
   const files = requested.map((path) => relative(root, path));
