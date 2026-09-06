@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
-import { hasMiseTask, runMiseTask } from './hook-utils.ts';
-process.chdir(process.env.CLAUDE_PROJECT_DIR ?? '.');
+import { hasMiseTask, readInput, runMiseTask, workingTree } from './hook-utils.ts';
+process.chdir(await workingTree(await readInput()));
 if (!(await hasMiseTask('claude-verify'))) process.exit(0);
 const result = await runMiseTask('claude-verify', [], 300_000);
 if (result.exitCode === 0) process.exit(0);

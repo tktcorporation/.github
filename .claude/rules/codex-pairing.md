@@ -4,7 +4,7 @@ Codex CLI (`codex`) はセカンドオピニオンを得るためのツール。
 
 ## 必ず使う場面（MUST）
 
-- **PR 作成・push 前のレビュー**: `codex review --uncommitted` / `codex review --base <default-branch>`
+- **PR 作成・push 前のレビューループを収束させる最後のラウンド**（条件は `pr-self-review.md` の「仕組み」節）: `codex review --base <default-branch>`。ループでは各ラウンドの修正をコミットしてから次に渡すため、`--uncommitted` では対象が空になる。`--uncommitted` はコミット前の手元確認にだけ使う
 - **設計方針が2つ以上あり迷う**: `codex exec "2案のトレードオフを分析して: ..."`
 - **バグ原因が10分以上特定できない**: `codex exec "このエラーの原因を調査して: ..."`
 
