@@ -1,3 +1,4 @@
 *.local.json
-.pr-review-count
+.session/
 plans/
+pr-review/
