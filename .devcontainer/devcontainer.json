@@ -4,10 +4,18 @@
   "workspaceMount": "source=${localWorkspaceFolder},target=/workspaces/${localWorkspaceFolderBasename},type=bind,consistency=cached",
   "workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}",
 
-  // mise shims resolve the tool version from the nearest .mise.toml, for every process in the container, including IDEs and hook runners.
+  // containerEnv は 1 つのオブジェクトに集約する。JSON はキーが重複すると後勝ちになり、
+  // 分けて書くと先に書いたほうが丸ごと無視される。
+  //
+  // PATH: mise shims resolve the tool version from the nearest .mise.toml, for every process in the container, including IDEs and hook runners.
   // containerEnv cannot expand ${containerEnv:PATH}; keep the image's standard executable paths explicitly.
+  //
+  // SSH_AUTH_SOCK: remoteEnv ではなく containerEnv に置く。VS Code のターミナル以外
+  // （バックグラウンドプロセスや postCreateCommand 等）からの SSH 接続にも
+  // 1Password agent ソケットを見せる必要があるため。
   "containerEnv": {
-    "PATH": "/home/vscode/.local/share/mise/shims:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+    "PATH": "/home/vscode/.local/share/mise/shims:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+    "SSH_AUTH_SOCK": "/tmp/1password-agent/agent.sock"
   },
 
   // Volume name must start with [a-zA-Z0-9] to comply with Docker naming rules
@@ -25,14 +33,29 @@
     // mise インストール済みツールを DevContainer 間で共有
     // 全コンテナが Linux なのでバイナリ互換性あり。ワークスペース名を含めず共有 volume にする
     // ホスト (macOS) とは OS が異なるためバインドマウントではなく named volume を使う
-    "source=devcontainer-shared-mise-data,target=/home/vscode/.local/share/mise,type=volume"
+    "source=devcontainer-shared-mise-data,target=/home/vscode/.local/share/mise,type=volume",
+
+    // EC2 への SSH 公開鍵認証を 1Password SSH Agent に委譲する。
+    // VS Code がコンテナへ転送する SSH agent ソケットには 1Password の鍵が乗らないため、
+    // ホストの 1Password agent ソケットを直接 bind mount して参照する。
+    // ソケットファイル単体ではなく親ディレクトリを mount する: 1Password がソケットを
+    // 再生成 (unlink して同名で作り直す) しても、ディレクトリ越しの参照なら新しい実体に追随する。
+    // また bind mount は source がホストに実在しないと docker create ごと失敗するため、
+    // 1Password 未導入のホストでも initializeCommand が事前に空ディレクトリを用意しておくことで
+    // devcontainer 自体は起動できるようにしている (agent が使えないだけで済む)。
+    // パスに空白 (Group Containers) を含むため、他要素と異なりオブジェクト形式で記述する。
+    {
+      "source": "${localEnv:HOME}/Library/Group Containers/2BUA8C4S2C.com.1password/t",
+      "target": "/tmp/1password-agent",
+      "type": "bind"
+    }
   ],
   "features": {
-    // "ghcr.io/devcontainers/features/docker-in-docker:2": {
-    //   "version": "latest",
-    //   "enableNonRootDocker": "true",
-    //   "moby": "true"
-    // },
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {
+      "version": "latest",
+      "enableNonRootDocker": "true",
+      "moby": "true"
+    },
     "ghcr.io/devcontainers/features/github-cli:1": {},
     "ghcr.io/devcontainers-extra/features/mise:1": {
       "version": "2026.8.14"
@@ -122,7 +145,16 @@
     // updateContentCommand の object 内は並列実行されるので、ここから起動すると setup-mise-shell と競合する。
   },
   "postCreateCommand": {
-    "fix-pnpm-store-permissions": ["bash", "-c", "sudo chown -R $(whoami) .pnpm-store"],
+    "fix-pnpm-store-permissions": ["bash", "-lc", "sudo chown -R $(whoami) .pnpm-store"],
+    // .devcontainer/project/ はテンプレート同期対象外 (プロジェクト固有スクリプト置き場) のため、
+    // 個別ファイル名をここに直接書くと同期先の他プロジェクトでファイル不在エラーになる。
+    // setup-*.sh を存在する分だけファイル名順に実行することで、このエントリ自体は同期しても安全にする。
+    // 1本の失敗が他を止めないよう各実行を `|| true` で受け、ループ全体が確実に成功終了するようにする。
+    "run-project-setup-scripts": [
+      "bash",
+      "-lc",
+      "for f in .devcontainer/project/setup-*.sh; do [ -e \"$f\" ] || continue; bash \"$f\" || true; done"
+    ],
     // vp の Node マネージャを system-first モードにする（Node/グローバルツールは mise に一任する方針）。
     // mise を shadow し得るのは vp の node/npm/npx shim（= Node マネージャ管轄）で、vp は既定で pnpm の
     // shim を作らないため pnpm 自体は mise のまま奪われない。
@@ -136,10 +168,17 @@
     // postCreateCommand の object 内は並列実行される。mise の trust/install/upgrade、Bun を使う初期設定、
     // Vite+ の切り替えを同一コマンドにまとめ、fresh container でも依存順を保証する。
     // lifecycle command では login shell を使わず、構築途中の .bash_profile を読み込まない。
+    //
+    // gh auth setup-git は git の credential helper を gh へ向け、https 越しの git 操作に
+    // GH_TOKEN を使わせる。これが無いと credential helper はホストの認証を借りる VS Code のものだけになり、
+    // ターミナル以外のプロセス（バックグラウンドで動くエージェント等）からの fetch / push が
+    // "could not read Username for https://github.com" で失敗する。
+    // setup-git-user.ts と同じ ~/.gitconfig を書き換えるため、並列キーに分けず直列に並べる。
+    // token が無い環境でも以降の初期設定を止めないよう、失敗は警告に留める。
     "mise-and-project-setup": [
       "bash",
       "-c",
-      "mise trust && mise install && mise upgrade && mise exec -- bun .devcontainer/setup-git-user.ts && mise exec -- bun .devcontainer/setup-herdr.ts && vp env off"
+      "mise trust && mise install && mise upgrade && { gh auth setup-git || echo 'Warning: gh auth setup-git failed; git over https will not use GH_TOKEN'; } && mise exec -- bun .devcontainer/setup-git-user.ts && mise exec -- bun .devcontainer/setup-herdr.ts && vp env off"
     ],
     // ~/.claude.json は volume 外（ホームディレクトリ直下）のため、rebuild で消える
     // volume 内のバックアップからリストアする（postStartCommand で毎回バックアップされる）
@@ -151,6 +190,15 @@
     ]
   },
   "postStartCommand": {
+    // .devcontainer/project/ の setup-*.sh を postCreateCommand と同じ内容で再実行する。
+    // VS Code がホストの SSH agent をコンテナへ転送するソケットのパスは接続のたびに変わるため、
+    // コンテナ作成時 (postCreateCommand) に一度書くだけでは追随できない。setup-*.sh は全て
+    // 冪等なので、起動のたびに走らせても問題ない。
+    "run-project-setup-scripts-on-start": [
+      "bash",
+      "-lc",
+      "for f in .devcontainer/project/setup-*.sh; do [ -e \"$f\" ] || continue; bash \"$f\" || true; done"
+    ],
     // ~/.claude.json を volume 内にバックアップ（認証情報の永続化）
     // コンテナ内で claude login した後の OAuth セッションを rebuild 後も保持するため
     // 有効な認証（oauthAccount）が含まれている場合のみバックアップする
@@ -174,7 +222,11 @@
       "[ -s .devcontainer/.env.devcontainer ] || echo 'WARNING: .devcontainer/.env.devcontainer is empty or missing. Secrets are not loaded.'"
     ]
   },
-  // initializeCommand はホスト側で実行される
-  // .env.devcontainer が無ければ空ファイルを作成（runArgs --env-file の失敗防止）
-  "initializeCommand": "touch .devcontainer/.env.devcontainer"
+  // initializeCommand はホスト側で実行される。
+  // mkdir: 1Password の Group Containers ディレクトリをホスト側に用意する。mounts の bind mount は
+  // source がホストに実在しないと docker create ごと失敗するため、1Password 未導入のホストでも
+  // ここで空ディレクトリを作っておけば devcontainer 自体は起動できる。`|| true` でこの失敗を
+  // 吸収し、後続の touch を必ず実行させる。
+  // touch: .env.devcontainer が無ければ空ファイルを作成する（runArgs --env-file の失敗防止）。
+  "initializeCommand": "mkdir -p \"${localEnv:HOME}/Library/Group Containers/2BUA8C4S2C.com.1password/t\" || true && touch .devcontainer/.env.devcontainer"
 }
