@@ -8,7 +8,7 @@ import { groupRows } from './model/group';
 import type { Snapshot } from './model/row';
 import { openRow } from './tui/actions';
 import { App } from './tui/App';
-import { formatAge, shortModel } from './tui/format';
+import { buildLine1, buildLine2 } from './tui/row-lines';
 
 // ワークスペースの root は「このツールが置かれた場所」から 2 つ上（tools/agent-fleet/src → 3 つ上）で決める。
 // cwd に依存させないのは、Herdr の pane がどの worktree にいても同じ root を見せたいから。
@@ -19,11 +19,20 @@ export function workspaceRootFrom(importMetaUrl: string): string {
 }
 export const workspaceRoot = workspaceRootFrom(import.meta.url);
 
-export function renderOnce(snapshot: Snapshot, acks: AckStore, now: number, ackError: SourceError | null = null): string {
+// --once はパイプ・CI 越しに読まれることもあるため、実端末が無くても崩れない
+// 固定幅（100）を既定にする。TUI 経路（cli.tsx の main）とは違い、この関数自体は
+// 端末を持たない場面（テスト等）からも呼べるよう width を引数で受け取れるようにする。
+export function renderOnce(snapshot: Snapshot, acks: AckStore, now: number, ackError: SourceError | null = null, width = 100): string {
   const g = groupRows(snapshot.rows, acks, now);
-  const line = (r: (typeof snapshot.rows)[number]) =>
-    `  ${r.statusNote ? `[${r.statusNote}] ` : ''}${r.status.padEnd(8)} ${r.agent.padEnd(6)} ${r.kind === 'background' ? 'bg ' : 'int'} ${shortModel(r.model).padEnd(7)} ${r.name}  ${r.pending?.text ?? r.activity ?? ''}  ${formatAge(r.updatedAt, now)}`;
-  const section = (title: string, rows: typeof snapshot.rows) => (rows.length ? [`${title} (${rows.length})`, ...rows.map(line)] : []);
+  // TUI（RowList.tsx）と同じ row-lines.ts を通すことで、--once と TUI の2行の
+  // 組み立てがずれない（幅の式は片方だけ直しても崩れる）。
+  const lines = (r: (typeof snapshot.rows)[number]) => {
+    const line1 = buildLine1(r, width, now, false);
+    const line2 = buildLine2(r, width);
+    return [line1.plain, line2.plain];
+  };
+  const section = (title: string, rows: typeof snapshot.rows) =>
+    rows.length ? [`${title} (${rows.length})`, ...rows.flatMap(lines)] : [];
   const errors = Object.entries(snapshot.sources).filter(([, e]) => e).map(([k, e]) => `${k}: ${e?.detail}`);
   if (ackError) errors.push(`ack: ${ackError.detail}`);
   return [
@@ -48,10 +57,15 @@ async function main(argv: string[]) {
     // 理由は renderOnce の末尾に出す。
     const r = loadAcks(defaultAckPath());
     const acks = r.ok ? r.value : {};
-    process.stdout.write(renderOnce(snapshot, acks, Date.now(), r.ok ? null : r.error) + '\n');
+    process.stdout.write(renderOnce(snapshot, acks, Date.now(), r.ok ? null : r.error, process.stdout.columns ?? 100) + '\n');
     return;
   }
-  render(<App collector={collector} ackPath={defaultAckPath()} intervalMs={3000} onOpen={(row) => openRow(row)} />);
+  // alternate screen は vim/htop と同じ仕組みで、端末の scrollback を汚さずに描く。
+  // 非 TTY（パイプ・CI）では Ink が自動的に無効化するため、--once/--json 側では指定しない。
+  render(<App collector={collector} ackPath={defaultAckPath()} intervalMs={3000} onOpen={(row) => openRow(row)} />, {
+    alternateScreen: true,
+  });
 }
 
 if (import.meta.main) await main(process.argv.slice(2));
+
