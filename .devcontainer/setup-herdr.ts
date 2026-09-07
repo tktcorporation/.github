@@ -15,4 +15,7 @@ if (existsSync(config) && !lstatSync(config).isSymbolicLink()) {
   await $`mv ${config} ${backup}`;
 }
 await $`ln -sfn ${join(workspace, '.herdr/config.toml')} ${config}`;
+// Herdr が pane と各エージェントのセッション ID を結び付けるには、エージェント側の SessionStart hook が要る。
+// hook は ~/.claude と ~/.codex の設定に書き込まれるため、Claude Code と Codex の両方へ導入する。
+await $`mise exec github:herdrdev/herdr -- herdr integration install claude`;
 await $`mise exec github:herdrdev/herdr -- herdr integration install codex`;

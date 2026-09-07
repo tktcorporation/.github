@@ -71,3 +71,4 @@ const child = Bun.spawn(command, {
   stderr: 'inherit',
 });
 process.exit(await child.exited);
+

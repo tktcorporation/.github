@@ -28,3 +28,4 @@ npm registry への接続が必要だが、依存はこのディレクトリの 
 
 依存を更新するときはこのディレクトリで `bun install --lockfile-only` を実行し、
 `package.json` と `bun.lock` を同じ変更に含める。
+

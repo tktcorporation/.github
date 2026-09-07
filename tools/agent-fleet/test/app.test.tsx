@@ -6,7 +6,7 @@ import { render } from 'ink-testing-library';
 import React from 'react';
 import { loadAcks } from '../src/model/ack';
 import type { FleetRow, Snapshot } from '../src/model/row';
-import { App } from '../src/tui/App';
+import { App, computeHeights } from '../src/tui/App';
 import { textWidth } from '../src/tui/format';
 
 const stripAnsi = (s: string) => s.replace(/\x1b\[[0-9;]*m/g, '');
@@ -207,33 +207,35 @@ describe('App', () => {
     expect(frame).toContain('row 25');
   });
 
-  test('詳細ペインの全項目が長文でも、rows=20 の端末で全体が収まる', async () => {
+  const longText = (label: string) => `${label} `.repeat(80).trim();
+  const packedSnapshot = (): Snapshot => ({
+    ...snapshot,
+    rows: [
+      row({
+        key: 'full',
+        name: 'fully packed row',
+        status: 'blocked',
+        model: 'claude-fable-5-1[1m]',
+        originalPrompt: longText('元の指示'),
+        latestPrompt: longText('最新の指示'),
+        activity: longText('いま'),
+        pending: { kind: 'input needed', text: longText('要判断') },
+        artifacts: [
+          { kind: 'pr', id: '1', href: 'https://example.test/pull/1' },
+          { kind: 'pr', id: '2', href: 'https://example.test/pull/2' },
+          { kind: 'pr', id: '3', href: 'https://example.test/pull/3' },
+        ],
+        attach: { type: 'hint', text: longText('移動') },
+      }),
+    ],
+  });
+
+  test('詳細ペインの全項目が長文でも、rows=40（detailHeight=13）では8ラベル全部が出る', async () => {
     const ackPath = makeAckPath();
-    const longText = (label: string) => `${label} `.repeat(80).trim();
-    const packed: Snapshot = {
-      ...snapshot,
-      rows: [
-        row({
-          key: 'full',
-          name: 'fully packed row',
-          status: 'blocked',
-          model: 'claude-fable-5-1[1m]',
-          originalPrompt: longText('元の指示'),
-          latestPrompt: longText('最新の指示'),
-          activity: longText('いま'),
-          pending: { kind: 'input needed', text: longText('要判断') },
-          artifacts: [
-            { kind: 'pr', id: '1', href: 'https://example.test/pull/1' },
-            { kind: 'pr', id: '2', href: 'https://example.test/pull/2' },
-            { kind: 'pr', id: '3', href: 'https://example.test/pull/3' },
-          ],
-          attach: { type: 'hint', text: longText('移動') },
-        }),
-      ],
-    };
+    const packed = packedSnapshot();
     const packedCollector = { collect: async () => packed };
     const { lastFrame, stdin, stdout } = renderApp(<App collector={packedCollector} ackPath={ackPath} intervalMs={60_000} now={() => now} initialSnapshot={packed} />);
-    (stdout as unknown as { rows: number }).rows = 20;
+    (stdout as unknown as { rows: number }).rows = 40;
     // stdout.rows の書き換えはそれ自体では再描画を起こさないため、無害なキー入力で
     // 状態を1つ更新して次のレンダーに反映させる（'c' はこのフィクスチャに
     // その他グループが無いので見た目には影響しない）。
@@ -241,12 +243,35 @@ describe('App', () => {
     await tick();
     const frame = lastFrame() ?? '';
     const lineCount = frame.split('\n').filter((l) => l.length > 0).length;
-    expect(lineCount).toBeLessThanOrEqual(20);
-    // どの項目も長文というだけで丸ごと描画から落ちてはいけない
-    // （共有予算だと先頭の項目が長いだけで後続が消える不具合の再発防止）。
-    for (const label of ['元の指示', '最新の指示', 'いま', '要判断', 'モデル', '場所', '成果物']) {
+    expect(lineCount).toBeLessThanOrEqual(40);
+    // detailHeight=13 は DETAIL_MAX_LINES と一致し、8フィールド全部の上限を賄いきる。
+    for (const label of ['元の指示', '最新の指示', 'いま', 'モデル', '要判断', '場所', '成果物', '移動']) {
       expect(frame).toContain(label);
     }
+  });
+
+  test('詳細ペインの全項目が長文でも、rows=20 の端末で全体が収まる', async () => {
+    const ackPath = makeAckPath();
+    const packed = packedSnapshot();
+    const packedCollector = { collect: async () => packed };
+    const { lastFrame, stdin, stdout } = renderApp(<App collector={packedCollector} ackPath={ackPath} intervalMs={60_000} now={() => now} initialSnapshot={packed} />);
+    (stdout as unknown as { rows: number }).rows = 20;
+    stdin.write('c');
+    await tick();
+    const frame = lastFrame() ?? '';
+    const lineCount = frame.split('\n').filter((l) => l.length > 0).length;
+    expect(lineCount).toBeLessThanOrEqual(20);
+    // detailHeight は端末高さだけで決まり（選択で伸縮しない）、rows=20 では
+    // 全フィールド分の行数を賄いきれない。そのときも「何を頼まれ、今どこで
+    // 止まっているか」の核（元の指示・要判断）だけは末尾から間引かれずに残る
+    // （共有予算だと先頭の項目が長いだけで後続がまるごと消える不具合の再発防止）。
+    for (const label of ['元の指示', '要判断']) {
+      expect(frame).toContain(label);
+    }
+    // 落ちるべき末尾フィールド（移動）は、この高さでは間引かれて出ない。
+    // ステータス行のキー help にも「Enter 移動」の語が出るため、詳細ペインの
+    // ラベル位置（行頭）に限って判定する。
+    expect(stripAnsi(frame)).not.toMatch(/^移動\s/m);
   });
 
   test('30行 + 長い源エラー3件でも、rows=20 columns=80 の端末で全体が収まる（StatusBar は1行に収める）', async () => {
@@ -278,6 +303,125 @@ describe('App', () => {
     const frame = lastFrame() ?? '';
     const lines = frame.split('\n').filter((l) => l.length > 0);
     expect(lines.length).toBeLessThanOrEqual(20);
-    expect(lines.every((l) => l.length <= 80 + 20)).toBe(true); // ANSI エスケープぶんの余裕を見つつ、大幅な折り返しが無いことを確認する
+    // ANSI エスケープを剥がした表示幅そのもので判定する（色数が増えるとエスケープの
+    // バイト数だけで閾値を超えてしまい、折り返しの有無を正しく判定できないため）。
+    expect(lines.every((l) => textWidth(stripAnsi(l)) <= 80)).toBe(true);
+  });
+
+  test.each([
+    [80, 20],
+    [80, 40],
+    [120, 20],
+    [120, 40],
+  ])('幅%i×高さ%iのどの組み合わせでも各行が端末幅を超えず、行数が端末高さを超えない', async (width, height) => {
+    const ackPath = makeAckPath();
+    const many: Snapshot = {
+      ...snapshot,
+      rows: Array.from({ length: 10 }, (_, i) =>
+        row({
+          key: `r${i}`,
+          name: `row ${i} 日本語混じりの名前`,
+          status: i % 3 === 0 ? 'blocked' : 'working',
+          pending: i % 3 === 0 ? { kind: 'input needed', text: '確認お願いします' } : null,
+        }),
+      ),
+    };
+    const manyCollector = { collect: async () => many };
+    const { lastFrame, stdin, stdout } = renderApp(
+      <App collector={manyCollector} ackPath={ackPath} intervalMs={60_000} now={() => now} initialSnapshot={many} />,
+    );
+    (stdout as unknown as { rows: number }).rows = height;
+    Object.defineProperty(stdout, 'columns', { value: width, configurable: true });
+    stdin.write('c');
+    await tick();
+    const frame = lastFrame() ?? '';
+    const lines = frame.split('\n').filter((l) => l.length > 0);
+    expect(lines.length).toBeLessThanOrEqual(height);
+    for (const l of lines) expect(textWidth(stripAnsi(l))).toBeLessThanOrEqual(width);
+  });
+
+  test('stdout.rows を変えて resize を発火するだけで（キー入力なし）再描画され行数が変わる', async () => {
+    const ackPath = makeAckPath();
+    const many: Snapshot = {
+      ...snapshot,
+      rows: Array.from({ length: 30 }, (_, i) => row({ key: `r${i}`, name: `row ${i}`, status: 'working', activity: null })),
+    };
+    const manyCollector = { collect: async () => many };
+    const { lastFrame, stdout } = renderApp(<App collector={manyCollector} ackPath={ackPath} intervalMs={60_000} now={() => now} initialSnapshot={many} />);
+    await tick();
+    const before = (lastFrame() ?? '').split('\n').filter((l) => l.length > 0).length;
+    (stdout as unknown as { rows: number }).rows = 15;
+    stdout.emit('resize');
+    await tick();
+    const after = (lastFrame() ?? '').split('\n').filter((l) => l.length > 0).length;
+    expect(after).toBeLessThan(before);
+  });
+
+  test('絞り込み中は PgDn/Home/End で選択が動き、g/G/j/k は絞り込み文字列に吸収される', async () => {
+    const ackPath = makeAckPath();
+    const many: Snapshot = {
+      ...snapshot,
+      rows: Array.from({ length: 10 }, (_, i) => row({ key: `r${i}`, name: `row ${i}`, status: 'working', activity: null })),
+    };
+    const manyCollector = { collect: async () => many };
+    const { lastFrame, stdin } = renderApp(<App collector={manyCollector} ackPath={ackPath} intervalMs={60_000} now={() => now} initialSnapshot={many} />);
+    await tick();
+    stdin.write('/');
+    await tick();
+    expect(lastFrame()).toContain('絞り込み:');
+    // フィルタは空文字のまま（全件ヒット）なので、PgDn/End は一覧移動として効く。
+    stdin.write('\x1b[6~'); // PgDn
+    await tick();
+    stdin.write('\x1b[4~'); // End
+    await tick();
+    expect(lastFrame()).toContain('row 9'); // End で末尾へ
+    expect(lastFrame()).toContain('絞り込み: '); // フィルタ文字列自体は空のまま
+
+    // g/G/j/k は絞り込み文字列としてタイプされるだけで、一覧移動には使われない。
+    stdin.write('g');
+    await tick();
+    stdin.write('G');
+    await tick();
+    stdin.write('j');
+    await tick();
+    stdin.write('k');
+    await tick();
+    expect(lastFrame()).toContain('絞り込み: gGjk');
+
+    // Home は非印字キーなので、絞り込み文字列を変えずに一覧移動として効く。
+    stdin.write('\x1b[1~'); // Home
+    await tick();
+    expect(lastFrame()).toContain('絞り込み: gGjk');
+  });
+
+  test('隠れているのが見出しだけ（セッション0件）のとき、案内行は見出し名を示す（N more ではない）', async () => {
+    const ackPath = makeAckPath();
+    // rows=20 のとき listHeight=9・capacity=7。作業中3件(1+2*3=7行)がちょうど埋まり、
+    // 畳んだ「その他」見出し1行だけが capacity を超えて隠れる配置を作る。
+    const packed: Snapshot = {
+      ...snapshot,
+      rows: [
+        ...Array.from({ length: 3 }, (_, i) => row({ key: `w${i}`, name: `working ${i}`, status: 'working', activity: null })),
+        row({ key: 'o0', name: 'other 0', status: 'done', doneMarker: 'x', activity: null }),
+      ],
+    };
+    const collector2 = { collect: async () => packed };
+    const { lastFrame, stdin, stdout } = renderApp(<App collector={collector2} ackPath={ackPath} intervalMs={60_000} now={() => now} initialSnapshot={packed} />);
+    (stdout as unknown as { rows: number }).rows = 20;
+    stdin.write('a'); // done を確認済みにし、その他グループへ畳んだまま押し出す
+    await tick();
+    const frame = lastFrame() ?? '';
+    expect(frame).toContain('その他 (1)');
+    expect(frame).not.toContain('more');
   });
 });
+
+describe('computeHeights', () => {
+  test.each([10, 14, 20, 24, 40, 60])('高さ%iでは 1 + listHeight + 1 + detailHeight + 1 <= rows（rows>=12 では ==）', (rows) => {
+    const { listHeight, detailHeight } = computeHeights(rows);
+    const total = 1 + listHeight + 1 + detailHeight + 1;
+    expect(total).toBeLessThanOrEqual(rows);
+    if (rows >= 12) expect(total).toBe(rows);
+  });
+});
+
