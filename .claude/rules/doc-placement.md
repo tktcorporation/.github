@@ -42,12 +42,12 @@ paths: ['**/*.md', '**/*.mdx', 'docs/**', '.config/docs-lifecycle.json']
 
 判断基準: **「この PR で、plan / spec に書かれた設計は実装され終わったか？」** フォローアップ TODO が残る、他ファイルからの参照がまだ手当てできていない、または段階的にしか実装しないなら残す。残す場合は次の節の猶予宣言を書く（何もしないと鮮度チェックで fail する）。
 
-手順 4 の「リンク切れを残さない」は `mise run lint-docs` が検知する。ただし lint が拾えるのは **`docs/...` の形でパスを含む参照と、doc 内の相対リンクだけ**。次の 2 つは検知できないので、手順 1〜2 の grep は省略できない。
+手順 4 の「リンク切れを残さない」は `bun scripts/docs-lifecycle/run.ts` が検知する。ただし lint が拾えるのは **`docs/...` の形でパスを含む参照と、doc 内の相対リンクだけ**。次の 2 つは検知できないので、手順 1〜2 の grep は省略できない。
 
 - `§5.2` のようにセクション番号だけで参照しているコメント
 - `2026-07-23-foo.md` のようにパスを伴わないファイル名だけの言及
 
-## 鮮度 — 触られていない doc は消すか見直す
+## 触られていない doc は消すか見直す
 
 更新が止まった doc は、次のいずれかの状態にある。**どれであっても、そのまま次の実装の根拠にすると誤る。**
 
@@ -55,19 +55,19 @@ paths: ['**/*.md', '**/*.mdx', 'docs/**', '.config/docs-lifecycle.json']
 - 実装が先に進み、記述が実態とズレた
 - 設計途中で放置され、前提が変わった
 
-そのため「内容が正しいか」ではなく **「最後に触られてから何日経ったか」** を機械的な代理指標にして、見直しを強制する。`mise run lint-docs` が最終コミット日からの経過日数で検知し、違反があれば非ゼロで終了する。CI で回すかどうかは各リポジトリのワークフロー次第。lifecycle 区分（ephemeral / durable / generated）と、パス由来の既定の割り当て・閾値の SSOT は `.config/docs-lifecycle.json`。
+そのため「内容が正しいか」ではなく **「最後に触られてから何日経ったか」** を機械的な代理指標にして、見直しを強制する。`bun scripts/docs-lifecycle/run.ts` が最終コミット日からの経過日数で検知し、違反があれば非ゼロで終了する。CI で回すかどうかは各リポジトリのワークフロー次第。lifecycle 区分（ephemeral / durable / generated）と、パス由来の既定の割り当て・閾値の SSOT は `.config/docs-lifecycle.json`。
 
-この設定ファイルは ziku でテンプレートから配られる。**リポジトリ固有の事情を設定に書かない** — 双方向同期でそれが他リポジトリへ流れ込む。個別の doc の事情は、次節の frontmatter で doc 自身に持たせる（生成物なら `lifecycle: generated` を生成スクリプトが出力する）。
+この設定ファイルは ziku でテンプレートから配られる。**リポジトリ固有の事情を設定に書かない。** 双方向同期でそれが他リポジトリへ流れ込む。個別の doc の事情は、次節の frontmatter で doc 自身に持たせる（生成物なら `lifecycle: generated` を生成スクリプトが出力する）。
 
 ### stale と報告されたときの選択肢
 
 上から順に検討する。**削除が第一候補**で、猶予は「まだ実装中」が本当のときだけ使う。
 
-1. **削除する** — 実装が済んでいる。手順は前節
-2. **WHY を参照元へ移す** — 単一ファイルに閉じる設計判断なら、その参照元のコードコメントへ移してから削除
-3. **`docs/design/` へ昇格させる** — 複数ファイルが依存する横断的な設計判断。昇格先を `lifecycle: durable` にする
-4. **猶予を宣言する** — 実装が進行中で、期限内に消費する見込みがある
-5. **`lifecycle: durable` を宣言する** — 長期保持する WHY 集約 doc として扱う
+1. **削除する**：実装が済んでいる。手順は前節
+2. **WHY を参照元へ移す**：単一ファイルに閉じる設計判断なら、その参照元のコードコメントへ移してから削除
+3. **`docs/design/` へ昇格させる**：複数ファイルが依存する横断的な設計判断。昇格先を `lifecycle: durable` にする
+4. **猶予を宣言する**：実装が進行中で、期限内に消費する見込みがある
+5. **`lifecycle: durable` を宣言する**：長期保持する WHY 集約 doc として扱う
 
 ### frontmatter による宣言
 
@@ -119,7 +119,7 @@ review-reason: データストア移行は段階リリースで、最終フェ�
 
 ## 関連
 
-- `evergreen-documentation.md` — 4 原則 (Evergreen / Why-First / SSOT / Reader-Friendly)
-- `.claude/skills/evergreen-writing` — 執筆時のセルフチェック
-- `.config/docs-lifecycle.json` — lifecycle 区分・閾値・パス由来の既定割り当ての SSOT
-- `mise run lint-docs` / `mise run lint-docs -- --list` — 違反検知と鮮度一覧（棚卸し用）
+- `evergreen-documentation.md`：4 原則 (Evergreen / Why-First / SSOT / Reader-Friendly)
+- `.claude/skills/evergreen-writing`：執筆時のセルフチェック
+- `.config/docs-lifecycle.json`：lifecycle 区分・閾値・パス由来の既定割り当ての SSOT
+- `bun scripts/docs-lifecycle/run.ts` / `bun scripts/docs-lifecycle/run.ts --list`：違反検知と鮮度一覧（棚卸し用）
