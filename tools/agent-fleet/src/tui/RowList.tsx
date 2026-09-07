@@ -1,36 +1,60 @@
 import { Box, Text } from 'ink';
 import React from 'react';
 import type { FleetRow } from '../model/row';
-import { formatAge, padDisplay, shortModel, statusColor, statusGlyph, truncate } from './format';
+import { buildLine1, buildLine2, GAP_WIDTH, LOCATION_SEP_WIDTH } from './row-lines';
+import { padDisplay, statusColor } from './format';
 
 type RowLineProps = { row: FleetRow; selected: boolean; now: number; width: number };
 
-// 1行に並べる各セグメントの表示幅。summary 列の残り幅は「行全体の幅 − これらの合計」
-// で決まるため、age（右寄せ4桁分）を含め漏れなく数える。ここに含めないぶんだけ
-// summary が伸び、行末で age がはみ出す（実機で "3s" が "3" に見えるなど）。
-const SELECT_PREFIX_WIDTH = 3; // ' ▶ ' / '   '
-const GLYPH_WIDTH = 1;
-const AGENT_WIDTH = 6;
-const KIND_WIDTH = 3; // 'bg ' / 'int'
-const MODEL_WIDTH = 7;
-const NAME_WIDTH = 22;
-const AGE_WIDTH = 4; // formatAge().padStart(4)
-const SEPARATOR_COUNT = 6; // glyph/agent/kind/model/name/summary の後ろに置く半角スペース
-const FIXED_WIDTH =
-  SELECT_PREFIX_WIDTH + GLYPH_WIDTH + AGENT_WIDTH + KIND_WIDTH + MODEL_WIDTH + NAME_WIDTH + AGE_WIDTH + SEPARATOR_COUNT;
-const MIN_SUMMARY_WIDTH = 10;
+// name にも状態色を載せる: 状態記号だけでは、要対応が多数行に埋もれたときに
+// 目が拾いにくい。
+const nameColor = (row: FleetRow): string | undefined =>
+  row.status === 'blocked' ? 'yellow' : row.status === 'failed' ? 'red' : row.status === 'done' ? 'green' : undefined;
+
+const summaryPrefixColor = (row: FleetRow): string | undefined =>
+  row.status === 'blocked' ? 'yellow' : row.status === 'done' ? 'green' : undefined;
 
 export function RowLine({ row, selected, now, width }: RowLineProps) {
-  const summaryWidth = Math.max(MIN_SUMMARY_WIDTH, width - FIXED_WIDTH);
-  const summary = row.pending?.text ?? row.activity ?? (row.status === 'idle' ? '(idle)' : '');
-  const notePrefix = row.statusNote ? `[${row.statusNote}] ` : '';
-  const summaryPrefix = notePrefix + (row.status === 'done' ? '完了: ' : row.status === 'blocked' ? '要判断: ' : '');
+  const line1 = buildLine1(row, width, now, selected);
+  const line2 = buildLine2(row, width);
+
+  // 選択行は2行とも幅いっぱいにパディングした上で inverse だけを掛ける。
+  // inverse と個別の色指定が重なると、黄色文字が黄色寄りの背景に化けて読めなくなる
+  // ため、選択中は色を一切乗せない（inverse のみで選択を示す）。
+  if (selected) {
+    return (
+      <Box flexDirection="column">
+        <Text inverse wrap="truncate-end">
+          {padDisplay(line1.plain, width - 1)}
+        </Text>
+        <Text inverse wrap="truncate-end">
+          {padDisplay(line2.plain, width - 1)}
+        </Text>
+      </Box>
+    );
+  }
+
   return (
-    <Box>
-      <Text inverse={selected}>
-        {selected ? ' ▶ ' : '   '}
-        <Text color={statusColor(row.status)}>{statusGlyph(row.status)}</Text>
-        {' '}{row.agent.padEnd(AGENT_WIDTH)} {row.kind === 'background' ? 'bg ' : 'int'} {padDisplay(shortModel(row.model), MODEL_WIDTH)} {padDisplay(truncate(row.name, NAME_WIDTH), NAME_WIDTH)} {padDisplay(truncate(summaryPrefix + summary, summaryWidth), summaryWidth)} {formatAge(row.updatedAt, now).padStart(AGE_WIDTH)}
+    <Box flexDirection="column">
+      <Text wrap="truncate-end">
+        {line1.cursor}
+        <Text color={statusColor(row.status)}>{line1.glyph}</Text>
+        {' '}
+        <Text bold color={nameColor(row)}>
+          {line1.name}
+        </Text>
+        {line1.location && <Text dimColor>{' '.repeat(LOCATION_SEP_WIDTH)}{line1.location}</Text>}
+        {' '.repeat(GAP_WIDTH)}
+        <Text dimColor>
+          {line1.meta}
+          {'  '}
+          {line1.age}
+        </Text>
+      </Text>
+      <Text wrap="truncate-end">
+        {line2.indent}
+        {line2.summaryPrefix && <Text color={summaryPrefixColor(row)}>{line2.summaryPrefix}</Text>}
+        {line2.summary}
       </Text>
     </Box>
   );
@@ -38,8 +62,9 @@ export function RowLine({ row, selected, now, width }: RowLineProps) {
 
 export function GroupHeader({ title, count, hint }: { title: string; count: number; hint?: string }) {
   return (
-    <Text bold>
+    <Text bold wrap="truncate-end">
       {' '}{title} ({count}){hint ? `  ${hint}` : ''}
     </Text>
   );
 }
+
