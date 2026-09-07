@@ -379,7 +379,13 @@ for (const entry of commands) {
 
 const root = await projectDirectory();
 async function run(path: string): Promise<void> {
-  const child = Bun.spawn(['bun', path], {
+  // project hook は bash と bun (TypeScript) の両方で書かれているため、
+  // 拡張子で実行系を選ぶ。bun 固定だと .sh は構文エラーで落ち、glob を
+  // *.ts に絞ると .sh は黙ってスキャン対象から外れる（後者で実際に
+  // block-redash-direct-exec.sh / block-athena-exec.sh が発火しなくなる
+  // 回帰が起きた）。
+  const interpreter = path.endsWith('.sh') ? 'bash' : 'bun';
+  const child = Bun.spawn([interpreter, join(root, path)], {
     cwd: root,
     env: process.env,
     stdin: new Blob([text]),
@@ -389,6 +395,6 @@ async function run(path: string): Promise<void> {
   const status = await child.exited;
   if (status !== 0) process.exit(status);
 }
-if (isPrCreateCommand(command)) await run(join(import.meta.dir, 'require-pr-self-review.ts'));
-for await (const path of new Glob('.claude/hooks/project/*.ts').scan({ cwd: root }))
-  await run(join(root, path));
+if (/gh\s+pr\s+create/.test(command)) await run('.claude/hooks/require-pr-self-review.ts');
+for await (const path of new Glob('.claude/hooks/project/*.{ts,sh}').scan({ cwd: root }))
+  await run(path);
