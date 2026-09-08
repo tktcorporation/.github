@@ -57,7 +57,6 @@ type Revert =
   | { kind: 'whole-tree'; why: string }
   | { kind: 'paths'; paths: string[]; base: string }
   | { kind: 'all-dirty'; base: string; why: string }
-  | { kind: 'confirm-required'; why: string }
   | null;
 
 const WHOLE_TREE_TARGET = /^(?:\.|:\/|\*|\.\/\*?)$/;
@@ -118,15 +117,6 @@ export function analyzeGit(command: SimpleCommand): Revert {
         : null;
     case 'restore': {
       const positional = [...positionalOf(before, ['-s', '--source']), ...after];
-      if (positional.length === 0) return null;
-      const stagesIndex = before.some((word) =>
-        ['-S', '--staged'].includes(wordValue(word) ?? ''),
-      );
-      if (stagesIndex)
-        return {
-          kind: 'confirm-required',
-          why: 'git restore --staged は索引を書き換えます（このセッションが書いた内容の指紋だけでは、ユーザーが独自に git add した索引状態かどうかを判定できません）',
-        };
       return classifyTargets(positional, base, 'git restore');
     }
     case 'switch':
@@ -333,6 +323,14 @@ if ((hasLsof && hasKill) || hasFuserKill)
   block(
     'lsof+kill / fuser+kill はdevcontainerを巻き込みます。ps aux --sort=-%mem | head でPIDを確認し、kill <PID> で個別に止めてください。',
   );
+for (const entry of commands) {
+  if (!entry.direct || entry.name !== 'git') continue;
+  const target = gitTarget(entry);
+  if (wordValue(target.subcommand) !== 'worktree' || wordValue(target.args[0]) !== 'add') continue;
+  const path = wordValue(target.args[1]);
+  if (path === undefined || !path.startsWith('.claude/worktrees/'))
+    block('worktreeは.claude/worktrees/配下に作成してください。');
+}
 const REVERT_SUBCOMMANDS = new Set([
   'restore',
   'checkout',
@@ -362,8 +360,6 @@ for (const entry of commands) {
     block(
       `全ファイル対象のrevert/reset（${revert.why}）は禁止です。特定ファイルか専用worktreeを指定してください。`,
     );
-  if (revert.kind === 'confirm-required')
-    block(`${revert.why}。ユーザーに確認してから進めてください。`);
   const foreign = await foreignChanges(revert.kind === 'all-dirty' ? 'all' : revert.paths, [
     revert.base,
   ]);
@@ -395,6 +391,6 @@ async function run(path: string): Promise<void> {
   const status = await child.exited;
   if (status !== 0) process.exit(status);
 }
-if (/gh\s+pr\s+create/.test(command)) await run('.claude/hooks/require-pr-self-review.ts');
+if (isPrCreateCommand(command)) await run('.claude/hooks/require-pr-self-review.ts');
 for await (const path of new Glob('.claude/hooks/project/*.{ts,sh}').scan({ cwd: root }))
   await run(path);
