@@ -102,4 +102,3 @@ export function Detail({ row, width, maxLines = DETAIL_MAX_LINES }: { row: Fleet
     </Box>
   );
 }
-
