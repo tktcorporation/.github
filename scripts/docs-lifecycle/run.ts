@@ -22,7 +22,10 @@ const requiredBun = /^bun@(\d+\.\d+\.\d+)(?:[-+].*)?$/.exec(manifest.packageMana
 
 // 数値部分だけを比べる。canary の suffix は無視して、同じ数値なら満たすものとして扱う。
 const toNumbers = (version: string) =>
-  version.split('-', 1)[0].split('.').map((part) => Number.parseInt(part, 10) || 0);
+  version
+    .split('-', 1)[0]
+    .split('.')
+    .map((part) => Number.parseInt(part, 10) || 0);
 
 const isOlder = (actual: string, required: string) => {
   const [a, b] = [toNumbers(actual), toNumbers(required)];
@@ -71,4 +74,3 @@ const child = Bun.spawn(command, {
   stderr: 'inherit',
 });
 process.exit(await child.exited);
-
