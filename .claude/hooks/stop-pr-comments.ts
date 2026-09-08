@@ -50,7 +50,7 @@ if (throttlePath) {
       .catch(() => '0'),
     10,
   );
-  const now = Date.now();
+  const now = performance.timeOrigin + performance.now();
   if (Number.isFinite(last) && now - last < THROTTLE_MS) process.exit(0);
   await mkdir(dirname(throttlePath), { recursive: true }).catch(() => undefined);
   await Bun.write(throttlePath, String(now)).catch(() => undefined);
