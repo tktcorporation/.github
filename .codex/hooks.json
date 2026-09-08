@@ -13,7 +13,6 @@
     ],
     "PreToolUse": [
       {
-        "matcher": "^Bash$",
         "hooks": [
           {
             "type": "command",
@@ -23,10 +22,10 @@
             "type": "command",
             "command": "bun \"$(git rev-parse --show-toplevel)/.codex/run-shared-hook.ts\" .claude/hooks/pre-bash-timing.ts"
           }
-        ]
+        ],
+        "matcher": "^Bash$"
       },
       {
-        "matcher": "Edit|Write|apply_patch",
         "hooks": [
           {
             "type": "command",
@@ -37,12 +36,12 @@
             "type": "command",
             "command": "bun \"$(git rev-parse --show-toplevel)/.codex/run-shared-hook.ts\" .claude/hooks/track-edits.ts"
           }
-        ]
+        ],
+        "matcher": "Edit|Write|apply_patch"
       }
     ],
     "PostToolUse": [
       {
-        "matcher": "^Bash$",
         "hooks": [
           {
             "type": "command",
@@ -51,11 +50,15 @@
           {
             "type": "command",
             "command": "bun \"$(git rev-parse --show-toplevel)/.codex/run-shared-hook.ts\" .claude/hooks/post-bash-timing.ts"
+          },
+          {
+            "type": "command",
+            "command": "bun \"$(git rev-parse --show-toplevel)/.codex/run-shared-hook.ts\" .claude/hooks/post-bash-guard.ts"
           }
-        ]
+        ],
+        "matcher": "^Bash$"
       },
       {
-        "matcher": "Edit|Write|apply_patch",
         "hooks": [
           {
             "type": "command",
@@ -71,7 +74,8 @@
             "command": "bun \"$(git rev-parse --show-toplevel)/.codex/run-shared-hook.ts\" .claude/hooks/post-lint.ts",
             "statusMessage": "Running lint on edited file..."
           }
-        ]
+        ],
+        "matcher": "Edit|Write|apply_patch"
       }
     ],
     "Stop": [
