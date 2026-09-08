@@ -29,7 +29,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bun \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/prompt-router.ts"
+            "command": "bun \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/run-or-skip-for-cursor.ts .claude/hooks/prompt-router.ts"
           }
         ]
       }
@@ -40,11 +40,11 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bun \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/pre-bash-guard.ts"
+            "command": "bun \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/run-or-skip-for-cursor.ts .claude/hooks/pre-bash-guard.ts"
           },
           {
             "type": "command",
-            "command": "bun \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/pre-bash-timing.ts"
+            "command": "bun \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/run-or-skip-for-cursor.ts .claude/hooks/pre-bash-timing.ts"
           }
         ]
       },
@@ -53,12 +53,12 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bun \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/protect-config.ts",
+            "command": "bun \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/run-or-skip-for-cursor.ts .claude/hooks/protect-config.ts",
             "statusMessage": "Checking if file is a protected config..."
           },
           {
             "type": "command",
-            "command": "bun \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/track-edits.ts"
+            "command": "bun \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/run-or-skip-for-cursor.ts .claude/hooks/track-edits.ts"
           }
         ]
       }
@@ -69,15 +69,15 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bun \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/post-bash-pr.ts"
+            "command": "bun \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/run-or-skip-for-cursor.ts .claude/hooks/post-bash-pr.ts"
           },
           {
             "type": "command",
-            "command": "bun \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/post-bash-guard.ts"
+            "command": "bun \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/run-or-skip-for-cursor.ts .claude/hooks/post-bash-timing.ts"
           },
           {
             "type": "command",
-            "command": "bun \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/post-bash-timing.ts"
+            "command": "bun \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/run-or-skip-for-cursor.ts .claude/hooks/post-bash-guard.ts"
           }
         ]
       },
@@ -86,16 +86,16 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bun \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/track-edits.ts"
+            "command": "bun \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/run-or-skip-for-cursor.ts .claude/hooks/track-edits.ts"
           },
           {
             "type": "command",
-            "command": "bun \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/docs-lifecycle-guard.ts",
+            "command": "bun \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/run-or-skip-for-cursor.ts .claude/hooks/docs-lifecycle-guard.ts",
             "statusMessage": "Checking doc placement..."
           },
           {
             "type": "command",
-            "command": "bun \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/post-lint.ts",
+            "command": "bun \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/run-or-skip-for-cursor.ts .claude/hooks/post-lint.ts",
             "statusMessage": "Running lint on edited file..."
           }
         ]
@@ -107,12 +107,12 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bun \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/stop-verify.ts",
+            "command": "bun \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/run-or-skip-for-cursor.ts .claude/hooks/stop-verify.ts",
             "statusMessage": "Running lint + test verification before completion..."
           },
           {
             "type": "command",
-            "command": "bun \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/stop-pr-comments.ts",
+            "command": "bun \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/run-or-skip-for-cursor.ts .claude/hooks/stop-pr-comments.ts",
             "statusMessage": "Checking unresolved PR review threads..."
           }
         ]
