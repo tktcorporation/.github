@@ -2,13 +2,19 @@ import { afterEach, describe, expect, test } from 'bun:test';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { collectClaudeSessions, isProcessAlive, parseClaudeSession } from '../src/collect/claude-sessions';
+import {
+  collectClaudeSessions,
+  isClaudeProcess,
+  isClaudeSessionActive,
+  isProcessAlive,
+  parseClaudeSession,
+} from '../src/collect/claude-sessions';
 
 const fixtures = join(import.meta.dir, 'fixtures', 'claude-sessions');
 
 describe('collectClaudeSessions', () => {
   test('生存している対話セッションだけを返す', async () => {
-    const r = await collectClaudeSessions(fixtures, (pid) => pid === 1001 || pid === 1002);
+    const r = await collectClaudeSessions(fixtures, (session) => session.pid === 1001 || session.pid === 1002);
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.value.map((s) => s.pid)).toEqual([1001]);
@@ -68,5 +74,34 @@ describe('isProcessAlive', () => {
   });
   test('ありえない pid は死んでいる', () => {
     expect(isProcessAlive(2 ** 22 - 1)).toBe(false);
+  });
+});
+
+describe('isClaudeProcess', () => {
+  test('Claude ではない自プロセスはセッションとして扱わない', () => {
+    expect(isClaudeProcess(process.pid)).toBe(false);
+  });
+});
+
+describe('isClaudeSessionActive', () => {
+  const session = {
+    pid: 1001,
+    procStart: '123',
+    sessionId: 'session',
+    kind: 'interactive' as const,
+    name: null,
+    status: 'busy' as const,
+    cwd: '/',
+    jobId: null,
+    startedAt: null,
+    updatedAt: null,
+  };
+
+  test('同じ Claude PID でも procStart が違えば stale session として除外する', () => {
+    expect(isClaudeSessionActive(session, () => true, () => '456')).toBe(false);
+  });
+
+  test('procStart が一致する Claude プロセスだけを受け入れる', () => {
+    expect(isClaudeSessionActive(session, () => true, () => '123')).toBe(true);
   });
 });
