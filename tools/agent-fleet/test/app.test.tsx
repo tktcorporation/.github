@@ -417,11 +417,10 @@ describe('App', () => {
 });
 
 describe('computeHeights', () => {
-  test.each([10, 14, 20, 24, 40, 60])('高さ%iでは 1 + listHeight + 1 + detailHeight + 1 <= rows（rows>=12 では ==）', (rows) => {
+  test.each([5, 10, 14, 20, 24, 40, 60])('高さ%iでは 1 + listHeight + 1 + detailHeight + 1 <= rows（rows>=12 では ==）', (rows) => {
     const { listHeight, detailHeight } = computeHeights(rows);
     const total = 1 + listHeight + 1 + detailHeight + 1;
     expect(total).toBeLessThanOrEqual(rows);
     if (rows >= 12) expect(total).toBe(rows);
   });
 });
-

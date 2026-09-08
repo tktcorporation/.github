@@ -9,4 +9,3 @@ branch refs/heads/feature/b
 worktree /workspaces/ws/.claude/worktrees/detached-one
 HEAD 535f5ae75000000000000000000000000000000
 detached
-

@@ -43,7 +43,7 @@ export function computeHeights(terminalRows: number): { listHeight: number; deta
   // ヘッダ・区切り・ステータス行の固定3行を引いた残りを、一覧と詳細ペインで分け合う。
   const budget = Math.max(0, terminalRows - 1 - 1 - 1);
   const preferredDetail = clamp(budget - MIN_LIST_HEIGHT, DETAIL_MIN_LINES, DETAIL_MAX_LINES);
-  const listHeight = Math.max(LIST_FLOOR, budget - preferredDetail);
+  const listHeight = Math.min(budget, Math.max(LIST_FLOOR, budget - preferredDetail));
   // 極端に狭い端末では LIST_FLOOR と DETAIL_MIN_LINES を同時に満たせないことがある。
   // その場合は detailHeight 側を budget に収まるまで縮め、画面の高さそのものを
   // 超えないことを優先する（案内行が Box をはみ出す事態を避ける）。
@@ -260,4 +260,3 @@ export function App({ collector, ackPath, intervalMs, now = () => Date.now(), on
     </Box>
   );
 }
-

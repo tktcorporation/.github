@@ -49,4 +49,3 @@ function textFits(text: string, width: number): boolean {
   // 同じ正規化を経由させないと textWidth の基準がずれる。
   return truncate(text, width) === text.replace(/\s+/g, ' ').trim();
 }
-

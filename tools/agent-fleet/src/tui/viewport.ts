@@ -74,4 +74,3 @@ export function computeViewport<T>(
   const hiddenAboveGroup = offset > 0 ? groupTitleFor(items[offset] as T) : null;
   return { offset, visible, hiddenAbove, hiddenBelow, hiddenAboveGroup };
 }
-

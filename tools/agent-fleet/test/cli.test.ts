@@ -72,4 +72,3 @@ describe('renderOnce', () => {
     expect(lines[lines.length - 1]).toBe('ack: ack unreadable');
   });
 });
-
