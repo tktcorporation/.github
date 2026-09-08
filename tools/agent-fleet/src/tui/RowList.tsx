@@ -67,4 +67,3 @@ export function GroupHeader({ title, count, hint }: { title: string; count: numb
     </Text>
   );
 }
-
