@@ -1,4 +1,5 @@
-import { existsSync, readdirSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { str, time } from './claude-jobs';
@@ -7,6 +8,8 @@ import { fail, ok, type SourceResult } from './types';
 
 export type ClaudeSession = {
   pid: number;
+  // Claude 2.1.251 より前など、保存済みセッションに無い形式とも互換にする。
+  procStart?: string | null;
   sessionId: string;
   kind: 'interactive' | 'bg' | 'unknown';
   name: string | null;
@@ -29,6 +32,7 @@ export function parseClaudeSession(raw: unknown): ClaudeSession | null {
   const status = r.status === 'busy' || r.status === 'idle' ? r.status : 'unknown';
   return {
     pid: r.pid,
+    procStart: str(r.procStart),
     sessionId,
     kind,
     name: str(r.name),
@@ -51,11 +55,52 @@ export function isProcessAlive(pid: number): boolean {
   }
 }
 
+// PID は終了後に OS が別プロセスへ再割り当てることがある。signal 0 だけでは stale な
+// sessions/<pid>.json を現行セッションとして復活させてしまうので、ps で Claude CLI
+// のプロセスであることも確認する。macOS と Linux のどちらでも使える POSIX `ps` を使い、
+// 確認できない環境は安全側（非アクティブ）に倒す。
+export function isClaudeProcess(pid: number): boolean {
+  if (!isProcessAlive(pid)) return false;
+  try {
+    const command = execFileSync('ps', ['-p', String(pid), '-o', 'command='], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    });
+    return /(?:^|[\\/\\s])claude(?:-code)?(?:[\\s]|$)/i.test(command);
+  } catch {
+    return false;
+  }
+}
+
+// Claude が Linux で保存する procStart は /proc/<pid>/stat の starttime（field 22）。
+// PID を別の Claude が再利用してもこの値は一致しない。macOS など procStart を保存しない
+// セッションは、後方互換として CLI 名の検証だけを使う。
+export function processStartForPid(pid: number): string | null {
+  try {
+    const stat = readFileSync(`/proc/${pid}/stat`, 'utf8');
+    const afterCommand = stat.slice(stat.lastIndexOf(')') + 1).trim().split(/\s+/);
+    return afterCommand[19] ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export function isClaudeSessionActive(
+  session: ClaudeSession,
+  isClaude: (pid: number) => boolean = isClaudeProcess,
+  startForPid: (pid: number) => string | null = processStartForPid,
+): boolean {
+  if (!isClaude(session.pid)) return false;
+  return session.procStart == null || startForPid(session.pid) === session.procStart;
+}
+
 export const defaultSessionsDir = () => join(homedir(), '.claude', 'sessions');
 
 export async function collectClaudeSessions(
   dir = defaultSessionsDir(),
-  alive: (pid: number) => boolean = isProcessAlive,
+  // テストや特殊なランナーではこの判定を差し替えられる。既定では PID の存在と Claude CLI
+  // であることに加え、Linux では procStart も照合して PID 再利用による誤表示を防ぐ。
+  isActive: (session: ClaudeSession) => boolean = isClaudeSessionActive,
 ): Promise<SourceResult<ClaudeSession[]>> {
   if (!existsSync(dir)) return fail('not_found', dir);
   let names: string[];
@@ -74,7 +119,7 @@ export async function collectClaudeSessions(
     // 止めてはいけないため、そのセッションだけを飛ばして続行する。
     if (!r.ok) continue;
     const s = parseClaudeSession(r.value);
-    if (!s || s.kind !== 'interactive' || !alive(s.pid)) continue;
+    if (!s || s.kind !== 'interactive' || !isActive(s)) continue;
     out.push(s);
   }
   return ok(out);
