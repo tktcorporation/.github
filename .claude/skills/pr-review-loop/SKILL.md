@@ -31,6 +31,7 @@ pr-review-loop(本スキル)  →  上記2つを「指摘全体」に対して�
 ### Step 0: スコープ確定
 
 ```bash
+# origin/HEAD が未設定なら一度だけ: git remote set-head origin --auto
 default_branch="$(git symbolic-ref --short refs/remotes/origin/HEAD | sed 's@^origin/@@')"
 git fetch origin "$default_branch"
 git status --porcelain

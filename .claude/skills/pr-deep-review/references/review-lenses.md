@@ -199,7 +199,7 @@ const reviewed = await pipeline(
         (f) => () =>
           agent(
             `この指摘を敵対的に検証せよ。実際に該当ファイルを開いて裏付けを取ること。裏付けが取れなければ REFUTED。\n指摘: ${JSON.stringify(f)}`,
-            // 複数票の多数決ではなく1指摘につき1エージェントが単独で REFUTED/CONFIRMED を決める
+            // 複数票の多数決ではなく1指摘につき1エージェントが単独で CONFIRMED / PLAUSIBLE / REFUTED を決める
             // 最終ジャッジなので、model を省略してメインセッションのモデルの継承を狙う
             // (subagent-model-policy.md の敵対的検証の最終ジャッジに該当する例外)。
             // 実際に動くモデルは /tasks で確認する。
