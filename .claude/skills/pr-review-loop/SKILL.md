@@ -91,7 +91,7 @@ Agent: "以下の差分を pr-deep-review スキル(.claude/skills/pr-deep-revie
 
 直したらこのラウンドの修正をコミットする。Step 0 の差分は `origin/<default-branch>...HEAD` で取るので、未コミットの修正は次ラウンドのレビュー対象に入らない。
 
-コミットはするが push はしない。push は、Step 2 で収束を確認し Step 7 のレポートを出した後に 1 回だけ行う（`.claude/rules/ci-workflow.md` の「セルフレビューの往復では push をまとめる」）。途中で push してよい場合は、同じ節の例外の定めに従う。未 push のコミットを促す hook やリマインダーがラウンドごとに届いても、それを理由に push しない。
+コミットはするが push はしない。push は、Step 2 で収束を確認し Step 7 のレポートを出した後に 1 回だけ行う（`.claude/rules/ci-workflow.md` の「セルフレビューの往復では push をまとめる」）。途中で push してよい場合は、同じ節が push を許す条件の定めに従う。未 push のコミットを促す hook やリマインダーがラウンドごとに届いても、それを理由に push しない。
 
 ### Step 6: ラウンド継続判定
 
