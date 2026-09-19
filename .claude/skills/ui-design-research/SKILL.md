@@ -58,7 +58,7 @@ Present as an Insight block before proposing changes.
 
 Inspect the UI in the form the product actually draws. Do not convert a cell/character UI into a bitmap; that drops information and costs tokens.
 
-- Cell/character UIs (terminal, TUI): dump the test-backend buffer as text and judge from that. Do not screenshot or screen-record. Follow the project's dump command if it has one.
+- Cell/character UIs (terminal, TUI): dump the rendered cell buffer as text with whatever the project provides (e.g. a test backend) and judge from that. Do not screenshot or screen-record. Follow the project's dump command if it has one.
 - Pixel UIs: take screenshots after implementation and compare before/after.
 
 ## Quick Reference
