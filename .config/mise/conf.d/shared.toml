@@ -20,6 +20,11 @@ bun = "latest"
 "npm:@openai/codex" = "latest"
 "npm:@google/gemini-cli" = "latest"
 "npm:chrome-devtools-mcp" = "latest"
+# `.devcontainer/setup-chrome-devtools-mcp.ts` が `playwright install(-deps) chromium`
+# を叩いて chrome-devtools-mcp 用の Chromium を用意する。chrome-devtools-mcp 自体の
+# npm-backed tool インストールは自分のパッケージの bin だけを shim するため、依存先の
+# playwright CLI は別途 mise tool として明示しないと PATH に出てこない。
+"npm:playwright" = "latest"
 "github:herdrdev/herdr" = "latest"
 # Vite / Vitest / Oxlint / Oxfmt / Rolldown / tsdown を束ねた開発ツールチェーン (`vp`)。
 # GitHub リリースのスタンドアロンバイナリを取る。npm 版は Node スクリプトから
