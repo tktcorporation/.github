@@ -26,3 +26,10 @@ jobs:
 
       - name: Validate ziku.jsonc
         run: node scripts/validate-jsonc.mjs
+
+      - uses: oven-sh/setup-bun@v2
+
+      - name: Test review-loop hooks
+        # bun test は隠しディレクトリを探索しないため、hooks ディレクトリで実行する。
+        working-directory: .claude/hooks
+        run: bun test
