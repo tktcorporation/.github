@@ -117,11 +117,17 @@ describe('judgeConvergence', () => {
 describe('judgeRound', () => {
   test('振り返りが済むまで、収束しないラウンドは記録できない', () => {
     const verdict = judgeRound(rounds(8, 6, 4), roundOf(3));
-    expect(verdict.kind).toBe('blocked');
+    expect(verdict).toEqual({
+      kind: 'blocked',
+      state: { status: 'due', counts: [8, 6, 4], totalRounds: 3, ask: null },
+    });
   });
 
-  test('窓が 2 ラウンドのうちは、3 ラウンド目を記録できる', () => {
-    expect(judgeRound(rounds(8, 6), roundOf(4)).kind).toBe('record');
+  test('窓が 2 ラウンドのうちは、3 ラウンド目を記録でき、追記後の状態で次の振り返りを予告する', () => {
+    expect(judgeRound(rounds(8, 6), roundOf(4))).toMatchObject({
+      kind: 'record',
+      next: { status: 'due', counts: [8, 6, 4], totalRounds: 3, ask: null },
+    });
   });
 
   test('振り返りが必要でも、収束するラウンドは止めない', () => {
@@ -166,6 +172,12 @@ describe('judgeCheckpoint', () => {
     );
   });
 
+  test('メモの前後の空白は取り除く', () => {
+    const verdict = judgeCheckpoint(rounds(8, 6, 4), 'continue', `  ${note}\n`, head);
+    expect(verdict).toMatchObject({ kind: 'accept' });
+    if (verdict.kind === 'accept') expect(verdict.entries.at(-1)).toMatchObject({ note });
+  });
+
   test('受理した振り返りは、畳んだメモと HEAD の SHA を持つ', () => {
     const verdict = judgeCheckpoint(rounds(8, 6, 4), 'replan', `分類:\n${note}`, head);
     expect(verdict).toMatchObject({ kind: 'accept' });
@@ -204,6 +216,14 @@ describe('記録形式', () => {
       { kind: 'round', round: roundOf(2, { accepted: true }) },
     ]);
     expect(parseEntries(`2 ${sha} unknown\n`)).toEqual([]);
+  });
+
+  test('64 桁の SHA（SHA-256）の行も読める', () => {
+    const long = 'c'.repeat(64);
+    expect(parseEntries(`3 ${long} codex\ncheckpoint asked ${long} ${note}\n`)).toEqual([
+      { kind: 'round', round: roundOf(3, { sha: long }) },
+      { kind: 'checkpoint', decision: 'asked', sha: long, note },
+    ]);
   });
 
   test('未知の決定を持つ行は読み飛ばす', () => {
