@@ -29,8 +29,13 @@ export const roundFromFlags = (count: number, sha: string, flags: readonly Round
   reviewer: flags.includes('codex') ? 'codex' : 'other',
   accepted: flags.includes('accepted'),
 });
+/** 各フラグが立つ条件。フラグを足すと、ここに対応を書かない限り型エラーになる。 */
+const FLAG_IS_SET: Record<RoundFlag, (round: Round) => boolean> = {
+  codex: (round) => round.reviewer === 'codex',
+  accepted: (round) => round.accepted,
+};
 const flagsOf = (round: Round): RoundFlag[] =>
-  ROUND_FLAGS.filter((flag) => (flag === 'codex' ? round.reviewer === 'codex' : round.accepted));
+  ROUND_FLAGS.filter((flag) => FLAG_IS_SET[flag](round));
 
 /**
  * 振り返りの決定。continue は方針を変えずに続ける、replan は方針を変える、asked は

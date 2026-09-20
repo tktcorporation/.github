@@ -69,8 +69,8 @@ function rejectionText(rejection: CheckpointRejection): string {
 function blockedText(state: DueState, rerun: string): string {
   const decide =
     state.ask === null
-      ? '2. 方針を変えるなら replan、変えずに続けるなら continue で、\n' +
-        '   bun .claude/hooks/record-pr-review.ts checkpoint <replan|continue> "<診断メモ>"\n'
+      ? '2. 方針を変えるか、変えずに続けるかを決めて、\n' +
+        `   bun .claude/hooks/record-pr-review.ts checkpoint <${CHECKPOINT_DECISIONS.filter((decision) => decision !== ASKED).join('|')}> "<診断メモ>"\n`
       : `2. ${askReasonText(state.ask, state.counts)}ので、AskUserQuestion でユーザーに続行か方針変更かを確認し、答えを得てから、\n` +
         `   bun .claude/hooks/record-pr-review.ts checkpoint ${ASKED} "<診断メモ>"\n`;
   return (

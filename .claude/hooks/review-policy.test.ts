@@ -53,6 +53,11 @@ describe('checkpointState', () => {
     expect(checkpointState(rounds(1, 9, 7, 8))).toMatchObject({ ask: { kind: 'stalled' } });
   });
 
+  test('振り返りが複数あっても、窓は最後の振り返り以降だけを数える', () => {
+    const entries = [...rounds(9, 8, 7), checkpoint, ...rounds(6, 5, 4), checkpoint, ...rounds(9, 8)];
+    expect(checkpointState(entries)).toEqual({ status: 'clear', counts: [9, 8], totalRounds: 8 });
+  });
+
   test('最後のラウンドが 0 件か accepted なら停滞ではない', () => {
     expect(checkpointState(rounds(3, 1, 0))).toMatchObject({ ask: null });
     expect(checkpointState([round(2), round(2), round(2, true)])).toMatchObject({ ask: null });
@@ -113,6 +118,10 @@ describe('judgeRound', () => {
   test('振り返りが済むまで、収束しないラウンドは記録できない', () => {
     const verdict = judgeRound(rounds(8, 6, 4), roundOf(3));
     expect(verdict.kind).toBe('blocked');
+  });
+
+  test('窓が 2 ラウンドのうちは、3 ラウンド目を記録できる', () => {
+    expect(judgeRound(rounds(8, 6), roundOf(4)).kind).toBe('record');
   });
 
   test('振り返りが必要でも、収束するラウンドは止めない', () => {
