@@ -7,9 +7,13 @@ import {
   CHECKPOINT_INTERVAL,
   LONG_REVIEW_ROUNDS,
   MIN_NOTE_LENGTH,
-  MIN_ROUNDS,
+  ROUND_FLAGS,
+  assertNever,
+  convergenceReason,
+  isRoundFlag,
   judgeCheckpoint,
   judgeRound,
+  roundFromFlags,
   roundsOf,
 } from './review-policy.ts';
 import type {
@@ -17,12 +21,11 @@ import type {
   CheckpointDecision,
   CheckpointRejection,
   DueState,
-  Reviewer,
 } from './review-policy.ts';
 
 const usage =
   '使い方:\n' +
-  '  ラウンドの記録: bun .claude/hooks/record-pr-review.ts <このラウンドの指摘件数> [codex] [accepted]\n' +
+  `  ラウンドの記録: bun .claude/hooks/record-pr-review.ts <このラウンドの指摘件数> [${ROUND_FLAGS.join('] [')}]\n` +
   `  振り返りの記録: bun .claude/hooks/record-pr-review.ts checkpoint <${CHECKPOINT_DECISIONS.join('|')}> "<診断メモ>"\n` +
   '指摘に対応し終えたラウンドだけを記録する。指摘 0 件のラウンドは 0 を渡す。\n' +
   'codex review でレビューしたラウンドは codex を渡す（自己申告であり、hook は実行の\n' +
@@ -45,6 +48,8 @@ function askReasonText(reason: AskReason, counts: number[]): string {
       return `指摘件数が停滞している（${trendText(counts)}）`;
     case 'long':
       return `レビューが ${reason.totalRounds} ラウンドに及んでいる`;
+    default:
+      return assertNever(reason);
   }
 }
 
@@ -56,6 +61,8 @@ function rejectionText(rejection: CheckpointRejection): string {
       return `${askReasonText(rejection.reason, rejection.counts)}ので、継続や方針変更をエージェントの判断だけで決めず、AskUserQuestion でユーザーに確認し、答えを得てから ${ASKED} で記録してください。`;
     case 'note_too_short':
       return `診断メモが短すぎます。${noteGuide}`;
+    default:
+      return assertNever(rejection);
   }
 }
 
@@ -98,17 +105,10 @@ if (countArg === 'checkpoint') {
   process.exit(0);
 }
 
-const knownFlags = new Set(['codex', 'accepted']);
-if (
-  countArg === undefined ||
-  !/^\d+$/.test(countArg) ||
-  flagArgs.some((flag) => !knownFlags.has(flag))
-) {
+if (countArg === undefined || !/^\d+$/.test(countArg) || !flagArgs.every(isRoundFlag)) {
   console.error(usage);
   process.exit(1);
 }
-const reviewer: Reviewer = flagArgs.includes('codex') ? 'codex' : 'other';
-const accepted = flagArgs.includes('accepted');
 // 追跡ファイルの変更だけを見る。レビュー対象は `git diff origin/<default-branch>...HEAD` で、
 // 未追跡ファイルはそこに含まれないため、無関係な作業ファイルの存在では止めない。
 const status = await $`git status --porcelain --untracked-files=no`.quiet().nothrow();
@@ -118,12 +118,8 @@ if (status.exitCode === 0 && status.text().trim()) {
   );
   process.exit(1);
 }
-const verdict = judgeRound(await readEntries(), {
-  count: Number(countArg),
-  sha: await reviewTargetSha(),
-  reviewer,
-  accepted,
-});
+const round = roundFromFlags(Number(countArg), await reviewTargetSha(), flagArgs);
+const verdict = judgeRound(await readEntries(), round);
 if (verdict.kind === 'blocked') {
   const rerun = `bun .claude/hooks/record-pr-review.ts ${[countArg, ...flagArgs].join(' ')}`;
   console.error(blockedText(verdict.state, rerun));
@@ -131,17 +127,14 @@ if (verdict.kind === 'blocked') {
 }
 await writeEntries(verdict.entries);
 const roundCount = roundsOf(verdict.entries).length;
-const state = verdict.converged
-  ? '収束。gh pr create に進める'
-  : roundCount < MIN_ROUNDS
-    ? `あと ${MIN_ROUNDS - roundCount} ラウンド以上必要`
-    : reviewer !== 'codex'
-      ? '未収束。最後は codex review である必要がある'
-      : '未収束。指摘 0 件、または accepted のラウンドまで続ける';
-console.log(
-  `ラウンド ${roundCount} を記録（指摘 ${countArg} 件${reviewer === 'codex' ? '、codex' : ''}${accepted ? '、accepted' : ''}）。${state}。`,
-);
-if (verdict.next.status === 'due' && !verdict.converged) {
+const converged = verdict.convergence.kind === 'converged';
+const state =
+  verdict.convergence.kind === 'converged'
+    ? '収束。gh pr create に進める'
+    : `未収束（${convergenceReason(verdict.convergence)}）`;
+const flagText = flagArgs.map((flag) => `、${flag}`).join('');
+console.log(`ラウンド ${roundCount} を記録（指摘 ${countArg} 件${flagText}）。${state}。`);
+if (verdict.next.status === 'due' && !converged) {
   const { counts, ask } = verdict.next;
   console.log(
     `次のラウンドに進む前に振り返りが必要です（指摘件数の推移: ${trendText(counts)}）。件数が減っていても、指摘の中身を分類して構造的原因を確認します。` +

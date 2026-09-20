@@ -5,9 +5,12 @@ import {
   LONG_REVIEW_ROUNDS,
   checkpointState,
   formatEntries,
+  isConverged,
   judgeCheckpoint,
+  judgeConvergence,
   judgeRound,
   parseEntries,
+  roundFromFlags,
 } from './review-policy.ts';
 import type { Entry, Round } from './review-policy.ts';
 
@@ -68,6 +71,39 @@ describe('checkpointState', () => {
   });
 });
 
+describe('judgeConvergence', () => {
+  const codexRounds = (...counts: number[]): Round[] => counts.map((count) => roundOf(count));
+
+  test('ラウンドが 1 回だけなら、0 件でも収束しない', () => {
+    expect(judgeConvergence(codexRounds(0), sha)).toEqual({ kind: 'too_few', missing: 1 });
+  });
+
+  test('2 ラウンドあり、最後が codex で現在の HEAD に対して 0 件なら収束する', () => {
+    expect(judgeConvergence(codexRounds(3, 0), sha)).toEqual({ kind: 'converged' });
+  });
+
+  test('最後のラウンドが現在の HEAD と違えば、0 件でも収束しない', () => {
+    expect(judgeConvergence(codexRounds(3, 0), head)).toEqual({ kind: 'stale_sha' });
+  });
+
+  test('最後のラウンドが codex でなければ収束しない', () => {
+    const rounds = [roundOf(3), roundOf(0, { reviewer: 'other' })];
+    expect(judgeConvergence(rounds, sha)).toEqual({ kind: 'not_codex' });
+  });
+
+  test('指摘が残っていれば収束しない。accepted なら残っていても収束する', () => {
+    expect(judgeConvergence(codexRounds(3, 2), sha)).toEqual({ kind: 'findings_left' });
+    expect(judgeConvergence([roundOf(3), roundOf(2, { accepted: true })], sha)).toEqual({
+      kind: 'converged',
+    });
+  });
+
+  test('isConverged は収束の結果だけを返す', () => {
+    expect(isConverged(codexRounds(3, 0), sha)).toBe(true);
+    expect(isConverged(codexRounds(3, 2), sha)).toBe(false);
+  });
+});
+
 describe('judgeRound', () => {
   test('振り返りが済むまで、収束しないラウンドは記録できない', () => {
     const verdict = judgeRound(rounds(8, 6, 4), roundOf(3));
@@ -76,12 +112,12 @@ describe('judgeRound', () => {
 
   test('振り返りが必要でも、収束するラウンドは止めない', () => {
     const verdict = judgeRound(rounds(3, 3, 3), roundOf(0, { sha: head }));
-    expect(verdict).toMatchObject({ kind: 'record', converged: true });
+    expect(verdict).toMatchObject({ kind: 'record', convergence: { kind: 'converged' } });
   });
 
   test('accepted のラウンドも、収束するので止めない', () => {
     const verdict = judgeRound(rounds(2, 2, 2), roundOf(2, { sha: head, accepted: true }));
-    expect(verdict).toMatchObject({ kind: 'record', converged: true });
+    expect(verdict).toMatchObject({ kind: 'record', convergence: { kind: 'converged' } });
   });
 
   test('振り返りを記録した後は、同じラウンドを記録できる', () => {
@@ -144,6 +180,16 @@ describe('記録形式', () => {
     expect(parseEntries(`checkpoint asked ${sha}\n`)).toEqual([
       { kind: 'checkpoint', decision: 'asked', sha, note: '' },
     ]);
+  });
+
+  test('フラグは記録形式とラウンドの組み立てで同じ語彙を使う', () => {
+    expect(roundFromFlags(2, sha, ['codex', 'accepted'])).toEqual(
+      roundOf(2, { reviewer: 'codex', accepted: true }),
+    );
+    expect(parseEntries(`2 ${sha} codex accepted\n`)).toEqual([
+      { kind: 'round', round: roundOf(2, { accepted: true }) },
+    ]);
+    expect(parseEntries(`2 ${sha} unknown\n`)).toEqual([]);
   });
 
   test('未知の決定を持つ行は読み飛ばす', () => {

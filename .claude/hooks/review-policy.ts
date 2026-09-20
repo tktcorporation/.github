@@ -18,6 +18,20 @@ export interface Round {
   accepted: boolean;
 }
 
+/** ラウンドの記録に付けられるフラグ。記録形式と CLI の引数は、どちらもこの配列から導く。 */
+export const ROUND_FLAGS = ['codex', 'accepted'] as const;
+export type RoundFlag = (typeof ROUND_FLAGS)[number];
+export const isRoundFlag = (value: string): value is RoundFlag =>
+  (ROUND_FLAGS as readonly string[]).includes(value);
+export const roundFromFlags = (count: number, sha: string, flags: readonly RoundFlag[]): Round => ({
+  count,
+  sha,
+  reviewer: flags.includes('codex') ? 'codex' : 'other',
+  accepted: flags.includes('accepted'),
+});
+const flagsOf = (round: Round): RoundFlag[] =>
+  ROUND_FLAGS.filter((flag) => (flag === 'codex' ? round.reviewer === 'codex' : round.accepted));
+
 /**
  * 振り返りの決定。continue は方針を変えずに続ける、replan は方針を変える、asked は
  * ユーザーに確認して指示を得た。いずれも記録するエージェント自身の申告で、hook は検証しない。
@@ -40,7 +54,9 @@ export const roundsOf = (entries: Entry[]): Round[] =>
 
 // SHA-1(40桁)・SHA-256(64桁)のどちらでも読めるようにする。
 const SHA = '[0-9a-f]{40}|[0-9a-f]{64}';
-const ROUND_LINE = new RegExp(`^(\\d+)\\s+(${SHA})((?:\\s+(?:codex|accepted))*)$`);
+const ROUND_LINE = new RegExp(
+  `^(\\d+)\\s+(${SHA})((?:\\s+(?:${ROUND_FLAGS.join('|')}))*)$`,
+);
 const CHECKPOINT_LINE = new RegExp(
   `^checkpoint\\s+(${CHECKPOINT_DECISIONS.join('|')})\\s+(${SHA})(?:\\s+(.+))?$`,
 );
@@ -49,16 +65,8 @@ function parseEntry(line: string): Entry | null {
   const text = line.trim();
   const round = text.match(ROUND_LINE);
   if (round) {
-    const flags = round[3].trim().split(/\s+/).filter(Boolean);
-    return {
-      kind: 'round',
-      round: {
-        count: Number(round[1]),
-        sha: round[2],
-        reviewer: flags.includes('codex') ? 'codex' : 'other',
-        accepted: flags.includes('accepted'),
-      },
-    };
+    const flags = round[3].trim().split(/\s+/).filter(isRoundFlag);
+    return { kind: 'round', round: roundFromFlags(Number(round[1]), round[2], flags) };
   }
   const checkpoint = text.match(CHECKPOINT_LINE);
   if (checkpoint) {
@@ -87,11 +95,9 @@ function formatEntry(entry: Entry): string {
     const head = `checkpoint ${entry.decision} ${entry.sha}`;
     return note ? `${head} ${note}` : head;
   }
-  const { count, sha, reviewer, accepted } = entry.round;
-  const flags = [reviewer === 'codex' ? 'codex' : null, accepted ? 'accepted' : null]
-    .filter(Boolean)
-    .join(' ');
-  return flags ? `${count} ${sha} ${flags}` : `${count} ${sha}`;
+  const flags = flagsOf(entry.round).join(' ');
+  const head = `${entry.round.count} ${entry.round.sha}`;
+  return flags ? `${head} ${flags}` : head;
 }
 
 export const formatEntries = (entries: Entry[]): string =>
@@ -112,14 +118,43 @@ export const formatEntries = (entries: Entry[]): string =>
  * 場合に、実際には指摘が残っているのに 0 件と偽って記録させないため。
  */
 export const MIN_ROUNDS = 2;
-export function isConverged(rounds: Round[], currentSha: string): boolean {
+export type Convergence =
+  | { kind: 'converged' }
+  | { kind: 'too_few'; missing: number }
+  | { kind: 'not_codex' }
+  | { kind: 'findings_left' }
+  | { kind: 'stale_sha' };
+export function judgeConvergence(rounds: Round[], currentSha: string): Convergence {
   const last = rounds.at(-1);
-  return (
-    rounds.length >= MIN_ROUNDS &&
-    (last?.count === 0 || last?.accepted === true) &&
-    last?.sha === currentSha &&
-    last?.reviewer === 'codex'
-  );
+  if (last === undefined || rounds.length < MIN_ROUNDS) {
+    return { kind: 'too_few', missing: MIN_ROUNDS - rounds.length };
+  }
+  if (last.reviewer !== 'codex') return { kind: 'not_codex' };
+  if (last.count !== 0 && !last.accepted) return { kind: 'findings_left' };
+  if (last.sha !== currentSha) return { kind: 'stale_sha' };
+  return { kind: 'converged' };
+}
+export const isConverged = (rounds: Round[], currentSha: string): boolean =>
+  judgeConvergence(rounds, currentSha).kind === 'converged';
+
+export function assertNever(value: never): never {
+  throw new Error(`未対応の分岐です: ${JSON.stringify(value)}`);
+}
+
+/** 収束していない理由の文言。記録コマンドと PR 作成のゲートが同じ文言を出す。 */
+export function convergenceReason(convergence: Exclude<Convergence, { kind: 'converged' }>): string {
+  switch (convergence.kind) {
+    case 'too_few':
+      return `ラウンドが ${MIN_ROUNDS} 回に達していません`;
+    case 'not_codex':
+      return '最後のラウンドが codex review ではありません';
+    case 'findings_left':
+      return '最後のラウンドに指摘が残っています（ユーザーが受け入れた場合は accepted を付けて記録する）';
+    case 'stale_sha':
+      return '収束後に別のコミットが乗っています。現在の HEAD で codex review が必要です';
+    default:
+      return assertNever(convergence);
+  }
 }
 
 // ---- 振り返り -------------------------------------------------------------
@@ -178,20 +213,24 @@ export function checkpointState(entries: Entry[]): CheckpointState {
 
 export type RoundVerdict =
   /** 記録してよい。entries は追記後の全記録、next は追記後の振り返りの状態。 */
-  | { kind: 'record'; entries: Entry[]; converged: boolean; next: CheckpointState }
+  | { kind: 'record'; entries: Entry[]; convergence: Convergence; next: CheckpointState }
   /** 振り返りが済むまで記録できない。 */
   | { kind: 'blocked'; state: DueState };
 
 /**
  * 収束するラウンドは止めない。止めるのは、振り返りをせずに収束しないループを続けることだけ。
  * ブロックしたラウンドは記録しないので、呼び出し側は振り返りの後に同じラウンドを記録し直す。
+ * 保留したラウンドは次の窓の最初のラウンドになり、その傾向は次の振り返りで判定する。
+ * 振り返りが判定するのは、記録済みの窓のラウンドだけである。
  */
 export function judgeRound(entries: Entry[], round: Round): RoundVerdict {
   const appended: Entry[] = [...entries, { kind: 'round', round }];
-  const converged = isConverged(roundsOf(appended), round.sha);
+  const convergence = judgeConvergence(roundsOf(appended), round.sha);
   const before = checkpointState(entries);
-  if (before.status === 'due' && !converged) return { kind: 'blocked', state: before };
-  return { kind: 'record', entries: appended, converged, next: checkpointState(appended) };
+  if (before.status === 'due' && convergence.kind !== 'converged') {
+    return { kind: 'blocked', state: before };
+  }
+  return { kind: 'record', entries: appended, convergence, next: checkpointState(appended) };
 }
 
 export type CheckpointRejection =
