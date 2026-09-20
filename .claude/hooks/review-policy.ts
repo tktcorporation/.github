@@ -50,7 +50,7 @@ export const roundsOf = (entries: Entry[]): Round[] =>
 
 // ---- 記録形式 -------------------------------------------------------------
 // 1 行 1 件。ラウンドは "<件数> <sha> [codex] [accepted]"、
-// 振り返りは "checkpoint <decision> <sha> <診断メモ>"（メモは旧形式では無い場合がある）。
+// 振り返りは "checkpoint <decision> <sha> <診断メモ>"（メモは省略されることがある）。
 
 // SHA-1(40桁)・SHA-256(64桁)のどちらでも読めるようにする。
 const SHA = '[0-9a-f]{40}|[0-9a-f]{64}';
@@ -145,7 +145,7 @@ export function assertNever(value: never): never {
 export function convergenceReason(convergence: Exclude<Convergence, { kind: 'converged' }>): string {
   switch (convergence.kind) {
     case 'too_few':
-      return `ラウンドが ${MIN_ROUNDS} 回に達していません`;
+      return `ラウンドが ${MIN_ROUNDS} 回に達していません（あと ${convergence.missing} ラウンド）`;
     case 'not_codex':
       return '最後のラウンドが codex review ではありません';
     case 'findings_left':
@@ -168,7 +168,8 @@ export const CHECKPOINT_INTERVAL = 3;
 /**
  * ブランチのラウンドがこの数に達したら、指摘件数の傾向に関係なく、振り返りでユーザーへの
  * 確認を必須にする。件数は確率的に減ることがあり、レビューが長引いた事実そのものが、
- * 構造の見直しを促す十分な合図になる。
+ * 構造の見直しを促す十分な合図になる。振り返り間隔の整数倍にするので、この閾値に達した
+ * 以降の振り返りは、すべて確認が必須になる。
  */
 export const LONG_REVIEW_ROUNDS = CHECKPOINT_INTERVAL * 2;
 /** 診断メモの最小文字数。指摘の分類・構造的原因・他の解決策の検討を 1 文は書かせる。 */

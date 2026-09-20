@@ -10,7 +10,6 @@ import {
 } from './hook-utils.ts';
 import { formatEntries, parseEntries, roundsOf } from './review-policy.ts';
 import type { Entry, Round } from './review-policy.ts';
-export { MIN_ROUNDS, isConverged } from './review-policy.ts';
 /**
  * レビュー記録はブランチごとに持つ。置き場所は主チェックアウトの .git 配下なので、linked
  * worktree から記録しても hook と同じファイルになり、別ブランチの記録とは混ざらない。git が

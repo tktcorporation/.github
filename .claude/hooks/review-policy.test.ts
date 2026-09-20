@@ -48,6 +48,11 @@ describe('checkpointState', () => {
     expect(checkpointState(rounds(8, 6, 4))).toMatchObject({ status: 'due', ask: null });
   });
 
+  test('停滞は直近の窓だけで判定する。窓より前の最良値は見ない', () => {
+    expect(checkpointState(rounds(1, 9, 7, 5))).toMatchObject({ status: 'due', ask: null });
+    expect(checkpointState(rounds(1, 9, 7, 8))).toMatchObject({ ask: { kind: 'stalled' } });
+  });
+
   test('最後のラウンドが 0 件か accepted なら停滞ではない', () => {
     expect(checkpointState(rounds(3, 1, 0))).toMatchObject({ ask: null });
     expect(checkpointState([round(2), round(2), round(2, true)])).toMatchObject({ ask: null });
@@ -176,7 +181,7 @@ describe('記録形式', () => {
     expect(parseEntries(formatEntries(entries))).toEqual(entries);
   });
 
-  test('メモの無い旧形式の振り返り行も読める', () => {
+  test('メモの無い振り返り行も読める', () => {
     expect(parseEntries(`checkpoint asked ${sha}\n`)).toEqual([
       { kind: 'checkpoint', decision: 'asked', sha, note: '' },
     ]);
