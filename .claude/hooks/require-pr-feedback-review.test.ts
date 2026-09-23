@@ -7,6 +7,7 @@ import type { Entry } from './review-policy.ts';
 
 const script = join(import.meta.dir, 'require-pr-feedback-review.ts');
 const record = join(import.meta.dir, 'record-pr-feedback.ts');
+const observeScript = join(import.meta.dir, 'observe-pr-feedback.ts');
 const preBash = join(import.meta.dir, 'pre-bash-guard.ts');
 interface FakeThread {
   comments: {
@@ -195,6 +196,11 @@ describe('外部指摘後の push ガード', () => {
     const cwd = await mkdtemp(join(tmpdir(), 'pr-feedback-body-'));
     try {
       git(cwd, 'init', '-q');
+      git(cwd, 'config', 'user.name', 'Test');
+      git(cwd, 'config', 'user.email', 'test@example.com');
+      await writeFile(join(cwd, 'README'), 'test');
+      git(cwd, 'add', 'README');
+      git(cwd, 'commit', '-qm', 'test');
       const bin = join(cwd, 'bin');
       await mkdir(bin);
       await writeFile(join(bin, 'gh'),
@@ -203,11 +209,23 @@ describe('外部指摘後の push ガード', () => {
         id, commit_id: head, submitted_at: `2026-09-23T00:00:0${id}Z`,
         state: 'CHANGES_REQUESTED', body: '設計を見直してください', user: { login: 'reviewer' },
       });
-      const first = [review(1, 'head-a'), review(2, 'head-b')];
+      const sha = await reviewTargetSha({ cwd });
+      const first = [review(1, sha), review(2, 'head-b')];
+      const observedAtArrival = Bun.spawn(['bun', observeScript], {
+        cwd, env: { ...process.env, PATH: `${bin}:${process.env.PATH}`,
+          FAKE_REVIEWS: JSON.stringify([[...first]]) },
+        stdin: new Blob([JSON.stringify({ cwd })]), stdout: 'pipe', stderr: 'pipe',
+      });
+      expect(await observedAtArrival.exited).toBe(0);
       const observed = await checkPush(cwd, bin, [], false, first);
       expect(observed.code).toBe(2);
       const historyPath = await externalReviewFile({ cwd });
-      expect((await Bun.file(historyPath).json()).heads).toEqual(['head-a', 'head-b']);
+      expect((await Bun.file(historyPath).json()).heads).toEqual([sha, 'head-b']);
+      await writeEntries([
+        { kind: 'round', round: { count: 1, sha, reviewer: 'other', accepted: false } },
+        { kind: 'round', round: { count: 0, sha, reviewer: 'codex', accepted: false } },
+      ], { cwd });
+      expect((await checkPush(cwd, bin, [], false, first)).code).toBe(0);
       const child = Bun.spawn(['bun', record, 'asked', 'レビュー継続の原因は責務の曖昧さにあり、ユーザーは境界と責務を整理してから進む方針を選んだ'], {
         cwd,
         env: { ...process.env, PATH: `${bin}:${process.env.PATH}`,
@@ -216,7 +234,7 @@ describe('外部指摘後の push ガード', () => {
       });
       expect(await child.exited).toBe(0);
       const history = await Bun.file(historyPath).json();
-      expect(history.heads).toEqual(['head-a', 'head-b', 'head-c']);
+      expect(history.heads).toEqual([sha, 'head-b', 'head-c']);
       expect(history.consultation.through).toBe(3);
     } finally {
       await rm(cwd, { recursive: true, force: true });

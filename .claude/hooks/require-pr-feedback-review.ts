@@ -1,16 +1,12 @@
 #!/usr/bin/env bun
 /** 外部レビュー指摘を受けた PR の修正を、ローカルのレビューループが収束する前に push させない。 */
-import { mkdir } from 'node:fs/promises';
-import { dirname } from 'node:path';
-import { readInput, workingTree } from './hook-utils.ts';
-import { fetchGitHubFeedback } from './pr-feedback-github.ts';
-import { parseExternalReviewHistory } from './pr-feedback-history.ts';
+import { readInput } from './hook-utils.ts';
+import { refreshFeedback } from './pr-feedback-observation.ts';
 import {
   judgeExternalPush,
   markFeedbackReviewed,
-  observeFeedbackBatch,
 } from './pr-feedback-policy.ts';
-import { externalReviewFile, readRounds, reviewTargetSha } from './review-count.ts';
+import { reviewTargetSha } from './review-count.ts';
 
 function block(message: string): never {
   console.error(`BLOCKED: ${message}`);
@@ -18,20 +14,10 @@ function block(message: string): never {
 }
 
 const input = await readInput();
-const historyPath = await externalReviewFile(input);
-const file = Bun.file(historyPath);
-const tree = await workingTree(input);
-const feedback = await fetchGitHubFeedback(tree);
+const feedback = await refreshFeedback(input);
 if (feedback.kind === 'no_pr') process.exit(0);
 if (feedback.kind === 'unavailable') block(feedback.reason);
-const parsed = parseExternalReviewHistory((await file.exists()) ? await file.text() : '', feedback.pr);
-if (parsed.kind === 'invalid') block('外部レビュー履歴が壊れています。記録を確認してください。');
-const rounds = await readRounds(input);
-const history = observeFeedbackBatch(parsed.history, feedback.observations, rounds.length);
-if (history !== parsed.history) {
-  await mkdir(dirname(historyPath), { recursive: true });
-  await Bun.write(historyPath, JSON.stringify(history));
-}
+const { history, rounds, path: historyPath } = feedback;
 if (history.heads.length === 0) process.exit(0);
 const sha = await reviewTargetSha(input);
 switch (judgeExternalPush(history, rounds, sha)) {

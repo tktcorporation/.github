@@ -18,6 +18,7 @@ import { $ } from 'bun';
 import { mkdir } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { readInput, sessionStateDir, workingTree } from './hook-utils.ts';
+import { refreshFeedback } from './pr-feedback-observation.ts';
 
 const THROTTLE_MS = 45_000;
 
@@ -158,6 +159,8 @@ const nagged = new Set(
 const stateOf = (thread: Thread) => `${thread.id}:${thread.comments.nodes[0]?.databaseId ?? ''}`;
 const fresh = waiting.filter((thread) => !nagged.has(stateOf(thread)));
 if (fresh.length === 0) process.exit(0);
+// 指摘を知らせた時点のラウンド数を記録し、修正後の push で再レビューを二重に要求しない。
+await refreshFeedback(input);
 if (naggedPath) {
   await mkdir(dirname(naggedPath), { recursive: true }).catch(() => undefined);
   await Bun.write(naggedPath, `${[...nagged, ...fresh.map(stateOf)].join('\n')}\n`).catch(
@@ -173,7 +176,7 @@ const summary = fresh
   })
   .join('\n');
 const guidance =
-  '個別の指摘だけを直して push せず、.claude/skills/pr-review-loop/SKILL.md の手順で差分全体を再レビューし、収束させてから push してください。外部指摘が異なる HEAD に 3 回続いた場合は .claude/rules/ci-workflow.md の診断と方針相談を行ってください。';
+  '指摘を読み始めるときは bun .claude/hooks/observe-pr-feedback.ts で観測を記録してください。個別の指摘だけを直して push せず、.claude/skills/pr-review-loop/SKILL.md の手順で差分全体を再レビューし、収束させてから push してください。外部指摘が異なる HEAD に 3 回続いた場合は .claude/rules/ci-workflow.md の診断と方針相談を行ってください。';
 console.log(
   JSON.stringify({
     decision: 'block',
