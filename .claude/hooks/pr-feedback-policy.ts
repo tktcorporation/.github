@@ -12,6 +12,7 @@ export interface ExternalReviewHistory {
   seenComments: string[];
   consultation: Consultation;
   roundsAtLastFeedback: number;
+  reviewedThrough: number;
 }
 
 export const EXTERNAL_REVIEW_LIMIT = 3;
@@ -22,6 +23,7 @@ export const newExternalReviewHistory = (pr: number): ExternalReviewHistory => (
   seenComments: [],
   consultation: { kind: 'none' },
   roundsAtLastFeedback: 0,
+  reviewedThrough: 0,
 });
 
 export type ParsedHistory =
@@ -55,6 +57,11 @@ export function parseExternalReviewHistory(text: string, pr: number): ParsedHist
     typeof value.roundsAtLastFeedback !== 'number' ||
     !Number.isInteger(value.roundsAtLastFeedback) ||
     value.roundsAtLastFeedback < 0 ||
+    !('reviewedThrough' in value) ||
+    typeof value.reviewedThrough !== 'number' ||
+    !Number.isInteger(value.reviewedThrough) ||
+    value.reviewedThrough < 0 ||
+    value.reviewedThrough > value.heads.length ||
     (value.heads.length === 0 && value.seenComments.length !== 0) ||
     (value.heads.length > 0 && value.seenComments.length === 0) ||
     !('consultation' in value) ||
@@ -95,6 +102,7 @@ export function parseExternalReviewHistory(text: string, pr: number): ParsedHist
           roundsAtConsultation: consultation.roundsAtConsultation,
         },
         roundsAtLastFeedback: value.roundsAtLastFeedback,
+        reviewedThrough: value.reviewedThrough,
       },
     };
   }
@@ -107,6 +115,7 @@ export function parseExternalReviewHistory(text: string, pr: number): ParsedHist
       seenComments: value.seenComments,
       consultation: { kind: 'none' },
       roundsAtLastFeedback: value.roundsAtLastFeedback,
+      reviewedThrough: value.reviewedThrough,
     },
   };
 }
@@ -126,19 +135,24 @@ export function observeFeedback(
     (id) => !history.seenComments.includes(id),
   );
   if (unseen.length === 0) return history;
+  const newHead = !history.heads.includes(observation.head);
   return {
     ...history,
-    heads: history.heads.includes(observation.head)
-      ? history.heads
-      : [...history.heads, observation.head],
+    heads: newHead ? [...history.heads, observation.head] : history.heads,
     seenComments: [...history.seenComments, ...unseen],
-    roundsAtLastFeedback: observation.roundsAtFeedback,
+    roundsAtLastFeedback: newHead ? observation.roundsAtFeedback : history.roundsAtLastFeedback,
   };
 }
 
 export const needsUserDecision = (history: ExternalReviewHistory): boolean =>
   history.heads.length >= EXTERNAL_REVIEW_LIMIT &&
   (history.consultation.kind === 'none' || history.consultation.through < history.heads.length);
+
+/** 最新の外部指摘に対するローカルレビューが収束したことを記録する。 */
+export const markFeedbackReviewed = (history: ExternalReviewHistory): ExternalReviewHistory => ({
+  ...history,
+  reviewedThrough: history.heads.length,
+});
 
 export const acknowledgeFeedback = (
   history: ExternalReviewHistory,
@@ -162,6 +176,7 @@ export function judgeExternalPush(
   currentSha: string,
 ): PushVerdict {
   if (needsUserDecision(history)) return 'consult_user';
+  if (history.reviewedThrough >= history.heads.length) return 'allow';
   if (
     rounds.length <= history.roundsAtLastFeedback ||
     (history.consultation.kind === 'answered' &&

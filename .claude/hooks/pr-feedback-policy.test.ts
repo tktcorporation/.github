@@ -3,6 +3,7 @@ import {
   EXTERNAL_REVIEW_LIMIT,
   acknowledgeFeedback,
   judgeExternalPush,
+  markFeedbackReviewed,
   needsUserDecision,
   newExternalReviewHistory,
   observeFeedback,
@@ -17,11 +18,11 @@ const observe = (
 ) => observeFeedback(history, { head, commentIds: [id], roundsAtFeedback });
 
 describe('外部レビューの往復', () => {
-  test('同じ HEAD の複数コメントは 1 回だけ数え、再通知はレビュー基準線を更新しない', () => {
+  test('同じ HEAD の複数コメントは 1 回だけ数え、レビュー基準線を更新しない', () => {
     const first = observe(newExternalReviewHistory(42), 'a', 'one', 1);
     const second = observe(first, 'a', 'two', 2);
     expect(second.heads).toEqual(['a']);
-    expect(second.roundsAtLastFeedback).toBe(2);
+    expect(second.roundsAtLastFeedback).toBe(1);
     expect(observe(second, 'a', 'one', 3)).toEqual(second);
   });
 
@@ -61,6 +62,7 @@ test('push は最新の指摘後に現在の HEAD で収束した場合だけ通
   expect(judgeExternalPush(history, rounds, 'a')).toBe('review_locally');
   expect(judgeExternalPush(history, [...rounds, rounds[1]], 'b')).toBe('review_locally');
   expect(judgeExternalPush(history, [...rounds, rounds[1]], 'a')).toBe('allow');
+  expect(judgeExternalPush(markFeedbackReviewed(history), [...rounds, rounds[1]], 'new-sha')).toBe('allow');
   const third = observe(observe(history, 'b', 'two', 3), 'c', 'three', 3);
   expect(judgeExternalPush(third, rounds, 'a')).toBe('consult_user');
 });

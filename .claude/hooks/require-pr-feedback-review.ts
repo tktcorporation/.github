@@ -4,7 +4,12 @@ import { mkdir } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { readInput, workingTree } from './hook-utils.ts';
 import { fetchGitHubFeedback } from './pr-feedback-github.ts';
-import { judgeExternalPush, observeFeedback, parseExternalReviewHistory } from './pr-feedback-policy.ts';
+import {
+  judgeExternalPush,
+  markFeedbackReviewed,
+  observeFeedback,
+  parseExternalReviewHistory,
+} from './pr-feedback-policy.ts';
 import { externalReviewFile, readRounds, reviewTargetSha } from './review-count.ts';
 
 function block(message: string): never {
@@ -44,4 +49,7 @@ switch (judgeExternalPush(history, rounds, sha)) {
     );
   case 'allow':
     break;
+}
+if (history.reviewedThrough < history.heads.length) {
+  await Bun.write(historyPath, JSON.stringify(markFeedbackReviewed(history)));
 }
