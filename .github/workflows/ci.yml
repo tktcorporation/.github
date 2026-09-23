@@ -29,10 +29,6 @@ jobs:
 
       - uses: oven-sh/setup-bun@v2
 
-      - name: Install hook dependencies
-        working-directory: .claude/hooks
-        run: bun install --frozen-lockfile
-
       - name: Test review-loop hooks
         # bun test は隠しディレクトリを探索しないため、hooks ディレクトリで実行する。
         working-directory: .claude/hooks
