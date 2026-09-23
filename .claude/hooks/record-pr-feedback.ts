@@ -3,7 +3,7 @@
 import { $ } from 'bun';
 import { readInput, workingTree } from './hook-utils.ts';
 import { EXTERNAL_REVIEW_LIMIT, acknowledgeFeedback, parseExternalReviewHistory } from './pr-feedback-policy.ts';
-import { externalReviewFile } from './review-count.ts';
+import { externalReviewFile, readRounds } from './review-count.ts';
 import { MIN_NOTE_LENGTH, normalizeNote } from './review-policy.ts';
 
 const [decision, ...words] = process.argv.slice(2);
@@ -32,5 +32,5 @@ if (history.heads.length < EXTERNAL_REVIEW_LIMIT) {
   console.error('外部レビューが相談を要する回数に達していません。');
   process.exit(1);
 }
-await Bun.write(path, JSON.stringify(acknowledgeFeedback(history, note)));
+await Bun.write(path, JSON.stringify(acknowledgeFeedback(history, note, (await readRounds(input)).length)));
 console.log(`PR #${number} の外部レビュー ${history.heads.length} 回についてユーザー判断を記録しました。`);

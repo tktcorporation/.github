@@ -34,7 +34,7 @@ interface ReviewThreadsPage {
 const query = `query($owner:String!,$name:String!,$number:Int!,$after:String){
   repository(owner:$owner,name:$name){ pullRequest(number:$number){
     reviewThreads(first:100,after:$after){ pageInfo{hasNextPage endCursor}
-      nodes{isResolved comments(last:1){nodes{databaseId author{login} pullRequestReview{commit{oid}}}}}
+      nodes{isResolved comments(last:100){nodes{databaseId author{login} pullRequestReview{commit{oid}}}}}
     }
   } }
 }`;
@@ -87,8 +87,11 @@ export async function fetchGitHubFeedback(tree: string): Promise<GitHubFeedback>
       return { kind: 'unavailable', reason: 'レビュースレッドの形式が想定と異なります' };
     }
     for (const thread of page.nodes) {
-      const last = thread.comments?.nodes?.[0];
-      if (thread.isResolved || !last || last.author?.login.toLowerCase() === login) continue;
+      if (thread.isResolved) continue;
+      const last = thread.comments?.nodes?.filter(
+        (comment) => comment.author?.login.toLowerCase() !== login,
+      ).at(-1);
+      if (!last) continue;
       if (!Number.isInteger(last.databaseId)) {
         return { kind: 'unavailable', reason: 'レビューコメントの ID を読み取れませんでした' };
       }

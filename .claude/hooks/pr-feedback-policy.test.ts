@@ -32,7 +32,7 @@ describe('外部レビューの往復', () => {
     );
     expect(history.heads).toHaveLength(EXTERNAL_REVIEW_LIMIT);
     expect(needsUserDecision(history)).toBe(true);
-    const answered = acknowledgeFeedback(history, 'ユーザーに全指摘と設計案を示し、修正の続行を指示された');
+    const answered = acknowledgeFeedback(history, 'ユーザーに全指摘と設計案を示し、修正の続行を指示された', 3);
     expect(needsUserDecision(answered)).toBe(false);
     expect(needsUserDecision(observe(answered, 'd', 'comment-4', 4))).toBe(true);
   });

@@ -4,7 +4,7 @@ import type { Round } from './review-policy.ts';
 /** PR の外部レビュー往復。ユーザー判断は回数と診断メモを一緒に持つ。 */
 export type Consultation =
   | { kind: 'none' }
-  | { kind: 'answered'; through: number; note: string };
+  | { kind: 'answered'; through: number; note: string; roundsAtConsultation: number };
 
 export interface ExternalReviewHistory {
   pr: number;
@@ -74,7 +74,11 @@ export function parseExternalReviewHistory(text: string, pr: number): ParsedHist
       consultation.through > value.heads.length ||
       !('note' in consultation) ||
       typeof consultation.note !== 'string' ||
-      consultation.note.trim() === ''
+      consultation.note.trim() === '' ||
+      !('roundsAtConsultation' in consultation) ||
+      typeof consultation.roundsAtConsultation !== 'number' ||
+      !Number.isInteger(consultation.roundsAtConsultation) ||
+      consultation.roundsAtConsultation < 0
     ) {
       return { kind: 'invalid' };
     }
@@ -84,7 +88,12 @@ export function parseExternalReviewHistory(text: string, pr: number): ParsedHist
         pr,
         heads: value.heads,
         seenComments: value.seenComments,
-        consultation: { kind: 'answered', through: consultation.through, note: consultation.note },
+        consultation: {
+          kind: 'answered',
+          through: consultation.through,
+          note: consultation.note,
+          roundsAtConsultation: consultation.roundsAtConsultation,
+        },
         roundsAtLastFeedback: value.roundsAtLastFeedback,
       },
     };
@@ -134,9 +143,15 @@ export const needsUserDecision = (history: ExternalReviewHistory): boolean =>
 export const acknowledgeFeedback = (
   history: ExternalReviewHistory,
   note: string,
+  roundCount: number,
 ): ExternalReviewHistory => ({
   ...history,
-  consultation: { kind: 'answered', through: history.heads.length, note },
+  consultation: {
+    kind: 'answered',
+    through: history.heads.length,
+    note,
+    roundsAtConsultation: roundCount,
+  },
 });
 
 export type PushVerdict = 'allow' | 'consult_user' | 'review_locally';
@@ -149,6 +164,8 @@ export function judgeExternalPush(
   if (needsUserDecision(history)) return 'consult_user';
   if (
     rounds.length <= history.roundsAtLastFeedback ||
+    (history.consultation.kind === 'answered' &&
+      rounds.length <= history.consultation.roundsAtConsultation) ||
     judgeConvergence(rounds, currentSha).kind !== 'converged'
   ) {
     return 'review_locally';

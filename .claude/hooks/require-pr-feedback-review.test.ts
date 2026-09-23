@@ -101,7 +101,13 @@ describe('外部指摘後の push ガード', () => {
           pullRequestReview: { commit: { oid: head } },
         }] },
       });
-      const firstComment = [comment(1, sha)];
+      const firstComment = [{
+        ...comment(1, sha),
+        comments: { nodes: [
+          comment(1, sha).comments.nodes[0],
+          comment(99, sha, false, 'testuser').comments.nodes[0],
+        ] },
+      }];
       expect((await checkPush(cwd, bin, [], true)).code).toBe(2);
       expect((await checkPush(cwd, bin, firstComment)).code).toBe(2);
       expect(await Bun.file(historyPath).exists()).toBe(true);
@@ -144,9 +150,16 @@ describe('外部指摘後の push ガード', () => {
           ...history,
           heads: ['a', 'b', sha],
           seenComments: ['one', 'two', 'thread:1'],
-          consultation: { kind: 'answered', through: 3, note: 'ユーザーの判断により再レビュー後の push を認める' },
+          consultation: {
+            kind: 'answered',
+            through: 3,
+            note: 'ユーザーの判断により再レビュー後の push を認める',
+            roundsAtConsultation: 3,
+          },
         }),
       );
+      expect((await checkPush(cwd, bin)).code).toBe(2);
+      await writeEntries([...entries, entries[1], entries[1]], { cwd });
       expect((await checkPush(cwd, bin)).code).toBe(0);
     } finally {
       await rm(cwd, { recursive: true, force: true });
