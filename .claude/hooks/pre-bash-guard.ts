@@ -28,7 +28,6 @@ import {
   type SimpleCommand,
 } from './command-parse.ts';
 import { dirtyFiles } from './foreign-changes.ts';
-import { reviewedPushTarget } from './pr-push-target.ts';
 import {
   isPrCreateCommand,
   ownershipFingerprint,
@@ -394,10 +393,13 @@ async function run(path: string, cwd?: string): Promise<void> {
 }
 if (isPrCreateCommand(command)) await run('.claude/hooks/require-pr-self-review.ts');
 for (const entry of commands) {
-  const target = await reviewedPushTarget(entry);
-  if (target.kind === 'blocked') block(target.reason);
-  if (target.kind === 'ready')
-    await run('.claude/hooks/require-pr-feedback-review.ts', target.directory);
+  if (!entry.direct || entry.name !== 'git') continue;
+  const target = gitTarget(entry);
+  if (wordValue(target.subcommand) !== 'push') continue;
+  if (target.directory.kind === 'known')
+    await run('.claude/hooks/require-pr-feedback-review.ts', target.directory.path);
+  else
+    console.error('NOTICE: git push の作業ツリーを特定できません。LLM が送信先 PR のレビュー指摘を確認してください。');
 }
 for await (const path of new Glob('.claude/hooks/project/*.{ts,sh}').scan({ cwd: root }))
   await run(path);

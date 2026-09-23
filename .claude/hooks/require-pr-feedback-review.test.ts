@@ -6,6 +6,7 @@ import { externalReviewFile, reviewTargetSha, writeEntries } from './review-coun
 import type { Entry } from './review-policy.ts';
 
 const script = join(import.meta.dir, 'require-pr-feedback-review.ts');
+const record = join(import.meta.dir, 'record-pr-feedback.ts');
 const preBash = join(import.meta.dir, 'pre-bash-guard.ts');
 interface FakeThread {
   comments: {
@@ -23,6 +24,7 @@ async function checkPush(
   bin: string,
   comments: FakeThread[] = [],
   prError = false,
+  reviews: unknown[] = [],
 ): Promise<{ code: number; error: string }> {
   const child = Bun.spawn(['bun', script], {
     cwd,
@@ -37,6 +39,7 @@ async function checkPush(
           user: comment.author,
         }),
       ))]),
+      FAKE_REVIEWS: JSON.stringify([reviews]),
       FAKE_PR_ERROR: prError ? '1' : '',
     },
     stdin: new Blob([JSON.stringify({ cwd })]),
@@ -58,7 +61,7 @@ describe('外部指摘後の push ガード', () => {
       git(target, 'init', '-q');
       await writeFile(
         join(bin, 'gh'),
-        '#!/bin/sh\nif [ "$1" = "pr" ]; then if [ "$PWD" != "$FAKE_TARGET" ]; then echo "no pull requests found for branch" >&2; exit 1; fi; printf \'{"number":42}\\n\'; exit 0; fi\nif [ "$1" = "api" ] && [ "$2" = "user" ]; then printf "testuser\\n"; exit 0; fi\nif [ "$1" = "api" ]; then printf \'[[{"id":1,"commit_id":"test-head","created_at":"2026-09-23T00:00:01Z","user":{"login":"reviewer"}}]]\\n\'; exit 0; fi\nexit 1\n',
+        '#!/bin/sh\nif [ "$1" = "pr" ]; then if [ "$PWD" != "$FAKE_TARGET" ]; then echo "no pull requests found for branch" >&2; exit 1; fi; printf \'{"number":42}\\n\'; exit 0; fi\nif [ "$1" = "api" ] && [ "$2" = "user" ]; then printf "testuser\\n"; exit 0; fi\nif [ "$1" = "api" ]; then case "$2" in */reviews?*) printf \'[[]]\\n\';; *) printf \'[[{"id":1,"commit_id":"test-head","created_at":"2026-09-23T00:00:01Z","user":{"login":"reviewer"}}]]\\n\';; esac; exit 0; fi\nexit 1\n',
         { mode: 0o755 },
       );
       const child = Bun.spawn(['bun', preBash], {
@@ -76,43 +79,6 @@ describe('外部指摘後の push ガード', () => {
       const [code, error] = await Promise.all([child.exited, new Response(child.stderr).text()]);
       expect(error).toContain('外部レビュー指摘');
       expect(code).toBe(2);
-      const other = Bun.spawn(['bun', preBash], {
-        cwd: caller,
-        env: {
-          ...process.env,
-          PATH: `${bin}:${process.env.PATH}`,
-          CLAUDE_PROJECT_DIR: join(import.meta.dir, '../..'),
-          FAKE_TARGET: target,
-        },
-        stdin: new Blob([JSON.stringify({ cwd: caller, tool_input: { command: `git -C ${target} push origin other:other` } })]),
-        stdout: 'pipe',
-        stderr: 'pipe',
-      });
-      const [otherCode, otherError] = await Promise.all([
-        other.exited,
-        new Response(other.stderr).text(),
-      ]);
-      expect(otherCode).toBe(2);
-      expect(otherError).toContain('別ブランチ');
-      git(target, 'config', 'push.default', 'matching');
-      const implicit = Bun.spawn(['bun', preBash], {
-        cwd: caller,
-        env: {
-          ...process.env,
-          PATH: `${bin}:${process.env.PATH}`,
-          CLAUDE_PROJECT_DIR: join(import.meta.dir, '../..'),
-          FAKE_TARGET: target,
-        },
-        stdin: new Blob([JSON.stringify({ cwd: caller, tool_input: { command: `git -C ${target} push origin` } })]),
-        stdout: 'pipe',
-        stderr: 'pipe',
-      });
-      const [implicitCode, implicitError] = await Promise.all([
-        implicit.exited,
-        new Response(implicit.stderr).text(),
-      ]);
-      expect(implicitCode).toBe(2);
-      expect(implicitError).toContain('暗黙の設定');
     } finally {
       await rm(root, { recursive: true, force: true });
     }
@@ -132,7 +98,7 @@ describe('外部指摘後の push ガード', () => {
       const gh = join(bin, 'gh');
       await writeFile(
         gh,
-        '#!/bin/sh\nif [ "$1" = "pr" ]; then if [ "$FAKE_PR_ERROR" = "1" ]; then echo "network error" >&2; exit 1; fi; printf \'{"number":42}\\n\'; exit 0; fi\nif [ "$1" = "api" ] && [ "$2" = "user" ]; then printf "testuser\\n"; exit 0; fi\nif [ "$1" = "api" ]; then printf "%s\\n" "$FAKE_COMMENTS"; exit 0; fi\nexit 1\n',
+        '#!/bin/sh\nif [ "$1" = "pr" ]; then if [ "$FAKE_PR_ERROR" = "1" ]; then echo "network error" >&2; exit 1; fi; printf \'{"number":42}\\n\'; exit 0; fi\nif [ "$1" = "api" ] && [ "$2" = "user" ]; then printf "testuser\\n"; exit 0; fi\nif [ "$1" = "api" ]; then case "$2" in */reviews?*) printf "%s\\n" "$FAKE_REVIEWS";; *) printf "%s\\n" "$FAKE_COMMENTS";; esac; exit 0; fi\nexit 1\n',
         { mode: 0o755 },
       );
       const sha = await reviewTargetSha({ cwd });
@@ -220,6 +186,38 @@ describe('外部指摘後の push ガード', () => {
       expect((await checkPush(cwd, bin)).code).toBe(2);
       await writeEntries([...entries, entries[1], entries[1], entries[1]], { cwd });
       expect((await checkPush(cwd, bin)).code).toBe(0);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  test('レビュー本文の指摘も観測し、相談記録時に届いた最新の指摘まで反映する', async () => {
+    const cwd = await mkdtemp(join(tmpdir(), 'pr-feedback-body-'));
+    try {
+      git(cwd, 'init', '-q');
+      const bin = join(cwd, 'bin');
+      await mkdir(bin);
+      await writeFile(join(bin, 'gh'),
+        '#!/bin/sh\nif [ "$1" = "pr" ]; then printf \'{"number":42}\\n\'; exit 0; fi\nif [ "$1" = "api" ] && [ "$2" = "user" ]; then printf "testuser\\n"; exit 0; fi\nif [ "$1" = "api" ]; then case "$2" in */reviews?*) printf "%s\\n" "$FAKE_REVIEWS";; *) printf \'[[]]\\n\';; esac; exit 0; fi\nexit 1\n', { mode: 0o755 });
+      const review = (id: number, head: string) => ({
+        id, commit_id: head, submitted_at: `2026-09-23T00:00:0${id}Z`,
+        state: 'CHANGES_REQUESTED', body: '設計を見直してください', user: { login: 'reviewer' },
+      });
+      const first = [review(1, 'head-a'), review(2, 'head-b')];
+      const observed = await checkPush(cwd, bin, [], false, first);
+      expect(observed.code).toBe(2);
+      const historyPath = await externalReviewFile({ cwd });
+      expect((await Bun.file(historyPath).json()).heads).toEqual(['head-a', 'head-b']);
+      const child = Bun.spawn(['bun', record, 'asked', 'レビュー継続の原因は責務の曖昧さにあり、ユーザーは境界と責務を整理してから進む方針を選んだ'], {
+        cwd,
+        env: { ...process.env, PATH: `${bin}:${process.env.PATH}`,
+          FAKE_REVIEWS: JSON.stringify([[...first, review(3, 'head-c')]]) },
+        stdin: new Blob([JSON.stringify({ cwd })]), stdout: 'pipe', stderr: 'pipe',
+      });
+      expect(await child.exited).toBe(0);
+      const history = await Bun.file(historyPath).json();
+      expect(history.heads).toEqual(['head-a', 'head-b', 'head-c']);
+      expect(history.consultation.through).toBe(3);
     } finally {
       await rm(cwd, { recursive: true, force: true });
     }

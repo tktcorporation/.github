@@ -8,7 +8,7 @@ import { parseExternalReviewHistory } from './pr-feedback-history.ts';
 import {
   judgeExternalPush,
   markFeedbackReviewed,
-  observeFeedback,
+  observeFeedbackBatch,
 } from './pr-feedback-policy.ts';
 import { externalReviewFile, readRounds, reviewTargetSha } from './review-count.ts';
 
@@ -27,11 +27,7 @@ if (feedback.kind === 'unavailable') block(feedback.reason);
 const parsed = parseExternalReviewHistory((await file.exists()) ? await file.text() : '', feedback.pr);
 if (parsed.kind === 'invalid') block('外部レビュー履歴が壊れています。記録を確認してください。');
 const rounds = await readRounds(input);
-const history = feedback.observations.reduce(
-  (current, observation) =>
-    observeFeedback(current, { ...observation, roundsAtFeedback: rounds.length }),
-  parsed.history,
-);
+const history = observeFeedbackBatch(parsed.history, feedback.observations, rounds.length);
 if (history !== parsed.history) {
   await mkdir(dirname(historyPath), { recursive: true });
   await Bun.write(historyPath, JSON.stringify(history));

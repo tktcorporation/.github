@@ -50,6 +50,18 @@ export function observeFeedback(
   };
 }
 
+/** 取得した指摘を同じレビュー時点でまとめて観測する。 */
+export function observeFeedbackBatch(
+  history: ExternalReviewHistory,
+  observations: Omit<FeedbackObservation, 'roundsAtFeedback'>[],
+  roundCount: number,
+): ExternalReviewHistory {
+  return observations.reduce(
+    (current, observation) => observeFeedback(current, { ...observation, roundsAtFeedback: roundCount }),
+    history,
+  );
+}
+
 export const needsUserDecision = (history: ExternalReviewHistory): boolean =>
   history.heads.length >= EXTERNAL_REVIEW_LIMIT &&
   (history.consultation.kind === 'none' || history.consultation.through < history.heads.length);
