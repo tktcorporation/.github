@@ -17,13 +17,7 @@
 import { $ } from 'bun';
 import { mkdir } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
-import {
-  needsUserDecision,
-  observeFeedback,
-  parseExternalReviewHistory,
-} from './pr-feedback-policy.ts';
 import { readInput, sessionStateDir, workingTree } from './hook-utils.ts';
-import { externalReviewFile, readRounds } from './review-count.ts';
 
 const THROTTLE_MS = 45_000;
 
@@ -63,11 +57,11 @@ if (throttlePath) {
   await Bun.write(throttlePath, String(now)).catch(() => undefined);
 }
 
-const pr = await $`gh pr view --json number,url,headRefOid`.cwd(tree).quiet().nothrow();
+const pr = await $`gh pr view --json number,url`.cwd(tree).quiet().nothrow();
 if (pr.exitCode !== 0) process.exit(0);
-const view = safeShellJson<{ number?: number; url?: string; headRefOid?: string }>(pr, {});
-const { number, url, headRefOid } = view;
-if (!number || !headRefOid) process.exit(0);
+const view = safeShellJson<{ number?: number; url?: string }>(pr, {});
+const { number, url } = view;
+if (!number) process.exit(0);
 
 const repo = await $`gh repo view --json nameWithOwner --jq .nameWithOwner`.cwd(tree).quiet().nothrow();
 const me = await $`gh api user --jq .login`.quiet().nothrow();
@@ -85,7 +79,6 @@ interface Thread {
       databaseId: number;
       author: { login: string } | null;
       body: string;
-      pullRequestReview: { commit: { oid: string } | null } | null;
     }[];
   };
   firstComment: { nodes: { author: { login: string } | null; body: string }[] };
@@ -107,7 +100,7 @@ const query = `query($owner:String!,$name:String!,$number:Int!,$after:String){
     reviewThreads(first:100, after:$after){
       pageInfo{ hasNextPage endCursor }
       nodes{ id isResolved path line
-        comments(last:1){ nodes{ databaseId author{ login } body pullRequestReview{ commit{ oid } } } }
+        comments(last:1){ nodes{ databaseId author{ login } body } }
         firstComment: comments(first:1){ nodes{ author{ login } body } }
       }
     }
@@ -163,31 +156,8 @@ const nagged = new Set(
 // 知らせた状態は「スレッド id + 最後のコメント id」で覚える。同じスレッドでも新しい返信が
 // 付けば再び知らせる
 const stateOf = (thread: Thread) => `${thread.id}:${thread.comments.nodes[0]?.databaseId ?? ''}`;
-const commentIdOf = (thread: Thread) => String(thread.comments.nodes[0]?.databaseId ?? stateOf(thread));
 const fresh = waiting.filter((thread) => !nagged.has(stateOf(thread)));
 if (fresh.length === 0) process.exit(0);
-
-// セッションごとの通知履歴とは別に、PR の外部レビュー往復をブランチ単位で持つ。
-// 同じ HEAD に複数コメントが届いても 1 回と数え、PR 番号が変われば初期化する。
-const historyPath = await externalReviewFile(input);
-const saved = await Bun.file(historyPath).text().catch(() => '');
-const parsed = parseExternalReviewHistory(saved, number);
-if (parsed.kind === 'invalid') {
-  console.log(JSON.stringify({ decision: 'block', reason: `PR #${number} の外部レビュー履歴が壊れています。記録を確認してください。` }));
-  process.exit(0);
-}
-let history = parsed.history;
-const roundCount = (await readRounds(input)).length;
-for (const thread of fresh) {
-  const reviewedHead = thread.comments.nodes[0]?.pullRequestReview?.commit?.oid ?? headRefOid;
-  history = observeFeedback(history, {
-    head: reviewedHead,
-    commentIds: [commentIdOf(thread)],
-    roundsAtFeedback: roundCount,
-  });
-}
-await mkdir(dirname(historyPath), { recursive: true });
-await Bun.write(historyPath, JSON.stringify(history));
 if (naggedPath) {
   await mkdir(dirname(naggedPath), { recursive: true }).catch(() => undefined);
   await Bun.write(naggedPath, `${[...nagged, ...fresh.map(stateOf)].join('\n')}\n`).catch(
@@ -203,9 +173,7 @@ const summary = fresh
   })
   .join('\n');
 const guidance =
-  needsUserDecision(history)
-    ? `この PR では異なる HEAD への外部指摘が ${history.heads.length} 回続いています。修正と push を止め、各回の指摘とローカルレビューで見逃した理由を原因ごとにまとめ、なぜレビューが続くのか診断してください。設計・要件・レビュー手順を変える具体案を効果と影響で比較し、推奨案を添えてユーザーに採る方針を尋ねてください。レビューを続けるかだけを聞かないでください。答えを得た後、bun .claude/hooks/record-pr-feedback.ts asked "<診断とユーザーが選んだ方針>" で記録するまで次の push は通りません。`
-    : `この PR では外部指摘が ${history.heads.length} 回目です。個別の指摘だけを直して push せず、.claude/skills/pr-review-loop/SKILL.md の手順で差分全体を再レビューし、収束させてから push してください。`;
+  '個別の指摘だけを直して push せず、.claude/skills/pr-review-loop/SKILL.md の手順で差分全体を再レビューし、収束させてから push してください。外部指摘が異なる HEAD に 3 回続いた場合は .claude/rules/ci-workflow.md の診断と方針相談を行ってください。';
 console.log(
   JSON.stringify({
     decision: 'block',

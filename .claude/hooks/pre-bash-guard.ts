@@ -28,8 +28,8 @@ import {
   type SimpleCommand,
 } from './command-parse.ts';
 import { dirtyFiles } from './foreign-changes.ts';
+import { reviewedPushTarget } from './pr-push-target.ts';
 import {
-  currentBranch,
   isPrCreateCommand,
   ownershipFingerprint,
   projectDirectory,
@@ -393,41 +393,11 @@ async function run(path: string, cwd?: string): Promise<void> {
   if (status !== 0) process.exit(status);
 }
 if (isPrCreateCommand(command)) await run('.claude/hooks/require-pr-self-review.ts');
-const PUSH_FLAGS = new Set([
-  '-u', '--set-upstream', '-f', '--force', '-n', '--dry-run', '-q', '--quiet', '-v', '--verbose',
-  '--porcelain', '--atomic', '--signed', '--no-signed', '--force-with-lease', '--no-verify',
-]);
 for (const entry of commands) {
-  if (!entry.direct || entry.name !== 'git') continue;
-  const target = gitTarget(entry);
-  if (wordValue(target.subcommand) !== 'push') continue;
-  if (target.directory.kind === 'unknown')
-    block('git push の作業ツリーを特定できません。対象ディレクトリを明示して再実行してください。');
-  const args = target.args.map(wordValue);
-  if (args.some((arg) => arg === undefined || (arg.startsWith('-') && !PUSH_FLAGS.has(arg))))
-    block('git push の対象ブランチを特定できません。対象ブランチの worktree から通常の git push で実行してください。');
-  const positional = args.filter((arg) => arg && !arg.startsWith('-'));
-  const branch = await currentBranch(target.directory.path);
-  const currentRefs = new Set(['HEAD', branch, `refs/heads/${branch}`]);
-  if (positional.slice(1).some((refspec) => {
-    const [source, destination = source] = refspec!.split(':');
-    return !currentRefs.has(source ?? '') || !currentRefs.has(destination ?? '');
-  }))
-    block('別ブランチへの git push はこの作業ツリーの PR レビュー履歴で検査できません。対象ブランチの worktree から push してください。');
-  if (positional.length <= 1) {
-    const pushDefault = Bun.spawnSync(
-      ['git', '-C', target.directory.path, 'config', '--get', 'push.default'],
-      { stdout: 'pipe', stderr: 'ignore' },
-    );
-    const mode = new TextDecoder().decode(pushDefault.stdout).trim();
-    const remotePush = Bun.spawnSync(
-      ['git', '-C', target.directory.path, 'config', '--get-regexp', '^remote\\..*\\.push$'],
-      { stdout: 'pipe', stderr: 'ignore' },
-    );
-    if ((mode && mode !== 'simple' && mode !== 'current') || remotePush.exitCode === 0)
-      block('git push の暗黙の設定が別ブランチも対象にする可能性があります。現在のブランチを refspec で明示して push してください。');
-  }
-  await run('.claude/hooks/require-pr-feedback-review.ts', target.directory.path);
+  const target = await reviewedPushTarget(entry);
+  if (target.kind === 'blocked') block(target.reason);
+  if (target.kind === 'ready')
+    await run('.claude/hooks/require-pr-feedback-review.ts', target.directory);
 }
 for await (const path of new Glob('.claude/hooks/project/*.{ts,sh}').scan({ cwd: root }))
   await run(path);

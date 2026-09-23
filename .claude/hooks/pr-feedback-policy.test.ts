@@ -1,3 +1,4 @@
+import { parseExternalReviewHistory } from './pr-feedback-history.ts';
 import { describe, expect, test } from 'bun:test';
 import {
   EXTERNAL_REVIEW_LIMIT,
@@ -7,7 +8,6 @@ import {
   needsUserDecision,
   newExternalReviewHistory,
   observeFeedback,
-  parseExternalReviewHistory,
 } from './pr-feedback-policy.ts';
 
 const observe = (

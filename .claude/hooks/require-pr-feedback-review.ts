@@ -4,11 +4,11 @@ import { mkdir } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { readInput, workingTree } from './hook-utils.ts';
 import { fetchGitHubFeedback } from './pr-feedback-github.ts';
+import { parseExternalReviewHistory } from './pr-feedback-history.ts';
 import {
   judgeExternalPush,
   markFeedbackReviewed,
   observeFeedback,
-  parseExternalReviewHistory,
 } from './pr-feedback-policy.ts';
 import { externalReviewFile, readRounds, reviewTargetSha } from './review-count.ts';
 

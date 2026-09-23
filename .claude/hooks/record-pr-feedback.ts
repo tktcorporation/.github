@@ -1,8 +1,9 @@
 #!/usr/bin/env bun
 /** 3 回目以降の外部指摘について、ユーザーの回答を得た事実を記録する。 */
 import { $ } from 'bun';
+import { parseExternalReviewHistory } from './pr-feedback-history.ts';
 import { readInput, workingTree } from './hook-utils.ts';
-import { EXTERNAL_REVIEW_LIMIT, acknowledgeFeedback, parseExternalReviewHistory } from './pr-feedback-policy.ts';
+import { EXTERNAL_REVIEW_LIMIT, acknowledgeFeedback } from './pr-feedback-policy.ts';
 import { externalReviewFile, readRounds } from './review-count.ts';
 import { MIN_NOTE_LENGTH, normalizeNote } from './review-policy.ts';
 
