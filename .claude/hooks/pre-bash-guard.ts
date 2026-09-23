@@ -374,7 +374,7 @@ for (const entry of commands) {
 // ---------------------------------------------------------------------------
 
 const root = await projectDirectory();
-async function run(path: string): Promise<void> {
+async function run(path: string, cwd?: string): Promise<void> {
   // project hook は bash と bun (TypeScript) の両方で書かれているため、
   // 拡張子で実行系を選ぶ。bun 固定だと .sh は構文エラーで落ち、glob を
   // *.ts に絞ると .sh は黙ってスキャン対象から外れる（後者で実際に
@@ -384,7 +384,7 @@ async function run(path: string): Promise<void> {
   const child = Bun.spawn([interpreter, join(root, path)], {
     cwd: root,
     env: process.env,
-    stdin: new Blob([text]),
+    stdin: new Blob([cwd ? JSON.stringify({ ...input, cwd }) : text]),
     stdout: 'inherit',
     stderr: 'inherit',
   });
@@ -392,11 +392,13 @@ async function run(path: string): Promise<void> {
   if (status !== 0) process.exit(status);
 }
 if (isPrCreateCommand(command)) await run('.claude/hooks/require-pr-self-review.ts');
-if (
-  commands.some(
-    (entry) => entry.direct && entry.name === 'git' && wordValue(gitTarget(entry).subcommand) === 'push',
-  )
-)
-  await run('.claude/hooks/require-pr-feedback-review.ts');
+for (const entry of commands) {
+  if (!entry.direct || entry.name !== 'git') continue;
+  const target = gitTarget(entry);
+  if (wordValue(target.subcommand) !== 'push') continue;
+  if (target.directory.kind === 'unknown')
+    block('git push の作業ツリーを特定できません。対象ディレクトリを明示して再実行してください。');
+  await run('.claude/hooks/require-pr-feedback-review.ts', target.directory.path);
+}
 for await (const path of new Glob('.claude/hooks/project/*.{ts,sh}').scan({ cwd: root }))
   await run(path);

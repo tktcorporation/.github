@@ -6,6 +6,7 @@ import { externalReviewFile, reviewTargetSha, writeEntries } from './review-coun
 import type { Entry } from './review-policy.ts';
 
 const script = join(import.meta.dir, 'require-pr-feedback-review.ts');
+const preBash = join(import.meta.dir, 'pre-bash-guard.ts');
 
 function git(cwd: string, ...args: string[]): void {
   const result = Bun.spawnSync(['git', ...args], { cwd, stdout: 'pipe', stderr: 'pipe' });
@@ -15,11 +16,22 @@ function git(cwd: string, ...args: string[]): void {
 async function checkPush(
   cwd: string,
   bin: string,
-  comments = '[[]]',
+  comments: unknown[] = [],
+  prError = false,
 ): Promise<{ code: number; error: string }> {
   const child = Bun.spawn(['bun', script], {
     cwd,
-    env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, FAKE_COMMENTS: comments },
+    env: {
+      ...process.env,
+      PATH: `${bin}:${process.env.PATH}`,
+      FAKE_COMMENTS: JSON.stringify({
+        data: { repository: { pullRequest: { reviewThreads: {
+          pageInfo: { hasNextPage: false, endCursor: null },
+          nodes: comments,
+        } } } },
+      }),
+      FAKE_PR_ERROR: prError ? '1' : '',
+    },
     stdin: new Blob([JSON.stringify({ cwd })]),
     stdout: 'pipe',
     stderr: 'pipe',
@@ -29,6 +41,39 @@ async function checkPush(
 }
 
 describe('外部指摘後の push ガード', () => {
+  test('git -C で別 worktree を push するときは、その作業ツリーの PR を検査する', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'pr-feedback-target-'));
+    try {
+      const caller = join(root, 'caller');
+      const target = join(root, 'target');
+      const bin = join(root, 'bin');
+      await Promise.all([mkdir(caller), mkdir(target), mkdir(bin)]);
+      git(target, 'init', '-q');
+      await writeFile(
+        join(bin, 'gh'),
+        '#!/bin/sh\nif [ "$1" = "pr" ]; then if [ "$PWD" != "$FAKE_TARGET" ]; then echo "no pull requests found for branch" >&2; exit 1; fi; printf \'{"number":42,"headRefOid":"test-head"}\\n\'; exit 0; fi\nif [ "$1" = "repo" ]; then printf "owner/repo\\n"; exit 0; fi\nif [ "$1" = "api" ] && [ "$2" = "user" ]; then printf "testuser\\n"; exit 0; fi\nif [ "$1" = "api" ] && [ "$2" = "graphql" ]; then printf \'{"data":{"repository":{"pullRequest":{"reviewThreads":{"pageInfo":{"hasNextPage":false,"endCursor":null},"nodes":[{"isResolved":false,"comments":{"nodes":[{"databaseId":1,"author":{"login":"reviewer"},"pullRequestReview":{"commit":{"oid":"test-head"}}}]}}]}}}}}\\n\'; exit 0; fi\nexit 1\n',
+        { mode: 0o755 },
+      );
+      const child = Bun.spawn(['bun', preBash], {
+        cwd: caller,
+        env: {
+          ...process.env,
+          PATH: `${bin}:${process.env.PATH}`,
+          CLAUDE_PROJECT_DIR: join(import.meta.dir, '../..'),
+          FAKE_TARGET: target,
+        },
+        stdin: new Blob([JSON.stringify({ cwd: caller, tool_input: { command: `git -C ${target} push` } })]),
+        stdout: 'pipe',
+        stderr: 'pipe',
+      });
+      const [code, error] = await Promise.all([child.exited, new Response(child.stderr).text()]);
+      expect(error).toContain('外部レビュー指摘');
+      expect(code).toBe(2);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   test('指摘後のレビュー収束と、3 回目のユーザー判断を要求する', async () => {
     const cwd = await mkdtemp(join(tmpdir(), 'pr-feedback-'));
     try {
@@ -43,17 +88,21 @@ describe('外部指摘後の push ガード', () => {
       const gh = join(bin, 'gh');
       await writeFile(
         gh,
-        '#!/bin/sh\nif [ "$1" = "pr" ]; then printf "42\\n"; exit 0; fi\nif [ "$1" = "api" ] && [ "$2" = "user" ]; then printf "testuser\\n"; exit 0; fi\nif [ "$1" = "api" ]; then printf "%s\\n" "$FAKE_COMMENTS"; exit 0; fi\nexit 1\n',
+        '#!/bin/sh\nif [ "$1" = "pr" ]; then if [ "$FAKE_PR_ERROR" = "1" ]; then echo "network error" >&2; exit 1; fi; printf \'{"number":42,"headRefOid":"test-head"}\\n\'; exit 0; fi\nif [ "$1" = "repo" ]; then printf "owner/repo\\n"; exit 0; fi\nif [ "$1" = "api" ] && [ "$2" = "user" ]; then printf "testuser\\n"; exit 0; fi\nif [ "$1" = "api" ] && [ "$2" = "graphql" ]; then printf "%s\\n" "$FAKE_COMMENTS"; exit 0; fi\nexit 1\n',
         { mode: 0o755 },
       );
       const sha = await reviewTargetSha({ cwd });
       const historyPath = await externalReviewFile({ cwd });
-      const firstComment = JSON.stringify([[{
-        id: 1,
-        commit_id: sha,
-        created_at: '2026-09-22T00:00:00Z',
-        user: { login: 'reviewer' },
-      }]]);
+      const comment = (id: number, head: string, isResolved = false, login = 'reviewer') => ({
+        isResolved,
+        comments: { nodes: [{
+          databaseId: id,
+          author: { login },
+          pullRequestReview: { commit: { oid: head } },
+        }] },
+      });
+      const firstComment = [comment(1, sha)];
+      expect((await checkPush(cwd, bin, [], true)).code).toBe(2);
       expect((await checkPush(cwd, bin, firstComment)).code).toBe(2);
       expect(await Bun.file(historyPath).exists()).toBe(true);
       await mkdir(dirname(historyPath), { recursive: true });
@@ -74,15 +123,13 @@ describe('外部指摘後の push ガード', () => {
       await writeEntries(entries, { cwd });
       expect((await checkPush(cwd, bin)).code).toBe(0);
 
-      const newComment = JSON.stringify([[{
-        id: 2,
-        commit_id: sha,
-        created_at: '2026-09-23T00:00:00Z',
-        user: { login: 'reviewer' },
-      }]]);
+      const newComment = [comment(2, sha)];
       expect((await checkPush(cwd, bin, newComment)).code).toBe(2);
       await writeEntries([...entries, entries[1]], { cwd });
       expect((await checkPush(cwd, bin, newComment)).code).toBe(0);
+
+      // 解決済みスレッドや自分の返信は、新しい外部指摘として数えない。
+      expect((await checkPush(cwd, bin, [comment(3, 'another-head', true), comment(4, 'another-head', false, 'testuser')])).code).toBe(0);
 
       await Bun.write(
         historyPath,
