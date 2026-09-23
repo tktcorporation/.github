@@ -50,6 +50,6 @@ switch (judgeExternalPush(history, rounds, sha)) {
   case 'allow':
     break;
 }
-if (history.reviewedThrough < history.heads.length) {
+if (history.reviewedCommentCount < history.seenComments.length) {
   await Bun.write(historyPath, JSON.stringify(markFeedbackReviewed(history)));
 }

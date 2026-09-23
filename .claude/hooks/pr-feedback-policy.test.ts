@@ -18,11 +18,12 @@ const observe = (
 ) => observeFeedback(history, { head, commentIds: [id], roundsAtFeedback });
 
 describe('外部レビューの往復', () => {
-  test('同じ HEAD の複数コメントは 1 回だけ数え、レビュー基準線を更新しない', () => {
+  test('同じ HEAD の複数コメントは相談回数を増やさず、新しいレビューを要求する', () => {
     const first = observe(newExternalReviewHistory(42), 'a', 'one', 1);
     const second = observe(first, 'a', 'two', 2);
     expect(second.heads).toEqual(['a']);
-    expect(second.roundsAtLastFeedback).toBe(1);
+    expect(second.roundsAtLastFeedback).toBe(2);
+    expect(judgeExternalPush(second, [], 'a')).toBe('review_locally');
     expect(observe(second, 'a', 'one', 3)).toEqual(second);
   });
 
