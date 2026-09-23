@@ -7,6 +7,11 @@ import type { Entry } from './review-policy.ts';
 
 const script = join(import.meta.dir, 'require-pr-feedback-review.ts');
 const preBash = join(import.meta.dir, 'pre-bash-guard.ts');
+interface FakeThread {
+  comments: {
+    nodes: { databaseId: number; author: { login: string }; pullRequestReview: { commit: { oid: string } } }[];
+  };
+}
 
 function git(cwd: string, ...args: string[]): void {
   const result = Bun.spawnSync(['git', ...args], { cwd, stdout: 'pipe', stderr: 'pipe' });
@@ -16,7 +21,7 @@ function git(cwd: string, ...args: string[]): void {
 async function checkPush(
   cwd: string,
   bin: string,
-  comments: unknown[] = [],
+  comments: FakeThread[] = [],
   prError = false,
 ): Promise<{ code: number; error: string }> {
   const child = Bun.spawn(['bun', script], {
@@ -24,12 +29,14 @@ async function checkPush(
     env: {
       ...process.env,
       PATH: `${bin}:${process.env.PATH}`,
-      FAKE_COMMENTS: JSON.stringify({
-        data: { repository: { pullRequest: { reviewThreads: {
-          pageInfo: { hasNextPage: false, endCursor: null },
-          nodes: comments,
-        } } } },
-      }),
+      FAKE_COMMENTS: JSON.stringify([comments.flatMap((thread) => thread.comments.nodes.map(
+        (comment) => ({
+          id: comment.databaseId,
+          commit_id: comment.pullRequestReview.commit.oid,
+          created_at: `2026-09-23T00:00:${String(comment.databaseId).padStart(2, '0')}Z`,
+          user: comment.author,
+        }),
+      ))]),
       FAKE_PR_ERROR: prError ? '1' : '',
     },
     stdin: new Blob([JSON.stringify({ cwd })]),
@@ -51,7 +58,7 @@ describe('外部指摘後の push ガード', () => {
       git(target, 'init', '-q');
       await writeFile(
         join(bin, 'gh'),
-        '#!/bin/sh\nif [ "$1" = "pr" ]; then if [ "$PWD" != "$FAKE_TARGET" ]; then echo "no pull requests found for branch" >&2; exit 1; fi; printf \'{"number":42,"headRefOid":"test-head"}\\n\'; exit 0; fi\nif [ "$1" = "repo" ]; then printf "owner/repo\\n"; exit 0; fi\nif [ "$1" = "api" ] && [ "$2" = "user" ]; then printf "testuser\\n"; exit 0; fi\nif [ "$1" = "api" ] && [ "$2" = "graphql" ]; then printf \'{"data":{"repository":{"pullRequest":{"reviewThreads":{"pageInfo":{"hasNextPage":false,"endCursor":null},"nodes":[{"isResolved":false,"comments":{"nodes":[{"databaseId":1,"author":{"login":"reviewer"},"pullRequestReview":{"commit":{"oid":"test-head"}}}]}}]}}}}}\\n\'; exit 0; fi\nexit 1\n',
+        '#!/bin/sh\nif [ "$1" = "pr" ]; then if [ "$PWD" != "$FAKE_TARGET" ]; then echo "no pull requests found for branch" >&2; exit 1; fi; printf \'{"number":42}\\n\'; exit 0; fi\nif [ "$1" = "api" ] && [ "$2" = "user" ]; then printf "testuser\\n"; exit 0; fi\nif [ "$1" = "api" ]; then printf \'[[{"id":1,"commit_id":"test-head","created_at":"2026-09-23T00:00:01Z","user":{"login":"reviewer"}}]]\\n\'; exit 0; fi\nexit 1\n',
         { mode: 0o755 },
       );
       const child = Bun.spawn(['bun', preBash], {
@@ -87,6 +94,25 @@ describe('外部指摘後の push ガード', () => {
       ]);
       expect(otherCode).toBe(2);
       expect(otherError).toContain('別ブランチ');
+      git(target, 'config', 'push.default', 'matching');
+      const implicit = Bun.spawn(['bun', preBash], {
+        cwd: caller,
+        env: {
+          ...process.env,
+          PATH: `${bin}:${process.env.PATH}`,
+          CLAUDE_PROJECT_DIR: join(import.meta.dir, '../..'),
+          FAKE_TARGET: target,
+        },
+        stdin: new Blob([JSON.stringify({ cwd: caller, tool_input: { command: `git -C ${target} push origin` } })]),
+        stdout: 'pipe',
+        stderr: 'pipe',
+      });
+      const [implicitCode, implicitError] = await Promise.all([
+        implicit.exited,
+        new Response(implicit.stderr).text(),
+      ]);
+      expect(implicitCode).toBe(2);
+      expect(implicitError).toContain('暗黙の設定');
     } finally {
       await rm(root, { recursive: true, force: true });
     }
@@ -106,7 +132,7 @@ describe('外部指摘後の push ガード', () => {
       const gh = join(bin, 'gh');
       await writeFile(
         gh,
-        '#!/bin/sh\nif [ "$1" = "pr" ]; then if [ "$FAKE_PR_ERROR" = "1" ]; then echo "network error" >&2; exit 1; fi; printf \'{"number":42,"headRefOid":"test-head"}\\n\'; exit 0; fi\nif [ "$1" = "repo" ]; then printf "owner/repo\\n"; exit 0; fi\nif [ "$1" = "api" ] && [ "$2" = "user" ]; then printf "testuser\\n"; exit 0; fi\nif [ "$1" = "api" ] && [ "$2" = "graphql" ]; then printf "%s\\n" "$FAKE_COMMENTS"; exit 0; fi\nexit 1\n',
+        '#!/bin/sh\nif [ "$1" = "pr" ]; then if [ "$FAKE_PR_ERROR" = "1" ]; then echo "network error" >&2; exit 1; fi; printf \'{"number":42}\\n\'; exit 0; fi\nif [ "$1" = "api" ] && [ "$2" = "user" ]; then printf "testuser\\n"; exit 0; fi\nif [ "$1" = "api" ]; then printf "%s\\n" "$FAKE_COMMENTS"; exit 0; fi\nexit 1\n',
         { mode: 0o755 },
       );
       const sha = await reviewTargetSha({ cwd });
@@ -158,7 +184,17 @@ describe('外部指摘後の push ガード', () => {
 
       // 自分の返信は指摘に数えず、解決済みでも未観測の外部指摘は検知する。
       expect((await checkPush(cwd, bin, [comment(4, 'another-head', false, 'testuser')])).code).toBe(0);
-      expect((await checkPush(cwd, bin, [comment(5, 'another-head', true)])).code).toBe(2);
+      const multiHead = {
+        ...comment(5, 'another-head', true),
+        comments: { nodes: [
+          comment(5, 'another-head').comments.nodes[0],
+          comment(6, 'third-head').comments.nodes[0],
+        ] },
+      };
+      expect((await checkPush(cwd, bin, [multiHead])).code).toBe(2);
+      expect((await Bun.file(historyPath).json()).heads).toEqual([
+        sha, 'next-head', 'another-head', 'third-head',
+      ]);
 
       await Bun.write(
         historyPath,

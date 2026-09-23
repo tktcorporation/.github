@@ -414,6 +414,19 @@ for (const entry of commands) {
     return !currentRefs.has(source ?? '') || !currentRefs.has(destination ?? '');
   }))
     block('別ブランチへの git push はこの作業ツリーの PR レビュー履歴で検査できません。対象ブランチの worktree から push してください。');
+  if (positional.length <= 1) {
+    const pushDefault = Bun.spawnSync(
+      ['git', '-C', target.directory.path, 'config', '--get', 'push.default'],
+      { stdout: 'pipe', stderr: 'ignore' },
+    );
+    const mode = new TextDecoder().decode(pushDefault.stdout).trim();
+    const remotePush = Bun.spawnSync(
+      ['git', '-C', target.directory.path, 'config', '--get-regexp', '^remote\\..*\\.push$'],
+      { stdout: 'pipe', stderr: 'ignore' },
+    );
+    if ((mode && mode !== 'simple' && mode !== 'current') || remotePush.exitCode === 0)
+      block('git push の暗黙の設定が別ブランチも対象にする可能性があります。現在のブランチを refspec で明示して push してください。');
+  }
   await run('.claude/hooks/require-pr-feedback-review.ts', target.directory.path);
 }
 for await (const path of new Glob('.claude/hooks/project/*.{ts,sh}').scan({ cwd: root }))
