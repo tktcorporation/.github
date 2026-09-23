@@ -17,7 +17,13 @@
 import { $ } from 'bun';
 import { mkdir } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
-import { readInput, sessionStateDir } from './hook-utils.ts';
+import {
+  needsUserDecision,
+  observeFeedback,
+  parseExternalReviewHistory,
+} from './pr-feedback-policy.ts';
+import { readInput, sessionStateDir, workingTree } from './hook-utils.ts';
+import { externalReviewFile, readRounds } from './review-count.ts';
 
 const THROTTLE_MS = 45_000;
 
@@ -38,6 +44,7 @@ function safeShellJson<T>(output: $.ShellOutput, fallback: T): T {
 
 const input = await readInput();
 if (input?.stop_hook_active) process.exit(0);
+const tree = await workingTree(input);
 
 const directory = await sessionStateDir();
 const throttlePath = directory
@@ -56,13 +63,13 @@ if (throttlePath) {
   await Bun.write(throttlePath, String(now)).catch(() => undefined);
 }
 
-const pr = await $`gh pr view --json number,url`.quiet().nothrow();
+const pr = await $`gh pr view --json number,url,headRefOid`.cwd(tree).quiet().nothrow();
 if (pr.exitCode !== 0) process.exit(0);
-const view = safeShellJson<{ number?: number; url?: string }>(pr, {});
-const { number, url } = view;
-if (!number) process.exit(0);
+const view = safeShellJson<{ number?: number; url?: string; headRefOid?: string }>(pr, {});
+const { number, url, headRefOid } = view;
+if (!number || !headRefOid) process.exit(0);
 
-const repo = await $`gh repo view --json nameWithOwner --jq .nameWithOwner`.quiet().nothrow();
+const repo = await $`gh repo view --json nameWithOwner --jq .nameWithOwner`.cwd(tree).quiet().nothrow();
 const me = await $`gh api user --jq .login`.quiet().nothrow();
 if (repo.exitCode !== 0 || me.exitCode !== 0) process.exit(0);
 const [owner, name] = repo.text().trim().split('/');
@@ -73,7 +80,14 @@ interface Thread {
   isResolved: boolean;
   path: string;
   line: number | null;
-  comments: { nodes: { databaseId: number; author: { login: string } | null; body: string }[] };
+  comments: {
+    nodes: {
+      databaseId: number;
+      author: { login: string } | null;
+      body: string;
+      pullRequestReview: { commit: { oid: string } | null } | null;
+    }[];
+  };
   firstComment: { nodes: { author: { login: string } | null; body: string }[] };
 }
 interface Payload {
@@ -93,7 +107,7 @@ const query = `query($owner:String!,$name:String!,$number:Int!,$after:String){
     reviewThreads(first:100, after:$after){
       pageInfo{ hasNextPage endCursor }
       nodes{ id isResolved path line
-        comments(last:1){ nodes{ databaseId author{ login } body } }
+        comments(last:1){ nodes{ databaseId author{ login } body pullRequestReview{ commit{ oid } } } }
         firstComment: comments(first:1){ nodes{ author{ login } body } }
       }
     }
@@ -117,7 +131,7 @@ for (;;) {
     `number=${number}`,
   ];
   if (after) args.push('-f', `after=${after}`);
-  const result = await $`gh ${args}`.quiet().nothrow();
+  const result = await $`gh ${args}`.cwd(tree).quiet().nothrow();
   if (result.exitCode !== 0) process.exit(0);
   const payload = safeShellJson<Payload | null>(result, null);
   const page = payload?.data?.repository?.pullRequest?.reviewThreads;
@@ -149,8 +163,31 @@ const nagged = new Set(
 // 知らせた状態は「スレッド id + 最後のコメント id」で覚える。同じスレッドでも新しい返信が
 // 付けば再び知らせる
 const stateOf = (thread: Thread) => `${thread.id}:${thread.comments.nodes[0]?.databaseId ?? ''}`;
+const commentIdOf = (thread: Thread) => String(thread.comments.nodes[0]?.databaseId ?? stateOf(thread));
 const fresh = waiting.filter((thread) => !nagged.has(stateOf(thread)));
 if (fresh.length === 0) process.exit(0);
+
+// セッションごとの通知履歴とは別に、PR の外部レビュー往復をブランチ単位で持つ。
+// 同じ HEAD に複数コメントが届いても 1 回と数え、PR 番号が変われば初期化する。
+const historyPath = await externalReviewFile(input);
+const saved = await Bun.file(historyPath).text().catch(() => '');
+const parsed = parseExternalReviewHistory(saved, number);
+if (parsed.kind === 'invalid') {
+  console.log(JSON.stringify({ decision: 'block', reason: `PR #${number} の外部レビュー履歴が壊れています。記録を確認してください。` }));
+  process.exit(0);
+}
+let history = parsed.history;
+const roundCount = (await readRounds(input)).length;
+for (const thread of fresh) {
+  const reviewedHead = thread.comments.nodes[0]?.pullRequestReview?.commit?.oid ?? headRefOid;
+  history = observeFeedback(history, {
+    head: reviewedHead,
+    commentIds: [commentIdOf(thread)],
+    roundsAtFeedback: roundCount,
+  });
+}
+await mkdir(dirname(historyPath), { recursive: true });
+await Bun.write(historyPath, JSON.stringify(history));
 if (naggedPath) {
   await mkdir(dirname(naggedPath), { recursive: true }).catch(() => undefined);
   await Bun.write(naggedPath, `${[...nagged, ...fresh.map(stateOf)].join('\n')}\n`).catch(
@@ -165,9 +202,13 @@ const summary = fresh
     return `- ${thread.path}:${thread.line ?? '-'} (${first?.author?.login ?? '?'}): ${head}`;
   })
   .join('\n');
+const guidance =
+  needsUserDecision(history)
+    ? `この PR では異なる HEAD への外部指摘が ${history.heads.length} 回続いています。ここで修正と push を止め、全ラウンドの指摘を根本原因でまとめ、現行の設計と要件を見直した結果をユーザーに示して相談してください。答えを得た後、bun .claude/hooks/record-pr-feedback.ts asked "<診断とユーザーの判断>" で記録するまで次の push は通りません。`
+    : `この PR では外部指摘が ${history.heads.length} 回目です。個別の指摘だけを直して push せず、.claude/skills/pr-review-loop/SKILL.md の手順で差分全体を再レビューし、収束させてから push してください。`;
 console.log(
   JSON.stringify({
     decision: 'block',
-    reason: `🛑 Stop hook: PR #${number}（${url}）に未対応のレビュースレッドが ${fresh.length} 件あります。完了報告の前に「修正 / 直さない理由 / 回答」のどれかにして返信と resolve まで済ませてください。後回しにするなら、その旨と理由をユーザーへの報告に書いてください。\n${summary}`,
+    reason: `🛑 Stop hook: PR #${number}（${url}）に未対応のレビュースレッドが ${fresh.length} 件あります。${guidance} コメントごとに「修正 / 直さない理由 / 回答」を判断し、対応したスレッドを resolve してください。\n${summary}`,
   }),
 );

@@ -17,7 +17,7 @@ import {
   roundsOf,
 } from './review-policy.ts';
 import type {
-  AskReason,
+  CheckpointReason,
   CheckpointDecision,
   CheckpointRejection,
   DueState,
@@ -42,7 +42,7 @@ const noteGuide =
   'より良い解決策はないか、の検討結果を書いてください。件数が減っていても、中身の確認は省略できません。';
 const trendText = (counts: number[]): string => counts.join(' → ');
 
-function askReasonText(reason: AskReason, counts: number[]): string {
+function checkpointReasonText(reason: CheckpointReason, counts: number[]): string {
   switch (reason.kind) {
     case 'stalled':
       return `指摘件数が停滞している（${trendText(counts)}）`;
@@ -58,7 +58,9 @@ function rejectionText(rejection: CheckpointRejection): string {
     case 'not_due':
       return `振り返りの時期ではありません（直近の振り返り以降 ${rejection.counts.length} ラウンド。${CHECKPOINT_INTERVAL} ラウンドで必要になります）。`;
     case 'must_ask':
-      return `${askReasonText(rejection.reason, rejection.counts)}ので、継続や方針変更をエージェントの判断だけで決めず、AskUserQuestion でユーザーに確認し、答えを得てから ${ASKED} で記録してください。`;
+      return `${checkpointReasonText(rejection.reason, rejection.counts)}ので、継続や方針変更をエージェントの判断だけで決めず、AskUserQuestion でユーザーに確認し、答えを得てから ${ASKED} で記録してください。`;
+    case 'must_replan_or_ask':
+      return `指摘件数が停滞しています（${trendText(rejection.counts)}）。continue は選べません。指摘の根本原因を見直し、依頼の範囲内で直せるなら replan、要件や範囲の変更が必要ならユーザーに確認して asked を記録してください。`;
     case 'note_too_short':
       return `診断メモが短すぎます。${noteGuide}`;
     default:
@@ -67,12 +69,20 @@ function rejectionText(rejection: CheckpointRejection): string {
 }
 
 function blockedText(state: DueState, rerun: string): string {
-  const decide =
-    state.ask === null
-      ? '2. 方針を変えるか、変えずに続けるかを決めて、\n' +
-        `   bun .claude/hooks/record-pr-review.ts checkpoint <${CHECKPOINT_DECISIONS.filter((decision) => decision !== ASKED).join('|')}> "<診断メモ>"\n`
-      : `2. ${askReasonText(state.ask, state.counts)}ので、AskUserQuestion でユーザーに続行か方針変更かを確認し、答えを得てから、\n` +
-        `   bun .claude/hooks/record-pr-review.ts checkpoint ${ASKED} "<診断メモ>"\n`;
+  let decide: string;
+  if (state.reason === null) {
+    decide =
+      '2. 方針を変えるか、変えずに続けるかを決めて、\n' +
+      `   bun .claude/hooks/record-pr-review.ts checkpoint <${CHECKPOINT_DECISIONS.filter((decision) => decision !== ASKED).join('|')}> "<診断メモ>"\n`;
+  } else if (state.reason.kind === 'stalled') {
+    decide =
+      `2. ${checkpointReasonText(state.reason, state.counts)}ため、根本原因を見直す。依頼の範囲内で直せるなら replan、要件や範囲の変更が必要ならユーザーに確認して asked を記録する。\n` +
+      '   bun .claude/hooks/record-pr-review.ts checkpoint <replan|asked> "<診断メモ>"\n';
+  } else {
+    decide =
+      `2. ${checkpointReasonText(state.reason, state.counts)}ので、AskUserQuestion でユーザーに続行か方針変更かを確認し、答えを得てから、\n` +
+      `   bun .claude/hooks/record-pr-review.ts checkpoint ${ASKED} "<診断メモ>"\n`;
+  }
   return (
     `振り返りが必要です（指摘件数の推移: ${trendText(state.counts)}）。このラウンドの記録は保留しました。\n` +
     '次の順に進めてください。\n' +
@@ -135,10 +145,14 @@ const state =
 const flagText = flagArgs.map((flag) => `、${flag}`).join('');
 console.log(`ラウンド ${roundCount} を記録（指摘 ${countArg} 件${flagText}）。${state}。`);
 if (verdict.next.status === 'due' && !converged) {
-  const { counts, ask } = verdict.next;
+  const { counts, reason } = verdict.next;
   console.log(
     `次のラウンドに進む前に振り返りが必要です（指摘件数の推移: ${trendText(counts)}）。件数が減っていても、指摘の中身を分類して構造的原因を確認します。` +
-      (ask === null ? '' : `${askReasonText(ask, counts)}ので、ユーザーへの確認が必須です。`) +
+      (reason === null
+        ? ''
+        : reason.kind === 'stalled'
+          ? `${checkpointReasonText(reason, counts)}ため、continue は選べません。依頼の範囲内で再計画できるか検討してください。`
+          : `${checkpointReasonText(reason, counts)}ので、ユーザーへの確認が必須です。`) +
       '手順は .claude/skills/pr-review-loop/SKILL.md の「振り返り」にあります。',
   );
 }
