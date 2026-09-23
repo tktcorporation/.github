@@ -11,6 +11,8 @@ interface ReviewComment {
   id: number;
   commit_id: string;
   created_at: string;
+  pull_request_review_id?: number | null;
+  in_reply_to_id?: number;
   user: { login: string } | null;
 }
 
@@ -91,12 +93,15 @@ export async function fetchGitHubFeedback(tree: string): Promise<GitHubFeedback>
     return { kind: 'unavailable', reason: 'レビュー本文の項目が不足しています' };
   }
   const login = me.text().trim().toLowerCase();
+  const reviewedHeads = new Map(reviews.map((review) => [review.id, review.commit_id]));
   const observations = [
-    ...comments.filter((comment) => comment.user?.login.toLowerCase() !== login)
-      .map((comment) => ({ at: comment.created_at, id: comment.id, head: comment.commit_id,
+    ...comments.filter((comment) => comment.user?.login.toLowerCase() !== login &&
+      comment.in_reply_to_id === undefined)
+      .map((comment) => ({ at: comment.created_at, id: comment.id,
+        head: reviewedHeads.get(comment.pull_request_review_id ?? -1) ?? comment.commit_id,
         commentIds: [`comment:${comment.id}`] })),
     ...reviews.filter((review) => review.submitted_at !== null && review.user?.login.toLowerCase() !== login &&
-      (review.state === 'CHANGES_REQUESTED' || (review.state === 'COMMENTED' && review.body.trim() !== '')))
+      review.state === 'CHANGES_REQUESTED')
       .map((review) => ({ at: review.submitted_at!, id: review.id, head: review.commit_id,
         commentIds: [`review:${review.id}`] })),
   ].sort((a, b) => a.at.localeCompare(b.at) || a.id - b.id)

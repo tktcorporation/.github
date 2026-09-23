@@ -159,8 +159,13 @@ const nagged = new Set(
 const stateOf = (thread: Thread) => `${thread.id}:${thread.comments.nodes[0]?.databaseId ?? ''}`;
 const fresh = waiting.filter((thread) => !nagged.has(stateOf(thread)));
 if (fresh.length === 0) process.exit(0);
-// 指摘を知らせた時点のラウンド数を記録し、修正後の push で再レビューを二重に要求しない。
-await refreshFeedback(input);
+// 観測できないときは通知済みにせず、次の Stop で再試行する。
+const observed = await refreshFeedback(input);
+if (observed.kind !== 'found') {
+  console.log(JSON.stringify({ decision: 'block', reason:
+    `PR #${number} の指摘を履歴に記録できませんでした。bun .claude/hooks/observe-pr-feedback.ts を再実行し、成功を確認してからレビューを始めてください。` }));
+  process.exit(0);
+}
 if (naggedPath) {
   await mkdir(dirname(naggedPath), { recursive: true }).catch(() => undefined);
   await Bun.write(naggedPath, `${[...nagged, ...fresh.map(stateOf)].join('\n')}\n`).catch(
