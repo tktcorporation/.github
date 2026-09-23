@@ -27,7 +27,7 @@ switch (judgeExternalPush(history, rounds, sha)) {
     );
   case 'review_locally':
     block(
-      '外部レビュー指摘が届いた後のセルフレビューが現在の HEAD で収束していません。.claude/skills/pr-review-loop/SKILL.md の手順で差分全体をレビューし、bun .claude/hooks/record-pr-review.ts で記録してから push してください。',
+      '外部レビュー指摘の観測後に 2 ラウンドのセルフレビューが現在の HEAD で収束していません。.claude/skills/pr-review-loop/SKILL.md の手順で差分全体をレビューし、bun .claude/hooks/record-pr-review.ts で記録してから push してください。',
     );
   case 'allow':
     break;

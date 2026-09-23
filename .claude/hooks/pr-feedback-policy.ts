@@ -94,13 +94,14 @@ export function judgeExternalPush(
   currentSha: string,
 ): PushVerdict {
   if (needsUserDecision(history)) return 'consult_user';
-  if (history.reviewedCommentCount >= history.seenComments.length) return 'allow';
-  if (
-    rounds.length <= history.roundsAtLastFeedback ||
-    (history.consultation.kind === 'answered' &&
-      rounds.length <= history.consultation.roundsAtConsultation) ||
-    judgeConvergence(rounds, currentSha).kind !== 'converged'
-  ) {
+  // push 失敗後に HEAD が変わった場合、以前の通過記録で新しい差分を通さない。
+  if (history.reviewedCommentCount >= history.seenComments.length &&
+      rounds.at(-1)?.sha === currentSha) return 'allow';
+  const baseline = Math.max(
+    history.roundsAtLastFeedback,
+    history.consultation.kind === 'answered' ? history.consultation.roundsAtConsultation : 0,
+  );
+  if (judgeConvergence(rounds.slice(baseline), currentSha).kind !== 'converged') {
     return 'review_locally';
   }
   return 'allow';

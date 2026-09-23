@@ -146,10 +146,12 @@ describe('外部指摘後の push ガード', () => {
 
       expect((await checkPush(cwd, bin, [comment(2, sha)])).code).toBe(2);
       await writeEntries([...entries, entries[1]], { cwd });
+      expect((await checkPush(cwd, bin, [comment(2, sha)])).code).toBe(2);
+      await writeEntries([...entries, entries[0], entries[1]], { cwd });
       expect((await checkPush(cwd, bin, [comment(2, sha)])).code).toBe(0);
       const newComment = [comment(3, 'next-head')];
       expect((await checkPush(cwd, bin, newComment)).code).toBe(2);
-      await writeEntries([...entries, entries[1], entries[1]], { cwd });
+      await writeEntries([...entries, entries[0], entries[1], entries[0], entries[1]], { cwd });
       expect((await checkPush(cwd, bin, newComment)).code).toBe(0);
 
       // 自分の返信は指摘に数えず、解決済みでも未観測の外部指摘は検知する。
@@ -183,12 +185,12 @@ describe('外部指摘後の push ガード', () => {
             kind: 'answered',
             through: 3,
             note: 'ユーザーの判断により再レビュー後の push を認める',
-            roundsAtConsultation: 4,
+            roundsAtConsultation: 6,
           },
         }),
       );
       expect((await checkPush(cwd, bin)).code).toBe(2);
-      await writeEntries([...entries, entries[1], entries[1], entries[1]], { cwd });
+      await writeEntries([...entries, entries[0], entries[1], entries[0], entries[1], entries[0], entries[1]], { cwd });
       expect((await checkPush(cwd, bin)).code).toBe(0);
     } finally {
       await rm(cwd, { recursive: true, force: true });
