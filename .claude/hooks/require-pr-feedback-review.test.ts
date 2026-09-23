@@ -69,6 +69,24 @@ describe('外部指摘後の push ガード', () => {
       const [code, error] = await Promise.all([child.exited, new Response(child.stderr).text()]);
       expect(error).toContain('外部レビュー指摘');
       expect(code).toBe(2);
+      const other = Bun.spawn(['bun', preBash], {
+        cwd: caller,
+        env: {
+          ...process.env,
+          PATH: `${bin}:${process.env.PATH}`,
+          CLAUDE_PROJECT_DIR: join(import.meta.dir, '../..'),
+          FAKE_TARGET: target,
+        },
+        stdin: new Blob([JSON.stringify({ cwd: caller, tool_input: { command: `git -C ${target} push origin other:other` } })]),
+        stdout: 'pipe',
+        stderr: 'pipe',
+      });
+      const [otherCode, otherError] = await Promise.all([
+        other.exited,
+        new Response(other.stderr).text(),
+      ]);
+      expect(otherCode).toBe(2);
+      expect(otherError).toContain('別ブランチ');
     } finally {
       await rm(root, { recursive: true, force: true });
     }
