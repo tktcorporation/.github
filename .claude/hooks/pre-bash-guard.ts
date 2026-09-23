@@ -392,10 +392,22 @@ async function run(path: string, cwd?: string): Promise<void> {
   if (status !== 0) process.exit(status);
 }
 if (isPrCreateCommand(command)) await run('.claude/hooks/require-pr-self-review.ts');
+// PreToolUse はシェル全体の実行前に一度だけ動く。先行コマンドが HEAD を変えると、
+// この時点で検査した SHA と実際に push される SHA が異なる。
+const HEAD_MUTATIONS = new Set([
+  'commit', 'merge', 'rebase', 'cherry-pick', 'revert', 'reset', 'checkout', 'switch',
+  'pull', 'am', 'apply', 'stash',
+]);
+let pendingCommit = false;
 for (const entry of commands) {
   if (!entry.direct || entry.name !== 'git') continue;
   const target = gitTarget(entry);
-  if (wordValue(target.subcommand) !== 'push') continue;
+  const subcommand = wordValue(target.subcommand);
+  if (subcommand === 'add' || subcommand === 'rm' || subcommand === 'mv' ||
+      HEAD_MUTATIONS.has(subcommand ?? '')) pendingCommit = true;
+  if (subcommand !== 'push') continue;
+  if (pendingCommit)
+    block('同じ Bash コマンド内で git add/commit 等の後に push すると、push 前に確定した HEAD をレビューできません。変更・commit を先に実行し、git push を別の Bash コマンドで実行してください。');
   if (target.directory.kind === 'known')
     await run('.claude/hooks/require-pr-feedback-review.ts', target.directory.path);
   else
