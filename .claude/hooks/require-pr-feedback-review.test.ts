@@ -202,7 +202,7 @@ describe('外部指摘後の push ガード', () => {
       );
       const blocked = await checkPush(cwd, bin);
       expect(blocked.code).toBe(2);
-      expect(blocked.error).toContain('ユーザーに相談');
+      expect(blocked.error).toContain('ユーザーに採る方針を尋ねてください');
       await Bun.write(
         historyPath,
         JSON.stringify({

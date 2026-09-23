@@ -204,7 +204,7 @@ const summary = fresh
   .join('\n');
 const guidance =
   needsUserDecision(history)
-    ? `この PR では異なる HEAD への外部指摘が ${history.heads.length} 回続いています。ここで修正と push を止め、全ラウンドの指摘を根本原因でまとめ、現行の設計と要件を見直した結果をユーザーに示して相談してください。答えを得た後、bun .claude/hooks/record-pr-feedback.ts asked "<診断とユーザーの判断>" で記録するまで次の push は通りません。`
+    ? `この PR では異なる HEAD への外部指摘が ${history.heads.length} 回続いています。修正と push を止め、各回の指摘とローカルレビューで見逃した理由を原因ごとにまとめ、なぜレビューが続くのか診断してください。設計・要件・レビュー手順を変える具体案を効果と影響で比較し、推奨案を添えてユーザーに採る方針を尋ねてください。レビューを続けるかだけを聞かないでください。答えを得た後、bun .claude/hooks/record-pr-feedback.ts asked "<診断とユーザーが選んだ方針>" で記録するまで次の push は通りません。`
     : `この PR では外部指摘が ${history.heads.length} 回目です。個別の指摘だけを直して push せず、.claude/skills/pr-review-loop/SKILL.md の手順で差分全体を再レビューし、収束させてから push してください。`;
 console.log(
   JSON.stringify({

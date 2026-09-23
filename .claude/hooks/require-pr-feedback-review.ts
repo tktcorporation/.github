@@ -41,7 +41,7 @@ const sha = await reviewTargetSha(input);
 switch (judgeExternalPush(history, rounds, sha)) {
   case 'consult_user':
     block(
-      `この PR では異なる HEAD への外部レビュー指摘が ${history.heads.length} 回続いています。修正と push を止め、根本原因と方針をユーザーに相談してください。答えを得た後に bun .claude/hooks/record-pr-feedback.ts asked "<診断とユーザーの判断>" で記録してください。`,
+      `この PR では異なる HEAD への外部レビュー指摘が ${history.heads.length} 回続いています。修正と push を止め、各回の指摘とローカルレビューで見逃した理由を根本原因ごとに整理し、なぜレビューが続くのか診断してください。設計・要件・レビュー手順を変える具体案を効果と影響で比較し、推奨案を添えてユーザーに採る方針を尋ねてください。レビューを続けるかだけの質問では足りません。答えを得た後に bun .claude/hooks/record-pr-feedback.ts asked "<診断とユーザーが選んだ方針>" で記録してください。`,
     );
   case 'review_locally':
     block(

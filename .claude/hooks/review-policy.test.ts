@@ -161,11 +161,13 @@ describe('judgeCheckpoint', () => {
     });
   });
 
-  test('停滞時は continue を拒否し、replan と asked を受理する', () => {
+  test('停滞時は診断結果と方針についてユーザーに相談するまで受理しない', () => {
     expect(judgeCheckpoint(rounds(5, 8, 6), 'continue', note, head)).toMatchObject({
-      rejection: { kind: 'must_replan_or_ask' },
+      rejection: { kind: 'must_ask', reason: { kind: 'stalled' } },
     });
-    expect(judgeCheckpoint(rounds(5, 8, 6), 'replan', note, head).kind).toBe('accept');
+    expect(judgeCheckpoint(rounds(5, 8, 6), 'replan', note, head)).toMatchObject({
+      rejection: { kind: 'must_ask', reason: { kind: 'stalled' } },
+    });
     expect(judgeCheckpoint(rounds(5, 8, 6), ASKED, note, head).kind).toBe('accept');
   });
 

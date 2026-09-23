@@ -243,8 +243,7 @@ export function judgeRound(entries: Entry[], round: Round): RoundVerdict {
 
 export type CheckpointRejection =
   | { kind: 'not_due'; counts: number[] }
-  | { kind: 'must_ask'; reason: Extract<CheckpointReason, { kind: 'long' }>; counts: number[] }
-  | { kind: 'must_replan_or_ask'; counts: number[] }
+  | { kind: 'must_ask'; reason: CheckpointReason; counts: number[] }
   | { kind: 'note_too_short' };
 export type CheckpointVerdict =
   | { kind: 'accept'; entries: Entry[] }
@@ -260,16 +259,10 @@ export function judgeCheckpoint(
   if (state.status === 'clear') {
     return { kind: 'reject', rejection: { kind: 'not_due', counts: state.counts } };
   }
-  if (state.reason?.kind === 'long' && decision !== ASKED) {
+  if (state.reason !== null && decision !== ASKED) {
     return {
       kind: 'reject',
       rejection: { kind: 'must_ask', reason: state.reason, counts: state.counts },
-    };
-  }
-  if (state.reason?.kind === 'stalled' && decision === 'continue') {
-    return {
-      kind: 'reject',
-      rejection: { kind: 'must_replan_or_ask', counts: state.counts },
     };
   }
   const text = normalizeNote(note);
