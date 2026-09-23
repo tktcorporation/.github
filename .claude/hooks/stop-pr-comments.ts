@@ -168,6 +168,6 @@ const summary = fresh
 console.log(
   JSON.stringify({
     decision: 'block',
-    reason: `🛑 Stop hook: PR #${number}（${url}）に未対応のレビュースレッドが ${fresh.length} 件あります。完了報告の前に pr-comments スキルの手順で「修正 / 直さない理由 / 回答」のどれかにして返信と resolve まで済ませてください。後回しにするなら、その旨と理由をユーザーへの報告に書いてください。\n${summary}`,
+    reason: `🛑 Stop hook: PR #${number}（${url}）に未対応のレビュースレッドが ${fresh.length} 件あります。完了報告の前に「修正 / 直さない理由 / 回答」のどれかにして返信と resolve まで済ませてください。後回しにするなら、その旨と理由をユーザーへの報告に書いてください。\n${summary}`,
   }),
 );
