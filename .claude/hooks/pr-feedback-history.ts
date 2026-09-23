@@ -94,4 +94,3 @@ export function parseExternalReviewHistory(text: string, pr: number): ParsedHist
     },
   };
 }
-

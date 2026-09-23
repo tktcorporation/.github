@@ -138,7 +138,7 @@ const roundCount = roundsOf(verdict.entries).length;
 const converged = verdict.convergence.kind === 'converged';
 const state =
   verdict.convergence.kind === 'converged'
-    ? '収束。gh pr create に進める'
+    ? 'PR 作成前レビューは収束。既存 PR の外部指摘後は、指摘の観測以降に 2 ラウンドのレビューが必要'
     : `未収束（${convergenceReason(verdict.convergence)}）`;
 const flagText = flagArgs.map((flag) => `、${flag}`).join('');
 console.log(`ラウンド ${roundCount} を記録（指摘 ${countArg} 件${flagText}）。${state}。`);
