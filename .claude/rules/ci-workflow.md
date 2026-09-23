@@ -49,7 +49,7 @@ push をまとめるのは、待たせる相手がいないときの話になる
 2. 未解決のスレッドを 1 つ残らず「修正して push / 直さない理由を返信 / 質問に回答」のどれかにし、対応したスレッドは resolve する
 3. 修正を push したら 1 に戻る。収束しない指摘は報告に残して判断を仰ぐ
 
-手順の詳細（コメントの取得コマンド、返信と resolve の方法）は `pr-comments` スキルにある。Stop フック（`.claude/hooks/stop-pr-comments.ts`）が、未対応スレッドを残したままの完了を止める。
+Stop フック（`.claude/hooks/stop-pr-comments.ts`）が、未対応スレッドを残したままの完了を止める。
 
 ## changeset
 
