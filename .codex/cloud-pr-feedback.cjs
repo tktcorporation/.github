@@ -178,8 +178,14 @@ module.exports = async function cloudPrFeedback(tools, options) {
     300,
   );
   if (pushed.exit_code !== 0) throw new Error(`Push failed: ${pushed.output}`);
-  const remote = await run(`git ls-remote origin ${quote(`refs/heads/${branch}`)}`, 100);
-  if (remote.exit_code !== 0 || remote.output.trim().split(/\s+/)[0] !== record.localHead)
+  // ゲート側の remoteHeadSha と同じく、15 秒で打ち切り、認証プロンプトを出さず、ref 名の
+  // 完全一致で読む（先頭行を読むと `a/refs/heads/<branch>` のような別ブランチを拾う）。
+  const remote = await run('GIT_TERMINAL_PROMPT=0 timeout 15 git ls-remote --heads origin', 12000);
+  const finalHead = remote.output
+    .split('\n')
+    .map((line) => line.trim().split(/\s+/))
+    .find(([, ref]) => ref === `refs/heads/${branch}`)?.[0];
+  if (remote.exit_code !== 0 || finalHead !== record.localHead)
     throw new Error('Push completed but final remote head could not be verified');
   return { kind: 'pushed-verified', ...record, finalHead: record.localHead };
 };

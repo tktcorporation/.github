@@ -426,8 +426,12 @@ describe('connector feedback boundary', () => {
           return { exit_code: 0, output: `${moved ? head : reviewed}\n` };
         if (cmd === 'git remote get-url --push --all origin')
           return { exit_code: 0, output: `${destination}\n` };
-        if (cmd.startsWith('git ls-remote'))
-          return { exit_code: 0, output: `${reviewed}\trefs/heads/${branch}\n` };
+        if (cmd.includes('git ls-remote'))
+          // 先頭に紛らわしい名前の別ブランチを置き、ref 名の完全一致で読むことを確かめる。
+          return {
+            exit_code: 0,
+            output: `${head}\trefs/heads/a/refs/heads/${branch}\n${reviewed}\trefs/heads/${branch}\n`,
+          };
         return { exit_code: 0, output: 'pushed' };
       },
       patch: async () => ({}),
