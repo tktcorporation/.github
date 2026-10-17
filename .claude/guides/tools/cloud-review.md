@@ -10,6 +10,8 @@
 
 ```bash
 # 既定ブランチ名はリポジトリごとに異なるため origin/HEAD から導く。
+# クラウドの clone では origin/HEAD が未設定のことがあるので、先にリモートから設定する。
+git remote set-head origin --auto
 default_branch="$(git symbolic-ref --short refs/remotes/origin/HEAD | sed 's@^origin/@@')"
 git fetch origin "$default_branch"
 git rev-parse HEAD "origin/$default_branch"

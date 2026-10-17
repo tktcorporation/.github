@@ -5,7 +5,6 @@ import { join } from 'node:path';
 import cloudPrFeedback from '../../.codex/cloud-pr-feedback.cjs';
 import {
   assertGitBranch,
-  bunTemporal,
   gitValue,
   matchesGitHubRemote,
   requireEvidence,
@@ -13,17 +12,14 @@ import {
   validateConnectorRows,
 } from './cloud-pr-feedback.ts';
 import { currentBranch } from './hook-utils.ts';
+import { formatIsoUtc, nowMs, parseIsoUtcMs } from './iso-time.ts';
 import { parseGitHubFeedback } from './pr-feedback-github.ts';
 import { reviewCountFile } from './review-count.ts';
 
 const head = 'a'.repeat(40);
 const reviewed = 'b'.repeat(40);
-const currentUtc = () => bunTemporal.Now.instant().toString({ fractionalSecondDigits: 3 });
-const currentToolTime = () =>
-  bunTemporal.Now.instant()
-    .toString({ smallestUnit: 'second' })
-    .replace('T', ' ')
-    .replace('Z', ' UTC');
+const currentUtc = () => formatIsoUtc(nowMs());
+const currentToolTime = () => formatIsoUtc(nowMs(), 0).replace('T', ' ').replace('Z', ' UTC');
 const options = {
   cwd: '/workspace/example',
   sourceTree: '/workspace/tooling',
@@ -316,12 +312,9 @@ describe('connector feedback boundary', () => {
     expect(patches).toHaveLength(1);
     expect(commands[1]).toContain('<');
     expect(commands.at(-1)).toContain('rm -rf');
-    expect(
-      Math.abs(
-        bunTemporal.Now.instant().epochMilliseconds -
-          bunTemporal.Instant.from(evidence.observedAt).epochMilliseconds,
-      ),
-    ).toBeLessThan(10_000);
+    expect(Math.abs(nowMs() - (parseIsoUtcMs(evidence.observedAt) ?? Number.NaN))).toBeLessThan(
+      10_000,
+    );
   });
 
   test('connector failure and prepush refusal never call git push', async () => {

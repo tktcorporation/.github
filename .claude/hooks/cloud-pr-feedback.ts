@@ -12,6 +12,7 @@ import {
 } from './pr-feedback-policy.ts';
 import { writeCloudPushGrant } from './cloud-push-grant.ts';
 import { isRecord } from './hook-utils.ts';
+import { nowMs, parseIsoUtcMs } from './iso-time.ts';
 import { remoteHeadSha } from './require-pr-self-review-mcp.ts';
 import { reviewTargetSha } from './review-count.ts';
 import { MIN_NOTE_LENGTH, normalizeNote } from './review-policy.ts';
@@ -27,23 +28,6 @@ type CloudEvidence = {
   reviews: unknown;
   consultationNote?: string;
 };
-
-type BunInstant = {
-  readonly epochMilliseconds: number;
-  toString(options?: { fractionalSecondDigits?: number; smallestUnit?: 'second' }): string;
-};
-
-// Bun 1.4 provides Temporal at runtime; the current TypeScript lib omits its global declaration.
-// Only the cloud feedback path loads this module, so older Bun versions fail this path closed
-// without affecting the push guards that run everywhere.
-declare global {
-  const Temporal: {
-    Instant: { from(value: string): BunInstant };
-    Now: { instant(): BunInstant };
-  };
-}
-
-export const bunTemporal = Temporal;
 
 const sha = (value: unknown): value is string =>
   typeof value === 'string' && /^[0-9a-f]{40}$/.test(value);
@@ -61,11 +45,7 @@ export function matchesGitHubRemote(remote: string, repository: string): boolean
 }
 
 function instantMilliseconds(value: string): number | null {
-  try {
-    return bunTemporal.Instant.from(value).epochMilliseconds;
-  } catch {
-    return null;
-  }
+  return parseIsoUtcMs(value);
 }
 
 // hook は同期先のどのリポジトリでも依存なしで動く必要があるため、スキーマライブラリを使わずに検査する。
@@ -108,7 +88,7 @@ export function requireEvidence(value: unknown): CloudEvidence {
   if (
     !/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/.test(record.observedAt) ||
     observedTime === null ||
-    Math.abs(bunTemporal.Now.instant().epochMilliseconds - observedTime) > 120_000
+    Math.abs(nowMs() - observedTime) > 120_000
   )
     throw new Error('観測時刻が不正です');
   return record;

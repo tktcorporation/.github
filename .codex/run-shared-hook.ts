@@ -55,10 +55,24 @@ if (input.tool_name === 'exec_command') {
 }
 input.cwd ??= tree;
 
+// pre-bash-guard.ts は全コマンドで動くが、レビューを強制するのは push と PR 作成だけ。
+// 解析用の依存を初回に入れられないオフライン環境などで hook 自体が落ちたとき、それ以外の
+// コマンドまで止めないよう、拒否に倒すのは push / PR 作成になり得るコマンドに限る。
+// 判定は取りこぼしを避けるため広めに取る（該当しうる文字列を含めば拒否側）。
+const shellCommand =
+  typeof input.tool_input === 'object' && typeof input.tool_input?.command === 'string'
+    ? input.tool_input.command
+    : undefined;
+const failsClosed =
+  isPrGate &&
+  (basename(hookPath) !== 'pre-bash-guard.ts' ||
+    shellCommand === undefined ||
+    /\bgit\b[\s\S]*\bpush\b|\bgh\b[\s\S]*\bpr\b/.test(shellCommand));
+
 /** Codex に返す、意図しない hook 失敗の診断。exit 2 以外は実行を止める指示ではない。 */
 function unexpectedFailure(status: number, stderr: string): string {
   const detail = stderr.trim().slice(0, 4_000);
-  if (isPrGate) refuse(`exit ${status}: ${detail}`);
+  if (failsClosed) refuse(`exit ${status}: ${detail}`);
   const lines = [
     `⚠️ shared hook failed: \`${hookPath}\` (exit ${status})。`,
     'この失敗は明示的なブロックではないため、元のツール実行は継続した。hook の修正が必要か確認すること。',

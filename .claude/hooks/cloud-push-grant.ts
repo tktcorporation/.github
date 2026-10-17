@@ -10,11 +10,8 @@
 import { mkdir, rm } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { isRecord } from './hook-utils.ts';
+import { nowMs } from './iso-time.ts';
 import { externalReviewFile } from './review-count.ts';
-
-// このモジュールは push 前のフックが必ず読み込むため、Bun の版に依存する Temporal を使わない。
-// performance.timeOrigin + performance.now() はどの版でも UNIX エポックからのミリ秒を返す。
-const nowMs = (): number => performance.timeOrigin + performance.now();
 
 /** ラッパーはゲート通過から push までを連続して実行する。それより長く残る許可は使わせない。 */
 export const CLOUD_PUSH_GRANT_TTL_MS = 120_000;
