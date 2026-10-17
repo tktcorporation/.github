@@ -12,6 +12,7 @@ import {
 } from './pr-feedback-policy.ts';
 import { bunTemporal, writeCloudPushGrant } from './cloud-push-grant.ts';
 import { isRecord } from './hook-utils.ts';
+import { remoteHeadSha } from './require-pr-self-review-mcp.ts';
 import { reviewTargetSha } from './review-count.ts';
 import { MIN_NOTE_LENGTH, normalizeNote } from './review-policy.ts';
 
@@ -211,9 +212,11 @@ export async function processCloudFeedback(
   ) {
     throw new Error('PR の番号・状態・head・repository が一致しません');
   }
-  const remote = await gitValue(cwd, 'ls-remote', 'origin', `refs/heads/${evidence.branch}`);
-  const remoteHead = remote.split(/\s+/)[0];
-  if (remoteHead !== head.sha) throw new Error('PR head と remote head が一致しません');
+  // remoteHeadSha は ls-remote に上限時間と非対話の設定を付ける。ラッパーはこのスクリプトの
+  // 完了を有限時間しか待たないため、リモート確認がそれより長く掛かり続ける経路を作らない。
+  const remoteHead = await remoteHeadSha(cwd, evidence.branch);
+  if (remoteHead === undefined || remoteHead !== head.sha)
+    throw new Error('PR head と remote head が一致しません');
   const parsed = parseGitHubFeedback(
     { number: evidence.prNumber, headRefOid: head.sha },
     evidence.viewerLogin,

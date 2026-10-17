@@ -95,7 +95,10 @@ module.exports = async function cloudPrFeedback(tools, options) {
     const target = repository.toLowerCase();
     return path === target || path === `${target}.git`;
   };
-  const run = async (cmd, maxOutputTokens) => {
+  // polls は 1 秒ごとの完了確認の回数。待ち切れないと失敗を返すが、コマンド自体は走り続けるため、
+  // 待たれる側の上限時間より長く取る。ゲートのリモート確認は 15 秒で打ち切られる
+  // （.claude/hooks/require-pr-self-review-mcp.ts の REMOTE_FETCH_TIMEOUT_MS）。
+  const run = async (cmd, maxOutputTokens, polls = 30) => {
     let result = await tools.exec({
       cmd,
       workdir: cwd,
@@ -103,7 +106,7 @@ module.exports = async function cloudPrFeedback(tools, options) {
       max_output_tokens: maxOutputTokens,
     });
     let output = result.output ?? '';
-    for (let attempt = 0; result.session_id !== undefined && attempt < 30; attempt++) {
+    for (let attempt = 0; result.session_id !== undefined && attempt < polls; attempt++) {
       if (!tools.poll)
         throw new Error(
           `Command still running in session ${result.session_id}; do not retry before reconciliation`,
@@ -136,7 +139,7 @@ module.exports = async function cloudPrFeedback(tools, options) {
     );
     if (saved?.isError) throw new Error('Could not save connector evidence');
     const command = `${quote(bun)} ${quote(script)} ${mode === 'push' ? 'prepush' : mode} < ${quote(snapshotPath)}`;
-    check = await run(command, 1000);
+    check = await run(command, 1000, 60);
   } finally {
     const removed = await run(`rm -rf -- ${quote(directory)}`, 100);
     cleanupFailed = removed.exit_code !== 0;
@@ -171,6 +174,8 @@ module.exports = async function cloudPrFeedback(tools, options) {
   const pushed = await run(
     `git push origin ${quote(`${record.localHead}:refs/heads/${branch}`)}`,
     1000,
+    // git push 自体には上限時間が無い。大きな push でも結果を見届けられるよう長めに待つ。
+    300,
   );
   if (pushed.exit_code !== 0) throw new Error(`Push failed: ${pushed.output}`);
   const remote = await run(`git ls-remote origin ${quote(`refs/heads/${branch}`)}`, 100);
