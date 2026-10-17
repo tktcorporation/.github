@@ -52,6 +52,10 @@ describe('Codex アダプターで pre-bash-guard.ts 自体が落ちたとき', 
       'ls\ngit push',
       'git branch -D main',
       'pnpm test',
+      'rg --pre ./x.sh pattern file',
+      'git diff --output=README.md HEAD~1 HEAD',
+      'git log --ext-diff',
+      '   ',
     ]) {
       expect((await runCrashingGuard(command)).code).toBe(2);
     }
