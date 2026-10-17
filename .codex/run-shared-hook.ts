@@ -12,6 +12,12 @@ function refuse(detail: string): never {
   process.stderr.write(`shared hook blocked: ${hookPath}: ${detail}\n`);
   process.exit(2);
 }
+/** 想定外の入力。PR 作成ゲートは作成を通さず、それ以外の hook は実行せずに元の処理を続ける。 */
+function invalidInput(detail: string): never {
+  if (isPrGate) refuse(detail);
+  process.stderr.write(`shared hook skipped: ${hookPath}: ${detail}\n`);
+  process.exit(0);
+}
 // Claude Code が hook に渡すものと同じ形にする: CLAUDE_PROJECT_DIR は状態ファイル用の
 // 主チェックアウト、入力の cwd は lint / 検証の対象になる作業ツリー（worktree）。
 process.env.CLAUDE_PROJECT_DIR = await projectDirectory();
@@ -33,19 +39,18 @@ try {
   }
   input = parsed;
 } catch {
-  if (isPrGate) refuse('invalid hook input JSON');
-  process.exit(0);
+  invalidInput('invalid hook input JSON');
 }
 if (input.tool_name === 'exec_command') {
   const shell = input.tool_input;
   if (!shell || typeof shell !== 'object' || typeof shell.cmd !== 'string') {
-    refuse('exec_command requires tool_input.cmd');
+    invalidInput('exec_command requires tool_input.cmd');
   }
   if (shell.command !== undefined && shell.command !== shell.cmd) {
-    refuse('conflicting tool_input.cmd and command');
+    invalidInput('conflicting tool_input.cmd and command');
   }
   if (shell.workdir !== undefined && typeof shell.workdir !== 'string') {
-    refuse('invalid tool_input.workdir');
+    invalidInput('invalid tool_input.workdir');
   }
   // Host cwd identifies the session; workdir identifies the actual command.
   // Resolve relative paths against the host process, like exec_command does.
@@ -103,7 +108,7 @@ const runHook = async (payload: unknown): Promise<string> => {
   // exit 2 は pre-bash-guard のような明示的な拒否。ここで 0 にすると安全上の block を
   // すり抜ける。0 / 2 以外は未処理例外・外部コマンド失敗・シグナル終了などの異常終了で、
   // Codex が hook 名も stderr も表示せず「Hook failed」だけを繰り返すので、診断を注入して
-  // fail-open にする。
+  // fail-open にする（PR 作成ゲートだけは unexpectedFailure が拒否する）。
   if (status !== 0 && status !== 2) return unexpectedFailure(status, stderr);
   if (status === 2) {
     if (stderr) process.stderr.write(stderr);

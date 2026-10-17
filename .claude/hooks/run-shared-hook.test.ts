@@ -55,6 +55,19 @@ describe('Codex アダプターで hook 自体が落ちたとき', () => {
   );
 
   test(
+    '想定外の形の exec_command 入力では、hook を実行せずに元の実行を続ける',
+    async () => {
+      const results = await Promise.all(
+        [JSON.stringify({ cmd: 'ls' }), { command: ['ls'] }].map((tool_input) =>
+          runCrashingHook('pre-bash-guard.ts', { tool_name: 'exec_command', tool_input }),
+        ),
+      );
+      expect(results.map((result) => result.code)).toEqual([0, 0]);
+    },
+    SPAWN_TEST_TIMEOUT_MS,
+  );
+
+  test(
     'MCP 経由の PR 作成ゲートは、落ちたときも作成を通さない',
     async () => {
       const result = await runCrashingHook('require-pr-self-review-mcp.ts', {
