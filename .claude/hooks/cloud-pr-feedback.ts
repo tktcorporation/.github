@@ -10,6 +10,7 @@ import {
   markFeedbackReviewed,
   needsUserDecision,
 } from './pr-feedback-policy.ts';
+import { bunTemporal, writeCloudPushGrant } from './cloud-push-grant.ts';
 import { isRecord } from './hook-utils.ts';
 import { reviewTargetSha } from './review-count.ts';
 import { MIN_NOTE_LENGTH, normalizeNote } from './review-policy.ts';
@@ -26,20 +27,7 @@ type CloudEvidence = {
   consultationNote?: string;
 };
 
-type BunInstant = {
-  readonly epochMilliseconds: number;
-  toString(options?: { fractionalSecondDigits?: number; smallestUnit?: 'second' }): string;
-};
-
-// Bun 1.4 provides Temporal at runtime; the current TypeScript lib omits its global declaration.
-declare global {
-  const Temporal: {
-    Instant: { from(value: string): BunInstant };
-    Now: { instant(): BunInstant };
-  };
-}
-
-export const bunTemporal = Temporal;
+export { bunTemporal };
 
 const sha = (value: unknown): value is string =>
   typeof value === 'string' && /^[0-9a-f]{40}$/.test(value);
@@ -294,6 +282,9 @@ export async function processCloudFeedback(
   if (verdict !== 'allow') throw new Error(`外部レビューの push ゲート: ${verdict}`);
   if (observed.history.reviewedCommentCount < comments.length)
     await Bun.write(observed.path, JSON.stringify(markFeedbackReviewed(observed.history)));
+  // 続く git push の PreToolUse hook は gh で同じ判定をやり直す。gh が使えない環境でも
+  // この判定結果で通れるよう、許可した HEAD に限って短命の許可を残す。
+  await writeCloudPushGrant(input, { branch, head: currentHead });
   return { ...summary, verdict };
 }
 

@@ -1,7 +1,8 @@
 #!/usr/bin/env bun
 /** 外部レビュー指摘を受けた PR の修正を、ローカルのレビューループが収束する前に push させない。 */
 import { $ } from 'bun';
-import { readInput } from './hook-utils.ts';
+import { consumeCloudPushGrant } from './cloud-push-grant.ts';
+import { currentBranch, readInput } from './hook-utils.ts';
 import { refreshFeedback } from './pr-feedback-observation.ts';
 import { judgeExternalPush, markFeedbackReviewed } from './pr-feedback-policy.ts';
 import { reviewTargetSha } from './review-count.ts';
@@ -15,7 +16,15 @@ function block(message: string): never {
 const input = await readInput();
 const feedback = await refreshFeedback(input);
 if (feedback.kind === 'no_pr') process.exit(0);
-if (feedback.kind === 'unavailable') block(feedback.reason);
+if (feedback.kind === 'unavailable') {
+  // gh で指摘を取得できない環境では、GitHub コネクタ経由のゲートが直前に許可した push だけを通す。
+  const grantError = await consumeCloudPushGrant(input, {
+    branch: await currentBranch(await workingTree(input)),
+    head: await reviewTargetSha(input),
+  });
+  if (grantError) block(`${feedback.reason}（${grantError}）`);
+  process.exit(0);
+}
 const { history, rounds, path: historyPath, remoteHead } = feedback;
 if (history.heads.length === 0) process.exit(0);
 const sha = await reviewTargetSha(input);
