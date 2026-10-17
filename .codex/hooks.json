@@ -46,7 +46,7 @@
             "command": "bun \"$(git rev-parse --show-toplevel)/.codex/run-shared-hook.ts\" .claude/hooks/require-pr-self-review-mcp.ts"
           }
         ],
-        "matcher": "^mcp__.+__create_pull_request$"
+        "matcher": "^mcp__.+__(?:github_)?create_pull_request$"
       }
     ],
     "PostToolUse": [
@@ -93,7 +93,7 @@
             "command": "bun \"$(git rev-parse --show-toplevel)/.codex/run-shared-hook.ts\" .claude/hooks/post-mcp-pr.ts"
           }
         ],
-        "matcher": "^mcp__.+__create_pull_request$"
+        "matcher": "^mcp__.+__(?:github_)?create_pull_request$"
       }
     ],
     "Stop": [

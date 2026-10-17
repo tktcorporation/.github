@@ -9,10 +9,12 @@
 最終レビューでは、取得した最新baseとHEADをレビュアーへ明示する。結果をテキストファイルへ保存し、最終ラウンドの記録に添える。
 
 ```bash
-git fetch origin main
-git rev-parse HEAD origin/main
+# 既定ブランチ名はリポジトリごとに異なるため origin/HEAD から導く。
+default_branch="$(git symbolic-ref --short refs/remotes/origin/HEAD | sed 's@^origin/@@')"
+git fetch origin "$default_branch"
+git rev-parse HEAD "origin/$default_branch"
 # この2つのSHAの差分を独立レビュアーが確認した後に実行する。
-bun .claude/hooks/record-pr-review.ts 0 codex --base origin/main --evidence /tmp/final-review.txt
+bun .claude/hooks/record-pr-review.ts 0 codex --base "origin/$default_branch" --evidence /tmp/final-review.txt
 ```
 
 件数・`accepted`・`codex` は実際の結果と既存ルールに従う。例の0を結果を確認せず記録しない。保存される証跡はbase/head、レポート本文とハッシュ、ラウンド記録のハッシュであり、独立実行を認証する署名ではない。
@@ -21,7 +23,7 @@ bun .claude/hooks/record-pr-review.ts 0 codex --base origin/main --evidence /tmp
 
 ## functions.execから作成する
 
-以下の `cwd`・SHA・本文・コネクタ名は実際の作業対象に合わせる。BunがPATHに無い場合は、`bun` に確認済みの実行ファイルの絶対パスを渡す。ソースはレビューした作業ツリーから読み込む。
+以下の `cwd`・SHA・base ブランチ名・本文・コネクタ名は実際の作業対象に合わせる。BunがPATHに無い場合は、`bun` に確認済みの実行ファイルの絶対パスを渡す。ソースはレビューした作業ツリーから読み込む。
 
 ```javascript
 const cwd = '/workspace/repository/worktree';
@@ -48,7 +50,7 @@ const result = await module.exports(
     request: {
       repository_full_name: 'owner/repository',
       head: 'feature-branch',
-      base: 'main',
+      base: 'DEFAULT_BRANCH',
       draft: true,
       title: '変更内容',
       body: '背景・解決内容・検証結果',
