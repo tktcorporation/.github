@@ -59,16 +59,13 @@ input.cwd ??= tree;
 // 原則として拒否する。ただし調査用のコマンドまで止めると原因を確かめられないため、シェル記法を
 // 含まず、読み取り専用と確かめられる単純なコマンドに限って通す。push や PR 作成を検出して
 // 止める形にしないのは、引用符や展開で文字列の判定をすり抜けられるため。
-// rg は --pre で任意のコマンドを実行できるため含めない。
+// 実行や書き込みの手段を持たないコマンドだけを並べる。rg は --pre で任意のコマンドを実行でき、
+// git は .git/config の設定（core.fsmonitor、diff.external など）で外部コマンドを起動できるため
+// 含めない。
 const READ_ONLY_PROGRAMS = new Set(['ls', 'cat', 'head', 'tail', 'pwd', 'wc', 'grep']);
-const READ_ONLY_GIT = new Set(['status', 'log', 'diff', 'show', 'rev-parse']);
 function isPlainReadOnly(command: string): boolean {
   if (!/^[\w ./=:@%+,-]+$/.test(command)) return false;
-  const [program, subcommand, ...args] = command.trim().split(/ +/);
-  // git はオプションで書き込み（--output）や外部コマンドの実行（--ext-diff、-c）ができるため、
-  // オプションを一切受け付けない。
-  if (program === 'git')
-    return READ_ONLY_GIT.has(subcommand ?? '') && args.every((arg) => !arg.startsWith('-'));
+  const [program] = command.trim().split(/ +/);
   return READ_ONLY_PROGRAMS.has(program ?? '');
 }
 const shellCommand =
