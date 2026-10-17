@@ -55,10 +55,18 @@ if (input.tool_name === 'exec_command') {
 }
 input.cwd ??= tree;
 
-// pre-bash-guard.ts は全コマンドで動くが、レビューを強制するのは push と PR 作成だけ。
-// 解析用の依存を初回に入れられないオフライン環境などで hook 自体が落ちたとき、それ以外の
-// コマンドまで止めないよう、拒否に倒すのは push / PR 作成になり得るコマンドに限る。
-// 判定は取りこぼしを避けるため広めに取る（該当しうる文字列を含めば拒否側）。
+// pre-bash-guard.ts 自体が落ちたとき（解析用の依存を初回に入れられないオフライン環境など）は
+// 原則として拒否する。ただし調査用のコマンドまで止めると原因を確かめられないため、シェル記法を
+// 含まず、読み取り専用と確かめられる単純なコマンドに限って通す。push や PR 作成を検出して
+// 止める形にしないのは、引用符や展開で文字列の判定をすり抜けられるため。
+const READ_ONLY_PROGRAMS = new Set(['ls', 'cat', 'head', 'tail', 'pwd', 'wc', 'grep', 'rg']);
+const READ_ONLY_GIT = new Set(['status', 'log', 'diff', 'show', 'rev-parse']);
+function isPlainReadOnly(command: string): boolean {
+  if (!/^[\w ./=:@%+,-]+$/.test(command)) return false;
+  const [program, subcommand] = command.trim().split(/ +/);
+  if (program === 'git') return READ_ONLY_GIT.has(subcommand ?? '');
+  return READ_ONLY_PROGRAMS.has(program ?? '');
+}
 const shellCommand =
   typeof input.tool_input === 'object' && typeof input.tool_input?.command === 'string'
     ? input.tool_input.command
@@ -67,7 +75,7 @@ const failsClosed =
   isPrGate &&
   (basename(hookPath) !== 'pre-bash-guard.ts' ||
     shellCommand === undefined ||
-    /\bgit\b[\s\S]*\bpush\b|\bgh\b[\s\S]*\bpr\b/.test(shellCommand));
+    !isPlainReadOnly(shellCommand));
 
 /** Codex に返す、意図しない hook 失敗の診断。exit 2 以外は実行を止める指示ではない。 */
 function unexpectedFailure(status: number, stderr: string): string {

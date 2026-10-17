@@ -33,14 +33,26 @@ async function runCrashingGuard(command: string): Promise<{ code: number; stdout
 }
 
 describe('Codex アダプターで pre-bash-guard.ts 自体が落ちたとき', () => {
-  test('push・PR 作成以外のコマンドは警告を出して続行する', async () => {
-    const result = await runCrashingGuard('ls -la');
-    expect(result.code).toBe(0);
-    expect(result.stdout).toContain('shared hook failed');
+  test('シェル記法を含まない読み取り専用のコマンドは警告を出して続行する', async () => {
+    for (const command of ['ls -la', 'git status', 'cat .claude/hooks/package.json']) {
+      const result = await runCrashingGuard(command);
+      expect(result.code).toBe(0);
+      expect(result.stdout).toContain('shared hook failed');
+    }
   });
 
-  test('push と PR 作成になり得るコマンドは拒否する', async () => {
-    for (const command of ['git push origin HEAD', 'git -C repo push', 'gh pr create --fill']) {
+  test('それ以外のコマンドは、引用符や展開で書き換えても拒否する', async () => {
+    for (const command of [
+      'git push origin HEAD',
+      'git -C repo push',
+      'gh pr create --fill',
+      'g""it push',
+      'sh -c "git push"',
+      'ls; git push',
+      'ls\ngit push',
+      'git branch -D main',
+      'pnpm test',
+    ]) {
       expect((await runCrashingGuard(command)).code).toBe(2);
     }
   });
