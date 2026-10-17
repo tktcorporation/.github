@@ -32,34 +32,46 @@ async function runCrashingGuard(command: string): Promise<{ code: number; stdout
   }
 }
 
-describe('Codex アダプターで pre-bash-guard.ts 自体が落ちたとき', () => {
-  test('シェル記法を含まない読み取り専用のコマンドは警告を出して続行する', async () => {
-    for (const command of ['ls -la', 'cat .claude/hooks/package.json', 'grep -rn TODO .claude']) {
-      const result = await runCrashingGuard(command);
-      expect(result.code).toBe(0);
-      expect(result.stdout).toContain('shared hook failed');
-    }
-  });
+// 1 件ごとにアダプターと hook の 2 プロセスを起動する。Bun の版や実行環境によっては
+// 起動が遅く、既定の 5 秒に収まらないため、起動は並列にし、上限も明示する。
+const SPAWN_TEST_TIMEOUT_MS = 30_000;
 
-  test('それ以外のコマンドは、引用符や展開で書き換えても拒否する', async () => {
-    for (const command of [
-      'git push origin HEAD',
-      'git -C repo push',
-      'gh pr create --fill',
-      'g""it push',
-      'sh -c "git push"',
-      'ls; git push',
-      'ls\ngit push',
-      'git branch -D main',
-      'pnpm test',
-      'rg --pre ./x.sh pattern file',
-      'git diff --output=README.md HEAD~1 HEAD',
-      'git log --ext-diff',
-      'git status',
-      'GIT_EXTERNAL_DIFF=./x git diff',
-      '   ',
-    ]) {
-      expect((await runCrashingGuard(command)).code).toBe(2);
-    }
-  });
+describe('Codex アダプターで pre-bash-guard.ts 自体が落ちたとき', () => {
+  test(
+    'シェル記法を含まない読み取り専用のコマンドは警告を出して続行する',
+    async () => {
+      const commands = ['ls -la', 'cat .claude/hooks/package.json', 'grep -rn TODO .claude'];
+      for (const result of await Promise.all(commands.map(runCrashingGuard))) {
+        expect(result.code).toBe(0);
+        expect(result.stdout).toContain('shared hook failed');
+      }
+    },
+    SPAWN_TEST_TIMEOUT_MS,
+  );
+
+  test(
+    'それ以外のコマンドは、引用符や展開で書き換えても拒否する',
+    async () => {
+      const commands = [
+        'git push origin HEAD',
+        'git -C repo push',
+        'gh pr create --fill',
+        'g""it push',
+        'sh -c "git push"',
+        'ls; git push',
+        'ls\ngit push',
+        'git branch -D main',
+        'pnpm test',
+        'rg --pre ./x.sh pattern file',
+        'git diff --output=README.md HEAD~1 HEAD',
+        'git log --ext-diff',
+        'git status',
+        'GIT_EXTERNAL_DIFF=./x git diff',
+        '   ',
+      ];
+      const results = await Promise.all(commands.map(runCrashingGuard));
+      expect(results.map((result) => result.code)).toEqual(commands.map(() => 2));
+    },
+    SPAWN_TEST_TIMEOUT_MS,
+  );
 });
