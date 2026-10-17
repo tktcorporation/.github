@@ -10,7 +10,7 @@ import {
   markFeedbackReviewed,
   needsUserDecision,
 } from './pr-feedback-policy.ts';
-import { bunTemporal, writeCloudPushGrant } from './cloud-push-grant.ts';
+import { writeCloudPushGrant } from './cloud-push-grant.ts';
 import { isRecord } from './hook-utils.ts';
 import { remoteHeadSha } from './require-pr-self-review-mcp.ts';
 import { reviewTargetSha } from './review-count.ts';
@@ -28,7 +28,22 @@ type CloudEvidence = {
   consultationNote?: string;
 };
 
-export { bunTemporal };
+type BunInstant = {
+  readonly epochMilliseconds: number;
+  toString(options?: { fractionalSecondDigits?: number; smallestUnit?: 'second' }): string;
+};
+
+// Bun 1.4 provides Temporal at runtime; the current TypeScript lib omits its global declaration.
+// Only the cloud feedback path loads this module, so older Bun versions fail this path closed
+// without affecting the push guards that run everywhere.
+declare global {
+  const Temporal: {
+    Instant: { from(value: string): BunInstant };
+    Now: { instant(): BunInstant };
+  };
+}
+
+export const bunTemporal = Temporal;
 
 const sha = (value: unknown): value is string =>
   typeof value === 'string' && /^[0-9a-f]{40}$/.test(value);

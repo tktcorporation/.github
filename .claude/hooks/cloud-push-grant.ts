@@ -12,20 +12,9 @@ import { dirname } from 'node:path';
 import { isRecord } from './hook-utils.ts';
 import { externalReviewFile } from './review-count.ts';
 
-type BunInstant = {
-  readonly epochMilliseconds: number;
-  toString(options?: { fractionalSecondDigits?: number; smallestUnit?: 'second' }): string;
-};
-
-// Bun 1.4 provides Temporal at runtime; the current TypeScript lib omits its global declaration.
-declare global {
-  const Temporal: {
-    Instant: { from(value: string): BunInstant };
-    Now: { instant(): BunInstant };
-  };
-}
-
-export const bunTemporal = Temporal;
+// このモジュールは push 前のフックが必ず読み込むため、Bun の版に依存する Temporal を使わない。
+// performance.timeOrigin + performance.now() はどの版でも UNIX エポックからのミリ秒を返す。
+const nowMs = (): number => performance.timeOrigin + performance.now();
 
 /** ラッパーはゲート通過から push までを連続して実行する。それより長く残る許可は使わせない。 */
 export const CLOUD_PUSH_GRANT_TTL_MS = 120_000;
@@ -40,7 +29,7 @@ export async function writeCloudPushGrant(
   input: { cwd?: string } | null,
   target: PushTarget,
 ): Promise<void> {
-  const expiresAt = bunTemporal.Now.instant().epochMilliseconds + CLOUD_PUSH_GRANT_TTL_MS;
+  const expiresAt = nowMs() + CLOUD_PUSH_GRANT_TTL_MS;
   const path = await grantFile(input);
   await mkdir(dirname(path), { recursive: true });
   await Bun.write(path, JSON.stringify({ ...target, expiresAt }));
@@ -77,5 +66,5 @@ export async function consumeCloudPushGrant(
   if (!(await file.exists())) return 'クラウドの push 許可がありません';
   const text = await file.text();
   await rm(path, { force: true });
-  return checkCloudPushGrant(text, { ...target, now: bunTemporal.Now.instant().epochMilliseconds });
+  return checkCloudPushGrant(text, { ...target, now: nowMs() });
 }
