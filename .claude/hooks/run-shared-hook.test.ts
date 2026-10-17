@@ -63,6 +63,8 @@ describe('Codex アダプターで hook 自体が落ちたとき', () => {
         ),
       );
       expect(results.map((result) => result.code)).toEqual([0, 0]);
+      // 落ちる hook を実行していれば失敗の診断が出る。出ないことで、実行せずに続けたと分かる。
+      for (const result of results) expect(result.stdout).not.toContain('shared hook failed');
     },
     SPAWN_TEST_TIMEOUT_MS,
   );
