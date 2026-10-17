@@ -21,7 +21,9 @@ module.exports = async function createReviewedPr({ exec, poll, create }, options
   // exec may return an unfinished session. Never treat a launched check as a passed check.
   let result = checked;
   let output = result.output ?? '';
-  for (let attempt = 0; result.session_id !== undefined && poll && attempt < 6; attempt++) {
+  // The preflight may wait on up to three `git ls-remote` calls of up to 15 s each
+  // (REMOTE_FETCH_TIMEOUT_MS in require-pr-self-review-mcp.ts), so keep polling past that budget.
+  for (let attempt = 0; result.session_id !== undefined && poll && attempt < 60; attempt++) {
     result = await poll({
       session_id: result.session_id,
       chars: '',
@@ -32,7 +34,7 @@ module.exports = async function createReviewedPr({ exec, poll, create }, options
   }
   if (result.session_id !== undefined) {
     throw new Error(
-      'Preflight is still running; no PR was created. Poll it for diagnostics, then retry.',
+      `Preflight is still running in session ${result.session_id}; no PR was created. Poll that session for diagnostics, then retry.`,
     );
   }
   if (result.exit_code !== 0) throw new Error(`PR preflight failed: ${output}`);
