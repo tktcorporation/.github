@@ -207,6 +207,10 @@ function toCursorOutput(output: string): string {
 const runHook = async (
   payload: ClaudePayload,
 ): Promise<{ output: string; status: number; stderr: string }> => {
+  // スクリプト本体は tree（Cursor が開いているワークスペース）から解決する。Cursor は
+  // ワークスペース自体を worktree 直下に開くことがあり、その worktree だけに存在する
+  // hook 定義（他 worktree /main checkout にまだ無いコミット）を、CLAUDE_PROJECT_DIR
+  // （常に主チェックアウトを指す）から解決すると見つけられない。
   const executable = isAbsolute(hookPath) ? hookPath : join(tree, hookPath);
   if (!existsSync(executable) && !isAbsolute(hookPath)) {
     return {

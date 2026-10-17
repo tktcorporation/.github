@@ -3,10 +3,7 @@
 import { $ } from 'bun';
 import { readInput } from './hook-utils.ts';
 import { refreshFeedback } from './pr-feedback-observation.ts';
-import {
-  judgeExternalPush,
-  markFeedbackReviewed,
-} from './pr-feedback-policy.ts';
+import { judgeExternalPush, markFeedbackReviewed } from './pr-feedback-policy.ts';
 import { reviewTargetSha } from './review-count.ts';
 import { workingTree } from './hook-utils.ts';
 
@@ -23,9 +20,15 @@ const { history, rounds, path: historyPath, remoteHead } = feedback;
 if (history.heads.length === 0) process.exit(0);
 const sha = await reviewTargetSha(input);
 const reviewedSha = rounds.at(-1)?.sha;
-const published = !!reviewedSha && !!remoteHead &&
-  (await $`git merge-base --is-ancestor ${reviewedSha} ${remoteHead}`
-    .cwd(await workingTree(input)).quiet().nothrow()).exitCode === 0;
+const published =
+  !!reviewedSha &&
+  !!remoteHead &&
+  (
+    await $`git merge-base --is-ancestor ${reviewedSha} ${remoteHead}`
+      .cwd(await workingTree(input))
+      .quiet()
+      .nothrow()
+  ).exitCode === 0;
 const verdict = judgeExternalPush(history, rounds, sha, published);
 if (verdict === 'consult_user') {
   block(

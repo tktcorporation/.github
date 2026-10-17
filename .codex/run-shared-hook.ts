@@ -1,9 +1,18 @@
 #!/usr/bin/env bun
-import { isAbsolute, join } from 'node:path';
+import { basename, isAbsolute, join, resolve } from 'node:path';
 import { projectDirectory, workingTree } from '../.claude/hooks/hook-utils.ts';
 
 const hookPath = process.argv[2];
 if (!hookPath) throw new Error('shared hook path is required');
+// These PreToolUse hooks enforce review before PR creation. Their failure must
+// never be translated into permission to continue by a hook-enabled host.
+const isPrGate = ['pre-bash-guard.ts', 'require-pr-self-review-mcp.ts'].includes(
+  basename(hookPath),
+);
+function refuse(detail: string): never {
+  process.stderr.write(`shared hook blocked: ${hookPath}: ${detail}\n`);
+  process.exit(2);
+}
 // Claude Code が hook に渡すものと同じ形にする: CLAUDE_PROJECT_DIR は状態ファイル用の
 // 主チェックアウト、入力の cwd は lint / 検証の対象になる作業ツリー（worktree）。
 process.env.CLAUDE_PROJECT_DIR = await projectDirectory();
@@ -12,21 +21,44 @@ const inputText = await Bun.stdin.text();
 interface HookPayload {
   cwd?: string;
   hook_event_name?: string;
-  tool_input?: string | { file_path?: string };
+  tool_name?: string;
+  tool_input?: string | { file_path?: string; cmd?: string; command?: string; workdir?: string };
   hookSpecificOutput?: { additionalContext?: string };
   [key: string]: unknown;
 }
 let input: HookPayload;
 try {
-  input = JSON.parse(inputText);
+  const parsed: HookPayload = JSON.parse(inputText);
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error('hook input must be an object');
+  }
+  input = parsed;
 } catch {
+  if (isPrGate) refuse('invalid hook input JSON');
   process.exit(0);
+}
+if (input.tool_name === 'exec_command') {
+  const shell = input.tool_input;
+  if (!shell || typeof shell !== 'object' || typeof shell.cmd !== 'string') {
+    refuse('exec_command requires tool_input.cmd');
+  }
+  if (shell.command !== undefined && shell.command !== shell.cmd) {
+    refuse('conflicting tool_input.cmd and command');
+  }
+  if (shell.workdir !== undefined && typeof shell.workdir !== 'string') {
+    refuse('invalid tool_input.workdir');
+  }
+  // Host cwd identifies the session; workdir identifies the actual command.
+  // Resolve relative paths against the host process, like exec_command does.
+  input.cwd = shell.workdir === undefined ? (input.cwd ?? tree) : resolve(shell.workdir);
+  input.tool_input = { ...shell, command: shell.cmd };
 }
 input.cwd ??= tree;
 
 /** Codex に返す、意図しない hook 失敗の診断。exit 2 以外は実行を止める指示ではない。 */
 function unexpectedFailure(status: number, stderr: string): string {
   const detail = stderr.trim().slice(0, 4_000);
+  if (isPrGate) refuse(`exit ${status}: ${detail}`);
   const lines = [
     `⚠️ shared hook failed: \`${hookPath}\` (exit ${status})。`,
     'この失敗は明示的なブロックではないため、元のツール実行は継続した。hook の修正が必要か確認すること。',
@@ -41,6 +73,10 @@ function unexpectedFailure(status: number, stderr: string): string {
 }
 
 const runHook = async (payload: unknown): Promise<string> => {
+  // スクリプト本体は tree（Codex が開いているワークスペース）から解決する。Codex は
+  // ワークスペース自体を worktree 直下に開くことがあり、その worktree だけに存在する
+  // hook 定義（他 worktree /main checkout にまだ無いコミット）を、CLAUDE_PROJECT_DIR
+  // （常に主チェックアウトを指す）から解決すると見つけられない。
   const executable = isAbsolute(hookPath) ? hookPath : join(tree, hookPath);
   const command = hookPath.endsWith('.ts') ? ['bun', executable] : [executable];
   let output: string;
