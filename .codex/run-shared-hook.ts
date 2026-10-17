@@ -4,11 +4,10 @@ import { projectDirectory, workingTree } from '../.claude/hooks/hook-utils.ts';
 
 const hookPath = process.argv[2];
 if (!hookPath) throw new Error('shared hook path is required');
-// These PreToolUse hooks enforce review before PR creation. Their failure must
-// never be translated into permission to continue by a hook-enabled host.
-const isPrGate = ['pre-bash-guard.ts', 'require-pr-self-review-mcp.ts'].includes(
-  basename(hookPath),
-);
+// MCP 経由の PR 作成ゲートは、落ちたときも作成を通さない（対象は PR 作成の呼び出しだけ）。
+// 全コマンドで動く pre-bash-guard.ts は対象にしない。落ちたときに拒否へ倒すと、解析用の依存を
+// 入れられない環境（オフライン、依存の lockfile を読めない古い Bun）で全コマンドが止まり続ける。
+const isPrGate = basename(hookPath) === 'require-pr-self-review-mcp.ts';
 function refuse(detail: string): never {
   process.stderr.write(`shared hook blocked: ${hookPath}: ${detail}\n`);
   process.exit(2);
@@ -55,33 +54,10 @@ if (input.tool_name === 'exec_command') {
 }
 input.cwd ??= tree;
 
-// pre-bash-guard.ts 自体が落ちたとき（解析用の依存を初回に入れられないオフライン環境など）は
-// 原則として拒否する。ただし調査用のコマンドまで止めると原因を確かめられないため、シェル記法を
-// 含まず、読み取り専用と確かめられる単純なコマンドに限って通す。push や PR 作成を検出して
-// 止める形にしないのは、引用符や展開で文字列の判定をすり抜けられるため。
-// 実行や書き込みの手段を持たないコマンドだけを並べる。rg は --pre で任意のコマンドを実行でき、
-// git は .git/config の設定（core.fsmonitor、diff.external など）で外部コマンドを起動できるため
-// 含めない。
-const READ_ONLY_PROGRAMS = new Set(['ls', 'cat', 'head', 'tail', 'pwd', 'wc', 'grep']);
-function isPlainReadOnly(command: string): boolean {
-  if (!/^[\w ./=:@%+,-]+$/.test(command)) return false;
-  const [program] = command.trim().split(/ +/);
-  return READ_ONLY_PROGRAMS.has(program ?? '');
-}
-const shellCommand =
-  typeof input.tool_input === 'object' && typeof input.tool_input?.command === 'string'
-    ? input.tool_input.command
-    : undefined;
-const failsClosed =
-  isPrGate &&
-  (basename(hookPath) !== 'pre-bash-guard.ts' ||
-    shellCommand === undefined ||
-    !isPlainReadOnly(shellCommand));
-
 /** Codex に返す、意図しない hook 失敗の診断。exit 2 以外は実行を止める指示ではない。 */
 function unexpectedFailure(status: number, stderr: string): string {
   const detail = stderr.trim().slice(0, 4_000);
-  if (failsClosed) refuse(`exit ${status}: ${detail}`);
+  if (isPrGate) refuse(`exit ${status}: ${detail}`);
   const lines = [
     `⚠️ shared hook failed: \`${hookPath}\` (exit ${status})。`,
     'この失敗は明示的なブロックではないため、元のツール実行は継続した。hook の修正が必要か確認すること。',

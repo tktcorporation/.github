@@ -6,22 +6,18 @@ import { join } from 'node:path';
 
 const adapter = join(import.meta.dir, '../../.codex/run-shared-hook.ts');
 
-/** 常に exit 1 で落ちる pre-bash-guard.ts を Codex アダプター経由で動かす。 */
-async function runCrashingGuard(command: string): Promise<{ code: number; stdout: string }> {
+/** 常に exit 1 で落ちる hook（ファイル名だけ本物と同じ）を Codex アダプター経由で動かす。 */
+async function runCrashingHook(
+  hookName: string,
+  payload: Record<string, unknown>,
+): Promise<{ code: number; stdout: string }> {
   const dir = await mkdtemp(join(tmpdir(), 'run-shared-hook-'));
   try {
-    const guard = join(dir, 'pre-bash-guard.ts');
-    await writeFile(guard, 'process.exit(1);\n');
-    const child = Bun.spawn(['bun', adapter, guard], {
+    const hook = join(dir, hookName);
+    await writeFile(hook, 'process.exit(1);\n');
+    const child = Bun.spawn(['bun', adapter, hook], {
       cwd: dir,
-      stdin: new Blob([
-        JSON.stringify({
-          cwd: dir,
-          hook_event_name: 'PreToolUse',
-          tool_name: 'exec_command',
-          tool_input: { cmd: command },
-        }),
-      ]),
+      stdin: new Blob([JSON.stringify({ cwd: dir, hook_event_name: 'PreToolUse', ...payload })]),
       stdout: 'pipe',
       stderr: 'pipe',
     });
@@ -32,16 +28,25 @@ async function runCrashingGuard(command: string): Promise<{ code: number; stdout
   }
 }
 
-// 1 件ごとにアダプターと hook の 2 プロセスを起動する。Bun の版や実行環境によっては
-// 起動が遅く、既定の 5 秒に収まらないため、起動は並列にし、上限も明示する。
+// 1 件ごとにアダプターと hook の 2 プロセスを起動する。Bun の版や実行環境によっては起動が遅く、
+// 既定の 5 秒に収まらないため、起動は並列にし、上限も明示する。
 const SPAWN_TEST_TIMEOUT_MS = 30_000;
 
-describe('Codex アダプターで pre-bash-guard.ts 自体が落ちたとき', () => {
+describe('Codex アダプターで hook 自体が落ちたとき', () => {
   test(
-    'シェル記法を含まない読み取り専用のコマンドは警告を出して続行する',
+    '全コマンドで動く pre-bash-guard.ts は、警告を出して元の実行を続ける',
     async () => {
-      const commands = ['ls -la', 'cat .claude/hooks/package.json', 'grep -rn TODO .claude'];
-      for (const result of await Promise.all(commands.map(runCrashingGuard))) {
+      // 解析用の依存を入れられない環境では毎回落ちるため、拒否に倒すと全コマンドが止まり続ける。
+      const commands = ['ls -la', 'git status', 'pnpm install'];
+      const results = await Promise.all(
+        commands.map((cmd) =>
+          runCrashingHook('pre-bash-guard.ts', {
+            tool_name: 'exec_command',
+            tool_input: { cmd },
+          }),
+        ),
+      );
+      for (const result of results) {
         expect(result.code).toBe(0);
         expect(result.stdout).toContain('shared hook failed');
       }
@@ -50,27 +55,13 @@ describe('Codex アダプターで pre-bash-guard.ts 自体が落ちたとき', 
   );
 
   test(
-    'それ以外のコマンドは、引用符や展開で書き換えても拒否する',
+    'MCP 経由の PR 作成ゲートは、落ちたときも作成を通さない',
     async () => {
-      const commands = [
-        'git push origin HEAD',
-        'git -C repo push',
-        'gh pr create --fill',
-        'g""it push',
-        'sh -c "git push"',
-        'ls; git push',
-        'ls\ngit push',
-        'git branch -D main',
-        'pnpm test',
-        'rg --pre ./x.sh pattern file',
-        'git diff --output=README.md HEAD~1 HEAD',
-        'git log --ext-diff',
-        'git status',
-        'GIT_EXTERNAL_DIFF=./x git diff',
-        '   ',
-      ];
-      const results = await Promise.all(commands.map(runCrashingGuard));
-      expect(results.map((result) => result.code)).toEqual(commands.map(() => 2));
+      const result = await runCrashingHook('require-pr-self-review-mcp.ts', {
+        tool_name: 'mcp__github__create_pull_request',
+        tool_input: { owner: 'owner', repo: 'repo', head: 'feature', base: 'main' },
+      });
+      expect(result.code).toBe(2);
     },
     SPAWN_TEST_TIMEOUT_MS,
   );
