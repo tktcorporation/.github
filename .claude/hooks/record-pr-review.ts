@@ -183,27 +183,38 @@ if (baseRef !== undefined && evidencePath !== undefined) {
 }
 const rounds = roundsOf(verdict.entries);
 const converged = verdict.convergence.kind === 'converged';
-// 指摘のあったラウンドは、HEAD とその祖先にある証跡を取り消す。ラウンドは指摘を直してコミット
-// した後に記録するので、指摘の見つかったコミットは HEAD ではなくその祖先にあることが多い。
-// 取り消さないと、指摘を残したままのコミットを指すブランチで PR を作れてしまう。取り消しすぎても
-// 収束を記録し直せば戻るので、指摘がどのコミットに由来するかは区別せず祖先をまとめて取り消す。
+// 指摘のあったラウンドは、このブランチで記録した証跡のうち HEAD とその祖先にあるものを取り消す。
+// ラウンドは指摘を直してコミットした後に記録するので、指摘の見つかったコミットは HEAD ではなく
+// その祖先にあることが多い。取り消しは SHA ごとなので、同じコミットを指す他のブランチの証跡も
+// 無効になる。他のブランチだけで記録した証跡（積み重ねたブランチの土台や、default branch に
+// 取り込まれたコミット）は、このブランチの指摘の対象とは限らないので取り消さない。
+// 取り消したコミットは、そのコミットで収束を記録し直すまでゲートを通らない。
+// 祖先かどうかを確かめられない（オブジェクトが無い等）ときは、取り消して警告する。
 // ラウンドの記録より先に書くので、台帳への書き込みが失敗すればラウンドも記録されず、再実行で取り消し直せる。
 // 指摘 0 件のラウンドは、収束の条件（最後が codex）を満たさなくても指摘を示さないので取り消さない。
 const tree = await workingTree();
 const [origin, branch] = await Promise.all([originRepository(tree), branchName(tree)]);
 const repo = origin ? `${origin.owner}/${origin.repo}`.toLowerCase() : null;
 if (!converged && round.count > 0 && origin !== null && repo !== null) {
-  const attested = (await readAttestations()).filter(
-    (entry) => entry.repo === repo && entry.host === origin.host,
+  const candidates = (await readAttestations()).filter(
+    (entry) =>
+      entry.repo === repo &&
+      entry.host === origin.host &&
+      (entry.sha === round.sha || (branch !== null && entry.branch === branch)),
   );
   const revoked = new Set<string>();
-  for (const entry of attested) {
+  for (const entry of candidates) {
     if (revoked.has(entry.sha)) continue;
-    const reached =
-      entry.sha === round.sha ||
-      (await $`git -C ${tree} merge-base --is-ancestor ${entry.sha} ${round.sha}`.quiet().nothrow())
-        .exitCode === 0;
-    if (!reached) continue;
+    if (entry.sha !== round.sha) {
+      const ancestor = await $`git -C ${tree} merge-base --is-ancestor ${entry.sha} ${round.sha}`
+        .quiet()
+        .nothrow();
+      if (ancestor.exitCode === 1) continue;
+      if (ancestor.exitCode !== 0)
+        console.error(
+          `${entry.sha} が HEAD の祖先か確かめられないため、念のため証跡を取り消します（git merge-base の終了コード ${ancestor.exitCode}）。`,
+        );
+    }
     revoked.add(entry.sha);
     await appendAttestation({
       sha: entry.sha,

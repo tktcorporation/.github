@@ -653,9 +653,16 @@ describe('Bash の PR 作成ゲート', () => {
 
     // 指摘を直してコミットしてから記録したラウンドは、HEAD の祖先にある証跡を取り消す。
     // リモートはまだ指摘のあったコミットを指しているので、PR を作れない。
+    // 別のブランチ（lib-feature）だけで記録した、HEAD の祖先でない証跡は取り消さない。
+    const otherBranch = ledger()
+      .filter((entry) => entry.branch === 'lib-feature' && entry.revoked !== true)
+      .at(-1)?.sha;
+    expect(otherBranch).toBeDefined();
     const fixed = await commit(at.lib, 'fix-after-review');
     const afterFix = await run('record-pr-review.ts', at.lib, ['1']);
     expect(afterFix.stdout).toContain(sha);
+    expect(afterFix.stdout).not.toContain(otherBranch ?? '');
+    expect(afterFix.stderr).toBe('');
     expectSingleBlock(await bash(at.super, command));
 
     // 直したコミットで収束を記録して push すれば通る。
