@@ -193,12 +193,13 @@ const state =
 const flagText = flagArgs.map((flag) => `、${flag}`).join('');
 console.log(`ラウンド ${rounds.length} を記録（指摘 ${countArg} 件${flagText}）。${state}。`);
 // 収束した HEAD の SHA を PR 作成ゲートの証跡として台帳に残す（pr-review-gate.ts）。
-// 収束しなかったラウンドが、既に証跡のある SHA をレビューしたものなら、その証跡を取り消す。
+// 指摘のあったラウンドが、既に証跡のある SHA をレビューしたものなら、その証跡を取り消す。
 // 取り消さないと、同じコミットに後から見つかった指摘を残したまま PR を作れてしまう。
+// 指摘 0 件のラウンドは、収束の条件（最後が codex）を満たさなくても指摘を示さないので取り消さない。
 const tree = await workingTree();
 const [origin, branch] = await Promise.all([originRepository(tree), branchName(tree)]);
 const repo = origin ? `${origin.owner}/${origin.repo}`.toLowerCase() : null;
-if (!converged && origin !== null && repo !== null) {
+if (!converged && round.count > 0 && origin !== null && repo !== null) {
   const attested = (await readAttestations()).filter(
     (entry) => entry.repo === repo && entry.host === origin.host && entry.sha === round.sha,
   );

@@ -627,9 +627,14 @@ describe('Bash の PR 作成ゲート', () => {
     expect(stale.stderr).toContain(attested);
   });
 
-  test('収束後に同じ SHA へ指摘ありのラウンドを記録すると証跡を取り消し、再び収束すれば通す', async () => {
+  test('収束後に同じ SHA へ指摘ありのラウンドを記録すると証跡を取り消し、再び収束すれば通す（指摘 0 件では取り消さない）', async () => {
     const command = 'cd lib && gh pr create -R github.com/acme/lib --head lib-work';
     const sha = git(at.lib, 'rev-parse', 'HEAD');
+    expect((await bash(at.super, command)).code).toBe(0);
+
+    // 指摘 0 件のラウンドは、codex でなく収束しなくても証跡を取り消さない。
+    const clean = await run('record-pr-review.ts', at.lib, ['0']);
+    expect(clean.stdout).not.toContain('証跡を取り消しました');
     expect((await bash(at.super, command)).code).toBe(0);
 
     const reopened = await run('record-pr-review.ts', at.lib, ['2']);
