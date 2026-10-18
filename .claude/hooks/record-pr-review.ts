@@ -183,7 +183,7 @@ if (baseRef !== undefined && evidencePath !== undefined) {
 }
 const rounds = roundsOf(verdict.entries);
 const converged = verdict.convergence.kind === 'converged';
-// 指摘のあったラウンドは、このブランチで記録した証跡のうち HEAD とその祖先にあるものを取り消す。
+// 指摘のあったラウンドは、HEAD の証跡と、このブランチで記録した証跡のうち HEAD の祖先にあるものを取り消す。
 // ラウンドは指摘を直してコミットした後に記録するので、指摘の見つかったコミットは HEAD ではなく
 // その祖先にあることが多い。取り消しは SHA ごとなので、同じコミットを指す他のブランチの証跡も
 // 無効になる。他のブランチだけで記録した証跡（積み重ねたブランチの土台や、default branch に
@@ -200,7 +200,9 @@ if (!converged && round.count > 0 && origin !== null && repo !== null) {
     (entry) =>
       entry.repo === repo &&
       entry.host === origin.host &&
-      (entry.sha === round.sha || (branch !== null && entry.branch === branch)),
+      // detached HEAD ではブランチで絞れないので、このチェックアウトで記録した証跡を候補にする。
+      (entry.sha === round.sha ||
+        (branch === null ? entry.checkout === tree : entry.branch === branch)),
   );
   const revoked = new Set<string>();
   for (const entry of candidates) {
