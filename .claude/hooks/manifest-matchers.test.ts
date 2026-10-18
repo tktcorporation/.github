@@ -24,7 +24,17 @@ const prCreateNames = {
   codex: ['mcp__github__create_pull_request', 'mcp__codex_apps__github_create_pull_request'],
   cursor: ['MCP:create_pull_request', 'MCP:github_create_pull_request'],
 };
-const otherNames = ['mcp__github__create_issue', 'MCP:create_issue', 'Bash', 'Shell'];
+const otherNames = [
+  'mcp__github__create_issue',
+  'mcp__github__update_pull_request',
+  'mcp__github__create_pull_request_review',
+  'MCP:create_issue',
+  'MCP:update_pull_request',
+  'MCP:create_pull_request_review',
+  'MCP:gitlab_create_pull_request',
+  'Bash',
+  'Shell',
+];
 
 describe('PR 作成の MCP 呼び出しに掛ける matcher', () => {
   for (const id of ['require-pr-self-review-mcp', 'post-mcp-pr']) {

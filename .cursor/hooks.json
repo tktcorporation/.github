@@ -25,7 +25,7 @@
       },
       {
         "command": "bun .cursor/run-shared-hook.ts .claude/hooks/require-pr-self-review-mcp.ts",
-        "matcher": "^MCP:(?:.+[_:])?create_pull_request$"
+        "matcher": "^MCP:(?:github_)?create_pull_request$"
       }
     ],
     "postToolUse": [
@@ -55,7 +55,7 @@
       },
       {
         "command": "bun .cursor/run-shared-hook.ts .claude/hooks/post-mcp-pr.ts",
-        "matcher": "^MCP:(?:.+[_:])?create_pull_request$"
+        "matcher": "^MCP:(?:github_)?create_pull_request$"
       }
     ],
     "stop": [
