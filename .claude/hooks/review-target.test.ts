@@ -363,6 +363,23 @@ describe('gh pr create の受け付ける形', () => {
   });
 
   test.each([
+    'GH=gh; "$GH" pr create -R github.com/acme/repo --head feat',
+    '"$GH" pr new -R github.com/acme/repo --head feat',
+    '$GH -R github.com/acme/repo pr create --head feat',
+    'timeout 5 "$GH" pr create -R github.com/acme/repo --head feat',
+    `bash -c '"$GH" pr create'`,
+  ])('実行するコマンドの語が実行時まで決まらない %p も、pr create の並びなら止める', (command) => {
+    expect(prCreateInvocation(command, start).kind).toBe('rejected');
+  });
+
+  test.each(['"$EDITOR" notes.txt', '"$X" pr list', '$X pr view 5 --json title', '"$X" create'])(
+    '実行するコマンドの語が決まらなくても pr create の並びでない %p は対象にしない',
+    (command) => {
+      expect(prCreateInvocation(command, start)).toEqual({ kind: 'none' });
+    },
+  );
+
+  test.each([
     'git commit -m "docs: use gh (GitHub CLI) for releases"',
     'git commit -m "chore: bump gh $VERSION"',
     "git commit -m 'chore: bump gh $VERSION'",
@@ -382,6 +399,35 @@ describe('gh pr create の受け付ける形', () => {
   ])('pr の直後以外にある create・new の %p は対象にしない', (command) => {
     expect(prCreateInvocation(command, start)).toEqual({ kind: 'none' });
   });
+
+  test.each([
+    'gh --hostname pr create -R acme/x --head feat',
+    'gh -d pr create -R acme/x --head feat',
+    'gh -Racme/x pr create --head feat',
+    'gh -R=acme/x pr create --head feat',
+    'gh pr --body create new -R acme/x --head feat',
+    'gh pr -x create -R acme/x --head feat',
+    'gh --flag value pr list create',
+  ])(
+    'サブコマンドより前に -R/--repo 以外のオプションがある %p は、語の位置を確定できないので止める',
+    (command) => {
+      expect(prCreateInvocation(command, start).kind).toBe('rejected');
+    },
+  );
+
+  test.each([
+    'gh --version',
+    'gh --help pr',
+    'gh -x pr list',
+    'gh pr -x list --search open',
+    'gh pr view --json title',
+    'gh --repo=acme/x pr list --search new',
+  ])(
+    '-R/--repo 以外のオプションがあっても create・new の並びが無い %p は対象にしない',
+    (command) => {
+      expect(prCreateInvocation(command, start)).toEqual({ kind: 'none' });
+    },
+  );
 
   test.each([
     ['gh pr new -R acme/x', '--head/-H'],
@@ -412,6 +458,9 @@ describe('origin の取得先の書き換えの比較', () => {
     ['ssh://github.com/acme/x.git', 'git+ssh://git@github.com/acme/x.git'],
     ['https://GitHub.com/Acme/X.git', 'ssh://git@github.com/acme/x.git'],
     ['ssh://git@ssh.github.com:443/acme/x.git', 'https://github.com/acme/x.git'],
+    ['https://ghe.example.com:443/acme/x.git', 'https://ghe.example.com/acme/x.git'],
+    ['ssh://git@ghe.example.com:22/acme/x.git', 'git@ghe.example.com:acme/x.git'],
+    ['https://ghe.example.com:8443/acme/x.git', 'https://GHE.example.com:8443/acme/x'],
   ])('scheme とユーザー名だけが違う %p と %p は同じリポジトリとみなす', (configured, effective) => {
     expect(sameRemoteRepository(configured, effective)).toBe(true);
   });
@@ -423,8 +472,11 @@ describe('origin の取得先の書き換えの比較', () => {
     ['git@github.com:acme/x.git', '/srv/mirror/acme/x.git'],
     ['git@github.com:acme/x.git', 'file:///srv/mirror/acme/x.git'],
     ['/srv/acme/x.git', '/srv/acme/x.git'],
+    ['https://ghe.example.com/acme/x.git', 'https://ghe.example.com:8443/acme/x.git'],
+    ['ssh://git@ghe.example.com/acme/x.git', 'ssh://git@ghe.example.com:2222/acme/x.git'],
+    ['git@github.com:acme/x.git', 'ssh://git@github.com:443/acme/x.git'],
   ])(
-    'ホストか owner/repo が違うか、ホストの無い %p と %p は別とみなす',
+    'ホスト・ポート・owner/repo のどれかが違うか、ホストの無い %p と %p は別とみなす',
     (configured, effective) => {
       expect(sameRemoteRepository(configured, effective)).toBe(false);
     },

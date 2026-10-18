@@ -179,7 +179,7 @@ function parsedPrCreate(command: string, origin: string, depth = 0): boolean {
     return [command, ...parsed.commands.flatMap((entry) => entry.argv.map(wordValue))].some(
       (value) => value !== undefined && indexOfWord(value, 'gh', 0) !== -1,
     );
-  return parsed.commands.some((entry) => {
+  const literalCommand = parsed.commands.some((entry) => {
     // 値を確定できない語（変数展開・コマンド置換）は、ghArgsCreatePr が実行時の値を仮定して判定する。
     // `gh` の直後（pr の位置）の語が実行時まで決まらないことを数えるのは、実行される最上位のコマンドだけ。
     // 引用符の中の文字列を解き直した段では、`git commit -m 'bump gh $VERSION'` のような文章にも当たるため。
@@ -189,9 +189,19 @@ function parsedPrCreate(command: string, origin: string, depth = 0): boolean {
     if (argv.slice(1).some((value) => parsedPrCreate(value, origin, depth + 1))) return true;
     return argv.some(
       (value, index) =>
-        basename(value) === 'gh' &&
-        ghArgsCreatePr(argv.slice(index + 1), { dynamicCommand: depth === 0 }),
+        (basename(value) === 'gh' &&
+          ghArgsCreatePr(argv.slice(index + 1), { dynamicCommand: depth === 0 })) ||
+        // `timeout 5 "$GH" pr create` のように、ラッパー越しに実行する語が実行時まで決まらない。
+        (value === NON_LITERAL_WORD && ghArgsCreatePr(argv.slice(index + 1))),
     );
+  });
+  if (literalCommand) return true;
+  // `GH=gh; "$GH" pr create` のように、実行するコマンドの語そのものが実行時まで決まらなくても、
+  // 続く語が `pr` とサブコマンドの位置の create/new なら gh でありうる。`pr` の位置は値の確定した
+  // 語だけを数え、`"$EDITOR" notes.txt` や `"$X" pr list` は対象にしない。
+  return parsed.dynamicCommands.some((words) => {
+    const argv = words.map((word) => wordValue(word) ?? NON_LITERAL_WORD);
+    return argv.slice(1).some((value) => isPrCreateCommand(value)) || ghArgsCreatePr(argv.slice(1));
   });
 }
 

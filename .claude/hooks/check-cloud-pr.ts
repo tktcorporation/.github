@@ -5,6 +5,7 @@
  * (pr-review-gate.ts) and the self-declared review evidence still matches the head, base and rounds.
  */
 import { $ } from 'bun';
+import { createHash } from 'node:crypto';
 import { currentBranch, isRecord, originRepository } from './hook-utils.ts';
 import { prCreateTarget } from './pr-create-target.ts';
 import {
@@ -26,7 +27,22 @@ type CreateRequest = {
   draft: true;
 };
 
+// .codex/create-reviewed-pr.cjs の REQUEST_KEYS と同じ並び。両側がこの順のキーで直列化した要求を
+// ハッシュして突き合わせる。
 const REQUEST_KEYS = ['repository_full_name', 'head', 'base', 'title', 'body', 'draft'];
+
+/**
+ * 許可した要求の SHA-256。要求をそのまま返すと、長い本文で出力が上限を超えて切れ、ラッパーが
+ * JSON を読めなくなるため、ラッパーが送る要求と同じかどうかはこのハッシュで照合させる。
+ */
+const requestDigest = (request: CreateRequest): string =>
+  createHash('sha256')
+    .update(
+      JSON.stringify(
+        Object.fromEntries(REQUEST_KEYS.map((key) => [key, Reflect.get(request, key)])),
+      ),
+    )
+    .digest('hex');
 
 const hasOnlyKeys = (value: Record<string, unknown>, keys: string[]): boolean =>
   Object.keys(value).every((key) => keys.includes(key));
@@ -122,7 +138,7 @@ try {
       expectedHead,
       expectedBase,
       headBranch,
-      request,
+      requestDigest: requestDigest(request),
     }),
   );
 } catch (error) {

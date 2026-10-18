@@ -146,6 +146,45 @@ function urlHost(url: string): string | null {
   return scp?.[1] ? canonicalHost(scp[1]) : null;
 }
 
+/** scheme ごとの既定ポート。既定ポートの明示は省いたものと同じ接続先になる。 */
+const DEFAULT_PORTS: Record<string, number> = {
+  https: 443,
+  http: 80,
+  ssh: 22,
+  'git+ssh': 22,
+  'ssh+git': 22,
+  git: 9418,
+};
+
+/**
+ * URL の接続先ポート。既定ポートと省略は null にそろえる。scp 形式（`host:path`）はポートを
+ * 書けないので null。
+ */
+function urlPort(url: string): number | null {
+  const match = url.match(/^([a-z][a-z0-9+.-]*):\/\/(?:[^@/]*@)?[^/:]*(?::(\d*))?(?:\/|$)/iu);
+  if (!match?.[2]) return null;
+  const port = Number(match[2]);
+  return port === DEFAULT_PORTS[(match[1] ?? '').toLowerCase()] ? null : port;
+}
+
+/**
+ * リモートの URL が指すリポジトリの同一性（`host[:port]/owner/repo` を小文字にした文字列）。
+ * scheme とユーザー名は含めず、ポートは既定のものを省いて含める。同じホストでもポートが違えば
+ * 別のサーバーでありうるので、別の値にする。`ssh.github.com:443` は github.com へ SSH で届く
+ * 公式の接続先なので（canonicalHost）、github.com そのものとして扱う。ホストか owner/repo を
+ * 読めなければ null。
+ */
+export function remoteIdentity(raw: string): string | null {
+  const parsed = parseRemoteUrl(raw);
+  if (parsed === null || parsed.host === null) return null;
+  const url = raw.trim().replace(/\/+$/u, '');
+  let port = urlPort(url);
+  if (port === 443 && /^[a-z][a-z0-9+.-]*:\/\/(?:[^@/]*@)?ssh\.github\.com:/iu.test(url))
+    port = null;
+  const endpoint = port === null ? parsed.host : `${parsed.host}:${port}`;
+  return `${endpoint}/${parsed.owner}/${parsed.repo}`.toLowerCase();
+}
+
 /**
  * hook スクリプトを実行するコマンド。スクリプトの絶対パスを使うので、サブモジュールや worktree
  * など、どのディレクトリから実行しても同じスクリプトが動き、実行したディレクトリのチェックアウトが
@@ -300,16 +339,20 @@ export const NON_LITERAL_WORD = '$';
  * `pr` の直後のサブコマンドの位置にあるときだけ数える。`gh pr checkout 5 && git switch -c new-x` の
  * ように、別のサブコマンドの後ろに現れた語は PR 作成として扱わない。
  *
- * `gh` と `pr` の間・`pr` とサブコマンドの間では、`-` で始まる語をオプションとして読み飛ばし、
- * `-R`・`--repo` だけは次の語を値として読み飛ばす。受け付ける形が許すのは `-R <値>`・`--repo <値>`・
- * `--repo=<値>` だけだが、gh は `gh -Racme/x pr create` や `gh pr -d create` も PR 作成として実行する
- * ので、検出はそれより広く取り、受け付けない形として止める（pr-create-command.ts）。
+ * `gh` と `pr` の間・`pr` とサブコマンドの間では、`-R <値>`・`--repo <値>`・`--repo=<値>` だけを
+ * オプションとして読み飛ばす。それ以外のオプションがあると、gh がそれを値を取るフラグとして次の語を
+ * 読むかどうかで、どの語がサブコマンドになるかが変わり、hook と gh の解釈がずれうる。そのときは
+ * 以降の語に `pr` → `create`/`new` の順の並びが（語の位置を問わず）あれば PR 作成として扱い、
+ * 受け付けない形として止める（pr-create-command.ts）。`gh --version` や `gh pr -x list` のように、
+ * その並びが無ければどの解釈でも PR 作成にならないので扱わない。サブコマンドより後ろのオプション
+ * （`gh pr list --search new`）は位置の判定に関わらないので見ない。
  *
  * 次の 2 つは、実行時に `pr create` になりうるので PR 作成として扱う（受け付けない形として止まる）。
  * - サブコマンドの位置の語が、`gh pr $SUB` のように実行時まで値が決まらない。`pr` の位置の語は、
  *   構文解析で値を確定できなかった語（`dynamicCommand`）だけを数える。文字列の走査では、
  *   コミットメッセージの `gh $VERSION` のような文章にも当たるため
- * - `words` が途中で打ち切られていて（`complete` が false）、オプションを読み飛ばすうちに末尾に届いた
+ * - `words` が途中で打ち切られていて（`complete` が false）、オプションを読み飛ばすうちに末尾に届いた。
+ *   受け付けないオプションの後で、`pr` までは見えて `create`/`new` の手前で打ち切られた場合も同じ
  */
 export function ghArgsCreatePr(
   words: readonly (string | undefined)[],
@@ -319,18 +362,38 @@ export function ghArgsCreatePr(
   }: { complete?: boolean; dynamicCommand?: boolean } = {},
 ): boolean {
   let index = 0;
-  const skipOptions = () => {
-    for (let word = words[index]; word?.startsWith('-'); word = words[index])
-      index += GH_REPO_FLAGS.has(word) ? 2 : 1;
+  // 受け付ける -R/--repo の形以外のオプションがあれば true にする。
+  const skipOptions = (): boolean => {
+    let ambiguous = false;
+    for (let word = words[index]; word?.startsWith('-'); word = words[index]) {
+      if (GH_REPO_FLAGS.has(word)) index += 2;
+      else {
+        if (!word.startsWith('--repo=')) ambiguous = true;
+        index += 1;
+      }
+    }
+    return ambiguous;
   };
   const undecided = () => !complete && index >= words.length;
-  skipOptions();
+  const isPr = (word: string | undefined) =>
+    word === 'pr' || (dynamicCommand && word !== undefined && isNonLiteral(word));
+  const isCreate = (word: string | undefined) =>
+    word === 'create' || word === 'new' || (word !== undefined && isNonLiteral(word));
+  // 語の位置を確定できないときに、from 以降のどこかに create/new（needPr なら pr の後ろ）があるか。
+  const mayCreateAfter = (from: number, needPr: boolean): boolean => {
+    const prAt = needPr ? words.findIndex((word, at) => at >= from && isPr(word)) : from - 1;
+    if (prAt === -1) return false;
+    return words.some((word, at) => at > prAt && isCreate(word)) || !complete;
+  };
+  const start = index;
+  if (skipOptions()) return mayCreateAfter(start, true) || undecided();
   if (undecided()) return true;
   const command = words[index];
   if (dynamicCommand && command !== undefined && isNonLiteral(command)) return true;
   if (command !== 'pr') return false;
   index += 1;
-  skipOptions();
+  const afterPr = index;
+  if (skipOptions()) return mayCreateAfter(afterPr, false) || undecided();
   if (undecided()) return true;
   const subcommand = words[index];
   if (subcommand !== undefined && isNonLiteral(subcommand)) return true;

@@ -12,13 +12,20 @@ const projectRoot = join(import.meta.dir, '..');
 // 全コマンドで動く pre-bash-guard.ts は対象にしない。落ちたときに拒否へ倒すと、解析用の依存を
 // 入れられない環境（オフライン、依存の lockfile を読めない古い Bun）で全コマンドが止まり続ける。
 const isPrGate = basename(hookPath) === 'require-pr-self-review-mcp.ts';
+// シェルのコマンドを検査するガード（Bash の PR 作成ゲートを含む）。落ちたときは上の理由で通すが、
+// 入力そのものが壊れているときは止める。検査できない入力のまま通すと、コマンドがガードを経ずに
+// 実行される一方、正しい形の入力でやり直せば済むので、止めても作業は続けられる。
+const isShellGuard = basename(hookPath) === 'pre-bash-guard.ts';
 function refuse(detail: string): never {
   process.stderr.write(`shared hook blocked: ${hookPath}: ${detail}\n`);
   process.exit(2);
 }
-/** 想定外の入力。PR 作成ゲートは作成を通さず、それ以外の hook は実行せずに元の処理を続ける。 */
+/**
+ * 想定外の入力。PR 作成ゲートとシェルのガードは実行を止め、それ以外の hook は実行せずに元の処理を
+ * 続ける。
+ */
 function invalidInput(detail: string): never {
-  if (isPrGate) refuse(detail);
+  if (isPrGate || isShellGuard) refuse(detail);
   process.stderr.write(`shared hook skipped: ${hookPath}: ${detail}\n`);
   process.exit(0);
 }
@@ -61,6 +68,11 @@ if (input.tool_name === 'exec_command') {
   // Resolve relative paths against the host process, like exec_command does.
   input.cwd = shell.workdir === undefined ? (input.cwd ?? tree) : resolve(shell.workdir);
   input.tool_input = { ...shell, command: shell.cmd };
+} else if (input.tool_name === 'Bash') {
+  const shell = input.tool_input;
+  if (!shell || typeof shell !== 'object' || typeof shell.command !== 'string') {
+    invalidInput('Bash requires tool_input.command');
+  }
 }
 input.cwd ??= tree;
 
