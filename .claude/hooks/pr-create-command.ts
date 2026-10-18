@@ -20,7 +20,7 @@
  */
 import { basename, resolve } from 'node:path';
 import { andChainArgv, parseCommands, wordValue, type ShellWord } from './command-parse.ts';
-import { ghArgsCreatePr, isPrCreateCommand } from './hook-utils.ts';
+import { ghArgsCreatePr, indexOfWord, isPrCreateCommand, NON_LITERAL_WORD } from './hook-utils.ts';
 
 export type PrCreateInvocation =
   /** コマンドに `gh pr create` が含まれない。 */
@@ -172,10 +172,16 @@ const MAX_NESTED_PARSE = 3;
 function parsedPrCreate(command: string, origin: string, depth = 0): boolean {
   const parsed = parseCommands(command, origin);
   if (parsed.kind !== 'parsed') return false;
-  // 上限まで入れ子になってもまだ引数付きのコマンドに見える文字列は、中身を確かめずに止める。
-  if (depth >= MAX_NESTED_PARSE) return parsed.commands.some((entry) => entry.argv.length > 1);
+  // 上限まで入れ子になった文字列は、中身を確かめずに `gh` という語の有無だけで決める。引用符で
+  // 分けた `g''h` も見えるよう、文字列そのものと解析した語の値の両方を探す。`gh` を含まない
+  // コミットメッセージや `ssh host "bash -c '…'"` の入れ子は PR 作成として扱わない。
+  if (depth >= MAX_NESTED_PARSE)
+    return [command, ...parsed.commands.flatMap((entry) => entry.argv.map(wordValue))].some(
+      (value) => value !== undefined && indexOfWord(value, 'gh', 0) !== -1,
+    );
   return parsed.commands.some((entry) => {
-    const argv = entry.argv.map((word) => wordValue(word) ?? '');
+    // 値を確定できない語（変数展開・コマンド置換）は、ghArgsCreatePr が実行時の値を仮定して判定する。
+    const argv = entry.argv.map((word) => wordValue(word) ?? NON_LITERAL_WORD);
     if (argv.some((value) => isPrCreateCommand(value))) return true;
     // `bash -c "g''h pr create"` のように、語の値そのものがコマンドとして解釈されうる。
     if (argv.slice(1).some((value) => parsedPrCreate(value, origin, depth + 1))) return true;

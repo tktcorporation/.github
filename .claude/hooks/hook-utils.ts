@@ -125,13 +125,25 @@ export function parseRemoteUrl(
   return { host: urlHost(url), owner: match[1], repo: match[2] };
 }
 
-/** `scheme://[user@]host[:port]/…` と scp 形式 `[user@]host:path` のホスト（小文字）。 */
+/**
+ * 同じ GitHub インスタンスを指す別名のホストを、gh が使うホスト名へそろえる。`ssh.github.com` は
+ * github.com へ 443 番ポート経由で SSH 接続するための GitHub 公式の接続先で、そこにあるリポジトリは
+ * github.com のリポジトリそのもの。そろえないと、origin がこの接続先のチェックアウトでは
+ * `-R github.com/<owner>/<repo>` がホストの不一致になり、証跡のホストも MCP 経路の候補と食い違う。
+ * `~/.ssh/config` の Host 別名は git の設定から実ホストを決められないので、そろえない。
+ */
+function canonicalHost(host: string): string {
+  const lower = host.toLowerCase();
+  return lower === 'ssh.github.com' ? 'github.com' : lower;
+}
+
+/** `scheme://[user@]host[:port]/…` と scp 形式 `[user@]host:path` のホスト（canonicalHost でそろえる）。 */
 function urlHost(url: string): string | null {
   const scheme = url.match(/^[a-z][a-z0-9+.-]*:\/\/(?:[^@/]*@)?([^/:]*)/iu);
   if (scheme)
-    return url.toLowerCase().startsWith('file:') ? null : (scheme[1] ?? '').toLowerCase() || null;
+    return url.toLowerCase().startsWith('file:') || !scheme[1] ? null : canonicalHost(scheme[1]);
   const scp = url.match(/^(?:[^@/]+@)?([^/:]+):/u);
-  return scp?.[1] ? scp[1].toLowerCase() : null;
+  return scp?.[1] ? canonicalHost(scp[1]) : null;
 }
 
 /**
@@ -259,7 +271,7 @@ export async function shasInReviewRange(
 }
 
 /** `command` 内で、`word` が単語境界付きで最初に現れる位置を `from` 以降から探す。無ければ -1。 */
-function indexOfWord(command: string, word: string, from: number): number {
+export function indexOfWord(command: string, word: string, from: number): number {
   let index = command.indexOf(word, from);
   while (index !== -1) {
     const before = command[index - 1];
@@ -275,6 +287,15 @@ function indexOfWord(command: string, word: string, from: number): number {
 const GH_REPO_FLAGS = new Set(['-R', '--repo']);
 
 /**
+ * 実行時まで値が決まらない語か（変数展開・コマンド置換を含む）。構文解析で値を確定できなかった語は
+ * 呼び出し側が NON_LITERAL_WORD に置き換えて渡す。
+ */
+const isNonLiteral = (word: string): boolean => /[$`(]/u.test(word);
+
+/** 値を確定できなかった語の代わりに ghArgsCreatePr へ渡す語。isNonLiteral に当たる。 */
+export const NON_LITERAL_WORD = '$';
+
+/**
  * `gh` に続く語の並び（`gh` 自身は含まない）が `pr create`・`pr new` を呼びうるか。`create`/`new` は
  * `pr` の直後のサブコマンドの位置にあるときだけ数える。`gh pr checkout 5 && git switch -c new-x` の
  * ように、別のサブコマンドの後ろに現れた語は PR 作成として扱わない。
@@ -283,18 +304,28 @@ const GH_REPO_FLAGS = new Set(['-R', '--repo']);
  * `-R`・`--repo` だけは次の語を値として読み飛ばす。受け付ける形が許すのは `-R <値>`・`--repo <値>`・
  * `--repo=<値>` だけだが、gh は `gh -Racme/x pr create` や `gh pr -d create` も PR 作成として実行する
  * ので、検出はそれより広く取り、受け付けない形として止める（pr-create-command.ts）。
+ *
+ * 次の 2 つは、実行時に `pr create` になりうるので PR 作成として扱う（受け付けない形として止まる）。
+ * - `pr` の位置かサブコマンドの位置の語が、`gh pr $SUB` のように実行時まで値が決まらない
+ * - `words` が途中で打ち切られていて（`complete` が false）、オプションを読み飛ばすうちに末尾に届いた
  */
-export function ghArgsCreatePr(words: readonly (string | undefined)[]): boolean {
+export function ghArgsCreatePr(words: readonly (string | undefined)[], complete = true): boolean {
   let index = 0;
   const skipOptions = () => {
     for (let word = words[index]; word?.startsWith('-'); word = words[index])
       index += GH_REPO_FLAGS.has(word) ? 2 : 1;
   };
+  const undecided = () => !complete && index >= words.length;
   skipOptions();
-  if (words[index] !== 'pr') return false;
+  if (undecided()) return true;
+  const command = words[index];
+  if (command !== undefined && isNonLiteral(command)) return true;
+  if (command !== 'pr') return false;
   index += 1;
   skipOptions();
+  if (undecided()) return true;
   const subcommand = words[index];
+  if (subcommand !== undefined && isNonLiteral(subcommand)) return true;
   return subcommand === 'create' || subcommand === 'new';
 }
 
@@ -323,8 +354,10 @@ function readToken(command: string, from: number): { token: string; end: number 
     if (char !== '"' && char !== "'" && char !== '`') token += char;
     index += 1;
   }
-  // 記号から始まる位置では記号を 1 文字だけ読み、空の語として返す（gh の並びを途切れさせる）。
-  return { token, end: index === start ? index + 1 : index };
+  // 記号から始まる位置では記号を 1 文字だけ読み、その記号を語として返す（gh の並びを途切れさせる）。
+  // `(` は isNonLiteral に当たるので、`gh pr $(…)` の `$` と同じくサブコマンドの位置で PR 作成に倒れる。
+  if (index === start) return { token: command[index] ?? '', end: index + 1 };
+  return { token, end: index };
 }
 
 /**
@@ -351,13 +384,17 @@ export function isPrCreateCommand(command: string): boolean {
   while (ghIndex !== -1) {
     const words: string[] = [];
     let position = ghIndex;
+    let complete = false;
     while (words.length < MAX_GH_WORDS) {
       const next = readToken(command, position);
-      if (next === null) break;
+      if (next === null) {
+        complete = true;
+        break;
+      }
       words.push(next.token);
       position = next.end;
     }
-    if (words[0] === 'gh' && ghArgsCreatePr(words.slice(1))) return true;
+    if (words[0] === 'gh' && ghArgsCreatePr(words.slice(1), complete)) return true;
     ghIndex = indexOfWord(command, 'gh', ghIndex + 2);
   }
   return false;

@@ -334,13 +334,32 @@ describe('gh pr create の受け付ける形', () => {
     `bash -c 'gh pr create'`,
     `bash -c "g''h pr create"`,
     `sh -c 'bash -c "g\\\\h pr new"'`,
-    `sh -c "sh -c 'sh -c \\"sh -c x y\\"'"`,
+    // 入れ子の上限（3 段）に届いた文字列の中の、バックスラッシュで分けた gh も止める。
+    `sh -c "sh -c 'sh -c \\"g\\\\\\\\h pr create\\"'"`,
   ])('ラッパー越しの %p は止める', (command) => {
     expect(prCreateInvocation(command, start).kind).toBe('rejected');
   });
 
   test('gh pr create を含まないコマンドは対象にしない', () => {
     expect(prCreateInvocation('cd lib && git push', start)).toEqual({ kind: 'none' });
+  });
+
+  test.each([
+    `git commit -m "fix: handle \\"x 'y z'\\" case"`,
+    `ssh host "bash -c 'docker exec c sh -c \\"ls -la\\"'"`,
+    `sh -c "sh -c 'sh -c \\"sh -c x y\\"'"`,
+  ])('入れ子の上限に届いても、gh を含まない %p は対象にしない', (command) => {
+    expect(prCreateInvocation(command, start)).toEqual({ kind: 'none' });
+  });
+
+  test.each([
+    'gh pr $SUB --fill',
+    'gh pr "$SUB" -R acme/x --head feat',
+    'gh pr `echo create` -R acme/x --head feat',
+    'gh $CMD create -R acme/x --head feat',
+    `cat <<EOF | sh\ngh ${Array.from({ length: 20 }, () => '-d').join(' ')} pr create -R acme/x --head feat\nEOF`,
+  ])('pr やサブコマンドの位置が実行時まで決まらない %p は止める', (command) => {
+    expect(prCreateInvocation(command, start).kind).toBe('rejected');
   });
 
   test.each([
@@ -382,6 +401,7 @@ describe('origin の取得先の書き換えの比較', () => {
     ['git@github.com:acme/x.git', 'https://github.com/acme/x'],
     ['ssh://github.com/acme/x.git', 'git+ssh://git@github.com/acme/x.git'],
     ['https://GitHub.com/Acme/X.git', 'ssh://git@github.com/acme/x.git'],
+    ['ssh://git@ssh.github.com:443/acme/x.git', 'https://github.com/acme/x.git'],
   ])('scheme とユーザー名だけが違う %p と %p は同じリポジトリとみなす', (configured, effective) => {
     expect(sameRemoteRepository(configured, effective)).toBe(true);
   });
@@ -539,6 +559,11 @@ describe('Bash の PR 作成ゲート', () => {
     'gh pr view 12 --comments | grep -i new',
     'git log | head; gh pr list --search "is:open new"',
     'gh pr comment 5 --body "new fix"',
+    'gh pr checkout 5 && git switch -c new-x',
+    'gh pr view 12 | grep new',
+    'gh pr list --search new',
+    `git commit -m "fix: handle \\"x 'y z'\\" case"`,
+    `ssh host "bash -c 'docker exec c sh -c \\"ls -la\\"'"`,
   ])('PR 作成でない %p は止めない', async (command) => {
     const result = await bash(at.super, command);
     expect({ code: result.code, stderr: result.stderr }).toEqual({ code: 0, stderr: '' });
@@ -618,6 +643,22 @@ describe('-R と --head の明示', () => {
       const local = await bash(at.super, pass);
       expectSingleBlock(local);
       expect(local.stderr).toContain('ホスト無し');
+    } finally {
+      git(at.super, 'remote', 'set-url', 'origin', 'ssh://github.com/acme/super.git');
+    }
+  });
+
+  test('origin が ssh.github.com（443 番ポート経由の SSH）なら -R github.com で通し、SSH 設定の Host 別名は止める', async () => {
+    const pass = 'gh pr create -R github.com/acme/super --head root-work';
+    git(at.super, 'remote', 'set-url', 'origin', 'ssh://git@ssh.github.com:443/acme/super.git');
+    try {
+      // 偽の ssh は -G の問い合わせに失敗するので、ポートを渡せる種類だと git に伝える。
+      const result = await bash(at.super, pass, { GIT_SSH_VARIANT: 'ssh' });
+      expect({ code: result.code, stderr: result.stderr }).toEqual({ code: 0, stderr: '' });
+      git(at.super, 'remote', 'set-url', 'origin', 'git@github-work:acme/super.git');
+      const alias = await bash(at.super, pass);
+      expectSingleBlock(alias);
+      expect(alias.stderr).toContain('origin のホスト（github-work）');
     } finally {
       git(at.super, 'remote', 'set-url', 'origin', 'ssh://github.com/acme/super.git');
     }
