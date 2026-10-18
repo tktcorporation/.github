@@ -21,7 +21,7 @@ for (const arg of args) {
 }
 const hookPath = hookArgs[0];
 if (!hookPath) throw new Error('shared hook path is required');
-// MCP 経由の PR 作成ゲートは、落ちたときと入力を読めないときも作成を通さない。Cursor は
+// MCP 経由の PR 作成ゲートは、落ちたとき・入力や出力を読めないときも作成を通さない。Cursor は
 // exit 2 か permission:deny でしか止めないため、ほかの hook と同じ fail-open にすると素通りする。
 const isPrGate = basename(hookPath) === 'require-pr-self-review-mcp.ts';
 function deny(reason: string): never {
@@ -147,7 +147,7 @@ function toClaudePayload(input: CursorHookInput): ClaudePayload {
 /** Cursor に返す、意図しない hook 失敗の診断。exit 2 以外は実行を止めない（PR 作成ゲートは拒否する）。 */
 function unexpectedFailure(status: number, stderr: string): string {
   const detail = stderr.trim().slice(0, 4_000);
-  if (isPrGate) deny(`exit ${status}: ${detail}`);
+  if (isPrGate) deny(detail ? `exit ${status}: ${detail}` : `exit ${status}`);
   const lines = [
     `⚠️ shared hook failed: \`${hookPath}\` (exit ${status})。`,
     'この失敗は明示的なブロックではないため、元のツール実行は継続した。hook の修正が必要か確認すること。',

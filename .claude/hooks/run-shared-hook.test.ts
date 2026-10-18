@@ -39,7 +39,7 @@ async function runStubHook(
 // 既定の 5 秒に収まらないため、起動は並列にし、上限も明示する。
 const SPAWN_TEST_TIMEOUT_MS = 30_000;
 
-describe('アダプター経由で hook 自体が落ちたとき', () => {
+describe('アダプター経由で hook が落ちたとき・入出力を読めないとき', () => {
   test(
     '全コマンドで動く pre-bash-guard.ts は、警告を出して元の実行を続ける',
     async () => {
@@ -132,11 +132,8 @@ describe('アダプター経由で hook 自体が落ちたとき', () => {
       const results = await Promise.all([
         runStubHook('require-pr-self-review-mcp.ts', '{not json', cursorAdapter),
         runStubHook('require-pr-self-review-mcp.ts', 'null', cursorAdapter),
-        runStubHook(
-          'require-pr-self-review-mcp.ts',
-          prInput,
-          cursorAdapter,
-          "console.log('not json');\n",
+        ...["console.log('not json');\n", "console.log('[]');\n", "console.log('{}');\n"].map(
+          (source) => runStubHook('require-pr-self-review-mcp.ts', prInput, cursorAdapter, source),
         ),
       ]);
       for (const result of results) {
