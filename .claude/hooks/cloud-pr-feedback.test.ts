@@ -8,6 +8,7 @@ import {
   gitValue,
   matchesGitHubRemote,
   requireEvidence,
+  sameRepositoryText,
   summarizeComments,
   validateConnectorRows,
 } from './cloud-pr-feedback.ts';
@@ -77,6 +78,18 @@ describe('connector feedback boundary', () => {
     ]) {
       expect(matchesGitHubRemote(remote, 'owner/repo')).toBe(false);
     }
+  });
+
+  test('repository names from the connector are compared case-insensitively', () => {
+    expect(sameRepositoryText('Owner/Repo', 'owner/repo')).toBe(true);
+    expect(
+      sameRepositoryText(
+        'https://github.com/Owner/Repo/pull/7',
+        'https://github.com/owner/repo/pull/7',
+      ),
+    ).toBe(true);
+    expect(sameRepositoryText('owner/other', 'owner/repo')).toBe(false);
+    expect(sameRepositoryText(undefined, 'owner/repo')).toBe(false);
   });
 
   test('reviewed commit, exact comment ID and author filter are preserved', () => {

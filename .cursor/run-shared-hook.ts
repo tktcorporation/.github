@@ -9,7 +9,7 @@
  * 二重実行スキップ（run-or-skip-for-cursor.ts）に吸われない。
  */
 import { existsSync } from 'node:fs';
-import { isAbsolute, join } from 'node:path';
+import { basename, isAbsolute, join } from 'node:path';
 import { projectDirectory, workingTree } from '../.claude/hooks/hook-utils.ts';
 
 const args = process.argv.slice(2);
@@ -21,6 +21,14 @@ for (const arg of args) {
 }
 const hookPath = hookArgs[0];
 if (!hookPath) throw new Error('shared hook path is required');
+// MCP 経由の PR 作成ゲートは、落ちたときと入力を読めないときも作成を通さない。Cursor は
+// exit 2 か permission:deny でしか止めないため、ほかの hook と同じ fail-open にすると素通りする。
+const isPrGate = basename(hookPath) === 'require-pr-self-review-mcp.ts';
+function deny(reason: string): never {
+  process.stderr.write(`shared hook blocked: ${hookPath}: ${reason}\n`);
+  console.log(JSON.stringify({ permission: 'deny', user_message: reason, agent_message: reason }));
+  process.exit(2);
+}
 
 process.env.CLAUDE_PROJECT_DIR = await projectDirectory();
 process.env.CURSOR_HOOK_VIA_ADAPTER = '1';
@@ -68,6 +76,7 @@ try {
   const parsed: CursorHookInput = JSON.parse(inputText);
   cursorInput = parsed;
 } catch {
+  if (isPrGate) deny('invalid hook input JSON');
   process.exit(0);
 }
 
@@ -134,9 +143,10 @@ function toClaudePayload(input: CursorHookInput): ClaudePayload {
   };
 }
 
-/** Cursor に返す、意図しない hook 失敗の診断。exit 2 以外は実行を止めない。 */
+/** Cursor に返す、意図しない hook 失敗の診断。exit 2 以外は実行を止めない（PR 作成ゲートは拒否する）。 */
 function unexpectedFailure(status: number, stderr: string): string {
   const detail = stderr.trim().slice(0, 4_000);
+  if (isPrGate) deny(`exit ${status}: ${detail}`);
   const lines = [
     `⚠️ shared hook failed: \`${hookPath}\` (exit ${status})。`,
     'この失敗は明示的なブロックではないため、元のツール実行は継続した。hook の修正が必要か確認すること。',
@@ -246,7 +256,7 @@ const runHook = async (
 const payload = toClaudePayload(cursorInput);
 const { output, status, stderr } = await runHook(payload);
 
-// exit 2 は明示的な拒否。0 / 2 以外は診断を注入して fail-open。
+// exit 2 は明示的な拒否。0 / 2 以外は診断を注入して fail-open（PR 作成ゲートは unexpectedFailure が拒否する）。
 if (status !== 0 && status !== 2) {
   console.log(unexpectedFailure(status, stderr));
   process.exit(0);

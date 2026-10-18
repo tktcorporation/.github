@@ -4,12 +4,14 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-const adapter = join(import.meta.dir, '../../.codex/run-shared-hook.ts');
+const codexAdapter = join(import.meta.dir, '../../.codex/run-shared-hook.ts');
+const cursorAdapter = join(import.meta.dir, '../../.cursor/run-shared-hook.ts');
 
-/** 常に exit 1 で落ちる hook（ファイル名だけ本物と同じ）を Codex アダプター経由で動かす。 */
+/** 常に exit 1 で落ちる hook（ファイル名だけ本物と同じ）をアダプター経由で動かす。 */
 async function runCrashingHook(
   hookName: string,
   payload: Record<string, unknown>,
+  adapter = codexAdapter,
 ): Promise<{ code: number; stdout: string }> {
   const dir = await mkdtemp(join(tmpdir(), 'run-shared-hook-'));
   try {
@@ -32,7 +34,7 @@ async function runCrashingHook(
 // 既定の 5 秒に収まらないため、起動は並列にし、上限も明示する。
 const SPAWN_TEST_TIMEOUT_MS = 30_000;
 
-describe('Codex アダプターで hook 自体が落ちたとき', () => {
+describe('アダプター経由で hook 自体が落ちたとき', () => {
   test(
     '全コマンドで動く pre-bash-guard.ts は、警告を出して元の実行を続ける',
     async () => {
@@ -77,6 +79,24 @@ describe('Codex アダプターで hook 自体が落ちたとき', () => {
         tool_input: { owner: 'owner', repo: 'repo', head: 'feature', base: 'main' },
       });
       expect(result.code).toBe(2);
+    },
+    SPAWN_TEST_TIMEOUT_MS,
+  );
+
+  test(
+    'Cursor のアダプターでも、PR 作成ゲートが落ちたら作成を拒否する',
+    async () => {
+      const result = await runCrashingHook(
+        'require-pr-self-review-mcp.ts',
+        {
+          hook_event_name: 'preToolUse',
+          tool_name: 'mcp__github__create_pull_request',
+          tool_input: { owner: 'owner', repo: 'repo', head: 'feature', base: 'main' },
+        },
+        cursorAdapter,
+      );
+      expect(result.code).toBe(2);
+      expect(result.stdout).toContain('"permission":"deny"');
     },
     SPAWN_TEST_TIMEOUT_MS,
   );
