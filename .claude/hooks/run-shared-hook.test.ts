@@ -8,7 +8,7 @@ const codexAdapter = join(import.meta.dir, '../../.codex/run-shared-hook.ts');
 const cursorAdapter = join(import.meta.dir, '../../.cursor/run-shared-hook.ts');
 
 /** 本物と同じファイル名の hook（既定は常に exit 1 で落ちる）をアダプター経由で動かす。 */
-async function runCrashingHook(
+async function runStubHook(
   hookName: string,
   payload: Record<string, unknown> | string,
   adapter = codexAdapter,
@@ -47,7 +47,7 @@ describe('アダプター経由で hook 自体が落ちたとき', () => {
       const commands = ['ls -la', 'git status', 'pnpm install'];
       const results = await Promise.all(
         commands.map((cmd) =>
-          runCrashingHook('pre-bash-guard.ts', {
+          runStubHook('pre-bash-guard.ts', {
             tool_name: 'exec_command',
             tool_input: { cmd },
           }),
@@ -66,7 +66,7 @@ describe('アダプター経由で hook 自体が落ちたとき', () => {
     async () => {
       const results = await Promise.all(
         [JSON.stringify({ cmd: 'ls' }), { command: ['ls'] }].map((tool_input) =>
-          runCrashingHook('pre-bash-guard.ts', { tool_name: 'exec_command', tool_input }),
+          runStubHook('pre-bash-guard.ts', { tool_name: 'exec_command', tool_input }),
         ),
       );
       expect(results.map((result) => result.code)).toEqual([0, 0]);
@@ -79,7 +79,7 @@ describe('アダプター経由で hook 自体が落ちたとき', () => {
   test(
     'MCP 経由の PR 作成ゲートは、落ちたときも作成を通さない',
     async () => {
-      const result = await runCrashingHook('require-pr-self-review-mcp.ts', {
+      const result = await runStubHook('require-pr-self-review-mcp.ts', {
         tool_name: 'mcp__github__create_pull_request',
         tool_input: { owner: 'owner', repo: 'repo', head: 'feature', base: 'main' },
       });
@@ -91,7 +91,7 @@ describe('アダプター経由で hook 自体が落ちたとき', () => {
   test(
     'Cursor のアダプターでも、PR 作成ゲートが落ちたら作成を拒否する',
     async () => {
-      const result = await runCrashingHook(
+      const result = await runStubHook(
         'require-pr-self-review-mcp.ts',
         {
           hook_event_name: 'preToolUse',
@@ -107,6 +107,21 @@ describe('アダプター経由で hook 自体が落ちたとき', () => {
   );
 
   test(
+    'Cursor のアダプターでも、PR 作成ゲート以外の hook が落ちたときは警告して通す',
+    async () => {
+      const result = await runStubHook(
+        'pre-bash-guard.ts',
+        { hook_event_name: 'beforeShellExecution', command: 'ls -la' },
+        cursorAdapter,
+      );
+      expect(result.code).toBe(0);
+      expect(result.stdout).toContain('shared hook failed');
+      expect(result.stdout).not.toContain('"permission":"deny"');
+    },
+    SPAWN_TEST_TIMEOUT_MS,
+  );
+
+  test(
     'Cursor のアダプターでも、入力や出力を読めない PR 作成ゲートは作成を拒否する',
     async () => {
       const prInput = {
@@ -115,8 +130,9 @@ describe('アダプター経由で hook 自体が落ちたとき', () => {
         tool_input: { owner: 'owner', repo: 'repo', head: 'feature', base: 'main' },
       };
       const results = await Promise.all([
-        runCrashingHook('require-pr-self-review-mcp.ts', '{not json', cursorAdapter),
-        runCrashingHook(
+        runStubHook('require-pr-self-review-mcp.ts', '{not json', cursorAdapter),
+        runStubHook('require-pr-self-review-mcp.ts', 'null', cursorAdapter),
+        runStubHook(
           'require-pr-self-review-mcp.ts',
           prInput,
           cursorAdapter,

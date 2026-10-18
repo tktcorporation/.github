@@ -74,6 +74,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 let cursorInput: CursorHookInput;
 try {
   const parsed: CursorHookInput = JSON.parse(inputText);
+  if (!isRecord(parsed)) throw new Error('hook input must be an object');
   cursorInput = parsed;
 } catch {
   if (isPrGate) deny('invalid hook input JSON');
