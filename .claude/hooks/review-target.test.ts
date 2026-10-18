@@ -864,6 +864,21 @@ describe('GitHub MCP の PR 作成ゲート', () => {
     expect((await gate(mcp('acme:lib-feature'))).stdout).toBe('');
   });
 
+  test('同じ SHA を別のブランチでも収束させても、先のブランチの証跡は残る', async () => {
+    const file = join(at.super, '.git', 'claude', 'pr-review', 'attestations.jsonl');
+    const original = readFileSync(file, 'utf8');
+    const first = ledger().filter((entry) => entry.branch === 'lib-feature').at(-1);
+    expect(first).toBeDefined();
+    try {
+      // 先のブランチの証跡がこの 1 件だけの台帳に、同じコミットを別ブランチで収束させた記録が続く。
+      const twin = { ...first, branch: 'lib-twin' };
+      await writeFile(file, `${JSON.stringify(first)}\n${JSON.stringify(twin)}\n`);
+      expect((await gate(mcp('lib-feature'))).stdout).toBe('');
+    } finally {
+      await writeFile(file, original);
+    }
+  });
+
   test('別ホストの同名リポジトリの証跡は使わず、ホストが決まらなければ止める', async () => {
     expect((await gate(mcp('lib-feature'))).stdout).toBe('');
     const file = join(at.super, '.git', 'claude', 'pr-review', 'attestations.jsonl');

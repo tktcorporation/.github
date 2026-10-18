@@ -78,18 +78,18 @@ const isAttestation = (value: unknown): value is Attestation => {
   );
 };
 
-const attestationKey = (entry: Attestation): string =>
-  `${entry.host ?? ''}\n${entry.repo}\n${entry.sha}`;
+const sameCommit = (a: Attestation, b: Attestation): boolean =>
+  a.host === b.host && a.repo === b.repo && a.sha === b.sha;
 
 /**
- * 有効な証跡を、最後に書かれた順に返す。読めない行は飛ばす。同じ repo・host・SHA の行は
- * 最後の 1 行が決め、それが取り消し（revoked）なら、その SHA の証跡は無いものとして扱う。
+ * 有効な証跡を古い順に返す。読めない行は飛ばす。取り消し（revoked）の行は、同じ repo・host・SHA
+ * について、それより前に書かれた証跡をブランチやチェックアウトを問わずすべて無効にする。
+ * 取り消しの後に書かれた証跡は有効なまま残る。
  */
 export async function readAttestations(): Promise<Attestation[]> {
   const file = Bun.file(await ledgerFile());
   if (!(await file.exists())) return [];
-  // Map は挿入順を保つので、削除してから入れ直した証跡は末尾（最新）に並ぶ。
-  const live = new Map<string, Attestation>();
+  let live: Attestation[] = [];
   for (const line of (await file.text()).split('\n')) {
     if (!line.trim()) continue;
     let value: unknown;
@@ -100,10 +100,11 @@ export async function readAttestations(): Promise<Attestation[]> {
       continue;
     }
     if (!isAttestation(value)) continue;
-    live.delete(attestationKey(value));
-    if (value.revoked !== true) live.set(attestationKey(value), value);
+    const entry = value;
+    if (entry.revoked === true) live = live.filter((kept) => !sameCommit(kept, entry));
+    else live.push(entry);
   }
-  return [...live.values()];
+  return live;
 }
 
 /** 1 行を 1 回の追記で書く。短い追記は互いに混ざらないので、ロックは取らない。 */
