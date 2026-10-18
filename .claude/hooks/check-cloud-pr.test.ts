@@ -12,7 +12,11 @@ function git(cwd: string, ...args: string[]): void {
 }
 
 /** origin だけを差し替えた、head ブランチをチェックアウトした作業ツリーで事前チェックを走らせる。 */
-function preflight(originUrl: string): { decision: string; reason?: string } {
+function preflight(originUrl: string): {
+  schemaVersion?: number;
+  decision: string;
+  reason?: string;
+} {
   const dir = mkdtempSync(join(tmpdir(), 'check-cloud-pr-'));
   try {
     git(dir, 'init', '-q', '-b', 'feat');
