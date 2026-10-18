@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 /**
- * PreToolUse(mcp__*__create_pull_request、Cursor では MCP:create_pull_request): GitHub MCP 経由の PR 作成にも、Bash の
+ * PreToolUse(mcp__*__[github_]create_pull_request、Cursor では MCP:[github_]create_pull_request): GitHub MCP 経由の PR 作成にも、Bash の
  * `gh pr create` と同じレビュー収束ゲート（.claude/rules/pr-self-review.md）を適用する。
  *
  * `require-pr-self-review.ts` は Bash コマンド文字列の解析（isPrCreateCommand）にしか

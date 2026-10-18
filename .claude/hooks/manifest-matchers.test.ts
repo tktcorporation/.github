@@ -46,6 +46,12 @@ describe('PR 作成の MCP 呼び出しに掛ける matcher', () => {
         const pattern = new RegExp(matcher ?? '');
         for (const name of names) expect(pattern.test(name)).toBe(true);
         for (const name of otherNames) expect(pattern.test(name)).toBe(false);
+        // Cursor（MCP:）と Claude Code・Codex（mcp__）の命名を取り違えて受け付けない
+        const foreign =
+          host === 'cursor'
+            ? [...prCreateNames.claude, ...prCreateNames.codex]
+            : prCreateNames.cursor;
+        for (const name of foreign) expect(pattern.test(name)).toBe(false);
       }
     });
   }

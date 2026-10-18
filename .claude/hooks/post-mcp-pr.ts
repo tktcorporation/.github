@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 /**
- * PostToolUse(mcp__*__create_pull_request、Cursor では MCP:create_pull_request): PR 作成後、次の PR 用にレビュー記録をリセットする。
+ * PostToolUse(mcp__*__[github_]create_pull_request、Cursor では MCP:[github_]create_pull_request): PR 作成後、次の PR 用にレビュー記録をリセットする。
  *
  * Bash 経路の post-bash-pr.ts は `gh pr view` で実際に PR が存在するかを確認してから
  * リセットする（終了コードは `|| true` 等で上書きできるため信用しない）。MCP 経路は
