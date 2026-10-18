@@ -96,7 +96,7 @@ module.exports = async function cloudPrFeedback(tools, options) {
   };
   // polls は 1 秒ごとの完了確認の回数。待ち切れないと失敗を返すが、コマンド自体は走り続けるため、
   // 待たれる側の上限時間より長く取る。ゲートのリモート確認は 15 秒で打ち切られる
-  // （.claude/hooks/require-pr-self-review-mcp.ts の REMOTE_FETCH_TIMEOUT_MS）。
+  // （.claude/hooks/pr-review-gate.ts の REMOTE_FETCH_TIMEOUT_MS）。
   const run = async (cmd, maxOutputTokens, polls = 30) => {
     let result = await tools.exec({
       cmd,

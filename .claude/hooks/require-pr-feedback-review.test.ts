@@ -22,7 +22,11 @@ interface FakeThread {
 }
 
 function git(cwd: string, ...args: string[]): void {
-  const result = Bun.spawnSync(['git', ...args], { cwd, stdout: 'pipe', stderr: 'pipe' });
+  const result = Bun.spawnSync(['git', '-c', 'commit.gpgsign=false', ...args], {
+    cwd,
+    stdout: 'pipe',
+    stderr: 'pipe',
+  });
   if (result.exitCode !== 0) throw new Error(new TextDecoder().decode(result.stderr));
 }
 
@@ -61,6 +65,11 @@ async function checkPush(
   return { code, error };
 }
 
+const round = (head: string, count: number, reviewer: 'other' | 'codex'): Entry => ({
+  kind: 'round',
+  round: { count, sha: head, reviewer, accepted: false },
+});
+
 describe('外部指摘後の push ガード', () => {
   test('git -C で別 worktree を push するときは、その作業ツリーの PR を検査する', async () => {
     const root = await mkdtemp(join(tmpdir(), 'pr-feedback-target-'));
@@ -85,6 +94,99 @@ describe('外部指摘後の push ガード', () => {
         },
         stdin: new Blob([
           JSON.stringify({ cwd: caller, tool_input: { command: `git -C ${target} push` } }),
+        ]),
+        stdout: 'pipe',
+        stderr: 'pipe',
+      });
+      const [code, error] = await Promise.all([child.exited, new Response(child.stderr).text()]);
+      expect(error).toContain('外部レビュー指摘');
+      expect(code).toBe(2);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test('default branch に取り込まれた前の作業のラウンドは、指摘後のレビューに数えない', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'pr-feedback-range-'));
+    try {
+      const remote = join(root, 'remote.git');
+      const cwd = join(root, 'clone');
+      const bin = join(root, 'bin');
+      await mkdir(bin);
+      git(root, 'init', '-q', '--bare', '-b', 'main', remote);
+      git(root, 'clone', '-q', remote, cwd);
+      git(cwd, 'config', 'user.name', 'Test');
+      git(cwd, 'config', 'user.email', 'test@example.com');
+      git(cwd, 'checkout', '-q', '-b', 'main');
+      await writeFile(join(cwd, 'README'), 'base');
+      git(cwd, 'add', 'README');
+      git(cwd, 'commit', '-qm', 'base');
+      git(cwd, 'push', '-q', 'origin', 'main');
+      git(cwd, 'remote', 'set-head', 'origin', 'main');
+      // 前の作業を fast-forward で取り込み、同じ名前でブランチを作り直す。
+      git(cwd, 'checkout', '-q', '-b', 'work');
+      await writeFile(join(cwd, 'README'), 'previous');
+      git(cwd, 'commit', '-qam', 'previous');
+      const previous = await reviewTargetSha({ cwd });
+      git(cwd, 'checkout', '-q', 'main');
+      git(cwd, 'merge', '-q', '--ff-only', 'work');
+      git(cwd, 'push', '-q', 'origin', 'main');
+      git(cwd, 'checkout', '-q', '-B', 'work', 'origin/main');
+      await writeFile(join(cwd, 'README'), 'fresh');
+      git(cwd, 'commit', '-qam', 'fresh');
+      const sha = await reviewTargetSha({ cwd });
+      await writeFile(
+        join(bin, 'gh'),
+        '#!/bin/sh\nif [ "$1" = "pr" ]; then printf \'{"number":42}\\n\'; exit 0; fi\nif [ "$1" = "api" ] && [ "$2" = "user" ]; then printf "testuser\\n"; exit 0; fi\nif [ "$1" = "api" ]; then case "$2" in */reviews?*) printf "%s\\n" "$FAKE_REVIEWS";; *) printf "%s\\n" "$FAKE_COMMENTS";; esac; exit 0; fi\nexit 1\n',
+        { mode: 0o755 },
+      );
+      await Bun.write(
+        await externalReviewFile({ cwd }),
+        JSON.stringify({
+          pr: 42,
+          heads: [sha],
+          seenComments: ['comment:1'],
+          consultation: { kind: 'none' },
+          roundsAtLastFeedback: 0,
+          reviewedCommentCount: 0,
+        }),
+      );
+      // 位置だけを数えれば 2 ラウンドで収束に見えるが、1 件目は取り込み済みの作業へのレビュー。
+      await writeEntries([round(previous, 1, 'other'), round(sha, 0, 'codex')], { cwd });
+      expect((await checkPush(cwd, bin)).code).toBe(2);
+      await writeEntries(
+        [round(previous, 1, 'other'), round(sha, 1, 'other'), round(sha, 0, 'codex')],
+        { cwd },
+      );
+      expect((await checkPush(cwd, bin)).code).toBe(0);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test('先頭の cd でサブディレクトリの別リポジトリへ移って push するときは、そのリポジトリを検査する', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'pr-feedback-cd-'));
+    try {
+      const target = join(root, 'nested repo');
+      const bin = join(root, 'bin');
+      await Promise.all([mkdir(target), mkdir(bin)]);
+      git(root, 'init', '-q');
+      git(target, 'init', '-q');
+      await writeFile(
+        join(bin, 'gh'),
+        '#!/bin/sh\nif [ "$1" = "pr" ]; then if [ "$PWD" != "$FAKE_TARGET" ]; then echo "no pull requests found for branch" >&2; exit 1; fi; printf \'{"number":42}\\n\'; exit 0; fi\nif [ "$1" = "api" ] && [ "$2" = "user" ]; then printf "testuser\\n"; exit 0; fi\nif [ "$1" = "api" ]; then case "$2" in */reviews?*) printf \'[[]]\\n\';; *) printf \'[[{"id":1,"commit_id":"test-head","created_at":"2026-09-23T00:00:01Z","user":{"login":"reviewer"}}]]\\n\';; esac; exit 0; fi\nexit 1\n',
+        { mode: 0o755 },
+      );
+      const child = Bun.spawn(['bun', preBash], {
+        cwd: root,
+        env: {
+          ...process.env,
+          PATH: `${bin}:${process.env.PATH}`,
+          CLAUDE_PROJECT_DIR: join(import.meta.dir, '../..'),
+          FAKE_TARGET: target,
+        },
+        stdin: new Blob([
+          JSON.stringify({ cwd: root, tool_input: { command: 'cd "nested repo" && git push' } }),
         ]),
         stdout: 'pipe',
         stderr: 'pipe',

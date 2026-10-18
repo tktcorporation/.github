@@ -1,10 +1,21 @@
 #!/usr/bin/env bun
-/** Explicit gate for hosts that do not dispatch repository PreToolUse hooks. */
+/**
+ * Explicit gate for hosts that do not dispatch repository PreToolUse hooks. It allows the exact
+ * request only when the remote head SHA has a review convergence attestation in the ledger
+ * (pr-review-gate.ts) and the self-declared review evidence still matches the head, base and rounds.
+ */
 import { $ } from 'bun';
-import { isRecord } from './hook-utils.ts';
-import { requireReviewedPr, remoteHeadSha } from './require-pr-self-review-mcp.ts';
-import { reviewCountFile } from './review-count.ts';
+import { currentBranch, isRecord, originRepository } from './hook-utils.ts';
+import { prCreateTarget } from './pr-create-target.ts';
+import {
+  baseDenyReason,
+  checkAttestation,
+  readAttestations,
+  remoteHeadSha,
+} from './pr-review-gate.ts';
+import { readRecordedEntries } from './review-count.ts';
 import { checkReviewEvidence, readReviewEvidence } from './review-evidence.ts';
+import { formatEntries } from './review-policy.ts';
 
 type CreateRequest = {
   repository_full_name: string;
@@ -66,29 +77,43 @@ function parsePayload(value: unknown): {
 
 try {
   const { request, expectedHead, expectedBase } = parsePayload(JSON.parse(await Bun.stdin.text()));
+  const cwd = process.cwd();
   const baseRef = `refs/heads/${request.base}`;
   const validRef = await $`git check-ref-format ${baseRef}`.quiet().nothrow();
   if (validRef.exitCode !== 0) throw new Error('Invalid base branch');
   const status = await $`git status --porcelain`.quiet();
   if (status.text().trim()) throw new Error('Commit or remove unreviewed working-tree changes');
-  const { headSha, headBranch } = await requireReviewedPr({
-    cwd: process.cwd(),
-    tool_input: request,
-  });
-  if (headSha !== expectedHead) throw new Error('Expected head differs from reviewed HEAD');
-  const baseSha = await remoteHeadSha(process.cwd(), request.base);
+  const target = prCreateTarget(request);
+  if (target.headOwner.toLowerCase() !== target.owner.toLowerCase())
+    throw new Error('Cross-owner fork PRs cannot be created through this wrapper');
+  const headBranch = target.headBranch;
+  // The review evidence sidecar belongs to the rounds file of the checked-out branch.
+  if ((await currentBranch(cwd)) !== headBranch)
+    throw new Error(`Run from a checkout of the head branch ${headBranch}`);
+  const repo = `${target.owner}/${target.repo}`.toLowerCase();
+  const baseError = await baseDenyReason(cwd, request.base);
+  if (baseError) throw new Error(baseError);
+  // Convergence is decided by the attestation ledger for the remote head SHA (pr-review-gate.ts).
+  const attestationError = await checkAttestation(repo, headBranch, cwd);
+  if (attestationError) throw new Error(attestationError);
+  const origin = await originRepository(cwd);
+  const attested = (await readAttestations()).some(
+    (entry) =>
+      entry.sha === expectedHead && entry.repo === repo && entry.host === (origin?.host ?? null),
+  );
+  if (!attested) throw new Error('Expected head has no review convergence attestation');
+  const baseSha = await remoteHeadSha(cwd, request.base);
   if (!baseSha || baseSha !== expectedBase)
     throw new Error('Remote base changed or could not be read');
-  const roundsText = await Bun.file(await reviewCountFile()).text();
-  const evidenceError = checkReviewEvidence(await readReviewEvidence(), {
-    headSha,
+  const evidenceError = checkReviewEvidence(await readReviewEvidence({ cwd }), {
+    headSha: expectedHead,
     baseSha,
-    roundsText,
+    roundsText: formatEntries(await readRecordedEntries({ cwd })),
   });
   if (evidenceError) throw new Error(evidenceError);
   // Recheck after reading evidence; a concurrent push still cannot be atomically locked with PR creation.
-  if ((await remoteHeadSha(process.cwd(), headBranch)) !== headSha) {
-    throw new Error('Remote head changed during preflight');
+  if ((await remoteHeadSha(cwd, headBranch)) !== expectedHead) {
+    throw new Error('Remote head differs from expected head');
   }
   console.log(
     JSON.stringify({

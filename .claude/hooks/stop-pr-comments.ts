@@ -17,7 +17,7 @@
 import { $ } from 'bun';
 import { mkdir } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
-import { readInput, sessionStateDir, workingTree } from './hook-utils.ts';
+import { hookCommand, readInput, resolveTarget, sessionStateDir } from './hook-utils.ts';
 import { refreshFeedback } from './pr-feedback-observation.ts';
 
 const THROTTLE_MS = 45_000;
@@ -39,7 +39,12 @@ function safeShellJson<T>(output: $.ShellOutput, fallback: T): T {
 
 const input = await readInput();
 if (input?.stop_hook_active) process.exit(0);
-const tree = await workingTree(input);
+// Stop の入力にはコマンドが無いので、対象はセッションの現在地（入力の cwd）のチェックアウトになる。
+// `cd <submodule> && ...` のようにコマンドごとに移動して作業していると、現在地はルートのままで、
+// サブモジュール側の PR は見ない（ゲートは push・PR 作成の時点で対象を解くので、見逃しは
+// Stop での通知に限られる）。
+const target = await resolveTarget(input);
+const tree = target.cwd;
 
 const directory = await sessionStateDir();
 const throttlePath = directory
@@ -162,13 +167,13 @@ const stateOf = (thread: Thread) => `${thread.id}:${thread.comments.nodes[0]?.da
 const fresh = waiting.filter((thread) => !nagged.has(stateOf(thread)));
 // レビュー本文だけの CHANGES_REQUESTED にも未解決スレッドは存在しない。
 // スレッドの有無に関係なく GitHub のレビューを観測してから通知を判定する。
-const observed = await refreshFeedback(input);
+const observed = await refreshFeedback(target);
 if (observed.kind !== 'found') {
   if (fresh.length === 0) process.exit(0);
   console.log(
     JSON.stringify({
       decision: 'block',
-      reason: `PR #${number} の指摘を履歴に記録できませんでした。bun .claude/hooks/observe-pr-feedback.ts を再実行し、成功を確認してからレビューを始めてください。`,
+      reason: `PR #${number} の指摘を履歴に記録できませんでした。${hookCommand('observe-pr-feedback.ts')} を ${tree} で再実行し、成功を確認してからレビューを始めてください。`,
     }),
   );
   process.exit(0);
@@ -196,8 +201,7 @@ const reviewSummary =
   freshReviews.length > 0
     ? `\n- 変更要求レビュー本文 ${freshReviews.length} 件。gh pr view ${number} --json reviews で本文を確認してください。`
     : '';
-const guidance =
-  '指摘を読み始めるときは bun .claude/hooks/observe-pr-feedback.ts で観測を記録してください。個別の指摘だけを直して push せず、.claude/skills/pr-review-loop/SKILL.md の手順で差分全体を再レビューし、収束させてから push してください。外部指摘が異なる HEAD に 3 回続いた場合は .claude/rules/ci-workflow.md の診断と方針相談を行ってください。';
+const guidance = `指摘を読み始めるときは ${tree} で ${hookCommand('observe-pr-feedback.ts')} を実行して観測を記録してください。個別の指摘だけを直して push せず、.claude/skills/pr-review-loop/SKILL.md の手順で差分全体を再レビューし、収束させてから push してください。外部指摘が異なる HEAD に 3 回続いた場合は .claude/rules/ci-workflow.md の診断と方針相談を行ってください。`;
 console.log(
   JSON.stringify({
     decision: 'block',

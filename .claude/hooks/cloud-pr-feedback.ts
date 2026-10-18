@@ -13,8 +13,8 @@ import {
 import { writeCloudPushGrant } from './cloud-push-grant.ts';
 import { isRecord } from './hook-utils.ts';
 import { nowMs, parseIsoUtcMs } from './iso-time.ts';
-import { remoteHeadSha } from './require-pr-self-review-mcp.ts';
-import { reviewTargetSha } from './review-count.ts';
+import { remoteHeadSha } from './pr-review-gate.ts';
+import { reviewRangeOf, reviewTargetSha } from './review-count.ts';
 import { MIN_NOTE_LENGTH, normalizeNote } from './review-policy.ts';
 
 type CloudEvidence = {
@@ -282,11 +282,16 @@ export async function processCloudFeedback(
         .quiet()
         .nothrow()
     ).exitCode === 0;
+  const reviewable = await reviewRangeOf(
+    observed.rounds.map((round) => round.sha),
+    input,
+  );
   const verdict = judgeExternalPush(
     observed.history,
     observed.rounds,
     currentHead,
     reviewedHeadPublished,
+    reviewable,
   );
   if (verdict !== 'allow') throw new Error(`外部レビューの push ゲート: ${verdict}`);
   if (observed.history.reviewedCommentCount < comments.length)

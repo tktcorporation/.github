@@ -19,13 +19,13 @@ git rev-parse HEAD "origin/$default_branch"
 bun .claude/hooks/record-pr-review.ts 0 codex --base "origin/$default_branch" --evidence /tmp/final-review.txt
 ```
 
-件数・`accepted`・`codex` は実際の結果と既存ルールに従う。例の0を結果を確認せず記録しない。保存される証跡はbase/head、レポート本文とハッシュ、ラウンド記録のハッシュであり、独立実行を認証する署名ではない。
+件数・`accepted`・`codex` は実際の結果と既存ルールに従う。例の0を結果を確認せず記録しない。このラウンドで収束すると、記録用の CLI がそのHEADのSHAを収束の証跡として台帳（`claude/pr-review/attestations.jsonl`、`.claude/rules/pr-self-review.md` の「仕組み」節）に書く。`--evidence` で保存される証拠はbase/head、レポート本文とハッシュ、ラウンド記録のハッシュであり、独立実行を認証する署名ではない。
 
-必要なテストを実行し、最新baseとの実マージ結果を確認する。変更ブランチだけをpushしてから作成する。HEADやbaseが変わった場合は、新しい差分をレビューし直して証跡を記録する。
+必要なテストを実行し、最新baseとの実マージ結果を確認する。収束を記録したHEADそのものを変更ブランチへpushしてから作成する。HEADやbaseが変わった場合は、新しい差分をレビューし直して証跡を記録する。
 
 ## functions.execから作成する
 
-以下の `cwd`・SHA・base ブランチ名・本文・コネクタ名は実際の作業対象に合わせる。BunがPATHに無い場合は、`bun` に確認済みの実行ファイルの絶対パスを渡す。ソースはレビューした作業ツリーから読み込む。
+以下の `cwd`・SHA・base ブランチ名・本文・コネクタ名は実際の作業対象に合わせる。`cwd` は head ブランチをチェックアウトし、対象リポジトリを origin に持つ作業ツリーにする。base は origin の既定ブランチ（`origin/HEAD`）にする。BunがPATHに無い場合は、`bun` に確認済みの実行ファイルの絶対パスを渡す。ソースはレビューした作業ツリーから読み込む。
 
 ```javascript
 const cwd = '/workspace/repository/worktree';
@@ -66,9 +66,9 @@ text(result);
 
 ## 強制する範囲
 
-このラッパーは、未収束、証跡なし、汚れた作業ツリー、対象不一致、古いhead/base、通信失敗、未完了のチェック、不正な応答では作成コネクタを呼ばない。既存のフック対応ホストではCodexアダプターが `Bash` と `exec_command` を共有フックへ渡すが、ホストが `.codex/hooks.json` を読むことが前提になる。`functions.exec` 内の全呼び出しを自動捕捉する設定ではない。
+このラッパーは、リモートのheadのSHAに収束の証跡が無いとき（未収束、収束後に積んだコミット、未push）、レビューの証拠が無いか古いとき、汚れた作業ツリー、対象不一致、既定ブランチ以外のbase、古いhead/base、通信失敗、未完了のチェック、不正な応答では作成コネクタを呼ばない。既存のフック対応ホストではCodexアダプターが `Bash` と `exec_command` を共有フックへ渡すが、ホストが `.codex/hooks.json` を読むことが前提になる。`functions.exec` 内の全呼び出しを自動捕捉する設定ではない。
 
-別CLI、GitHub画面、直接API、reopen、作成後のpush、改変されたラッパーはこの入口の外にある。レビュー記録は自己申告で、判定と作成の間のリモート更新もGitHubとの原子的操作にはできない。返却されたhead/baseが違えば未検証として報告する。既存共有ゲートのorigin照合はURL末尾のowner/repoを使い、ホストの真正性までは検証しない。
+別CLI、GitHub画面、直接API、reopen、作成後のpush、改変されたラッパーはこの入口の外にある。レビュー記録は自己申告で、判定と作成の間のリモート更新もGitHubとの原子的操作にはできない。返却されたhead/baseが違えば未検証として報告する。共有ゲートのorigin照合はURLのホストと末尾のowner/repoを証跡と突き合わせるが、そのホストが実際に対象のGitHubインスタンスかまでは検証しない。
 
 CIのフックテストは判定実装の検証であり、各PRの独立レビュー実施の認証ではない。全経路の統制やマージ時の強制には、ホスト側のツール制御やGitHubの権限・必須チェック設定が別途必要になる。これらの外部設定をこのラッパーは変更しない。
 

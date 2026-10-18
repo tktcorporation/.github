@@ -1,8 +1,10 @@
 #!/usr/bin/env bun
 import { $ } from 'bun';
 import { readFile } from 'node:fs/promises';
+import { hookCommand, originRepository, workingTree } from './hook-utils.ts';
+import { appendAttestation, branchName, roundSummary } from './pr-review-gate.ts';
 import { createReviewEvidence, parseRoundArgs, writeReviewEvidence } from './review-evidence.ts';
-import { readEntries, reviewTargetSha, writeEntries } from './review-count.ts';
+import { appendEntry, readEntries, readRecordedEntries, reviewTargetSha } from './review-count.ts';
 import {
   ASKED,
   CHECKPOINT_DECISIONS,
@@ -20,12 +22,15 @@ import {
   formatEntries,
   roundsOf,
 } from './review-policy.ts';
-import type { CheckpointReason, CheckpointRejection, DueState } from './review-policy.ts';
+import type { CheckpointReason, CheckpointRejection, DueState, Entry } from './review-policy.ts';
 
+// 対象は実行したディレクトリのチェックアウト。サブモジュールや worktree で作業しているときは、
+// そのディレクトリからこのスクリプトを（絶対パスで）実行する。
+const command = hookCommand('record-pr-review.ts');
 const usage =
   '使い方:\n' +
-  `  ラウンドの記録: bun .claude/hooks/record-pr-review.ts <このラウンドの指摘件数> [${ROUND_FLAGS.join('] [')}]\n` +
-  `  振り返りの記録: bun .claude/hooks/record-pr-review.ts checkpoint <${CHECKPOINT_DECISIONS.join('|')}> "<診断メモ>"\n` +
+  `  ラウンドの記録: ${command} <このラウンドの指摘件数> [${ROUND_FLAGS.join('] [')}]\n` +
+  `  振り返りの記録: ${command} checkpoint <${CHECKPOINT_DECISIONS.join('|')}> "<診断メモ>"\n` +
   'クラウド用証跡: ラウンド引数に --base <git-ref> --evidence <report-path> を追加。レポート全文と HEAD/base/記録のハッシュを保存（自己申告）。\n' +
   '指摘に対応し終えたラウンドだけを記録する。指摘 0 件のラウンドは 0 を渡す。\n' +
   'codex review でレビューしたラウンドは codex を渡す（自己申告であり、hook は実行の\n' +
@@ -76,11 +81,11 @@ function blockedText(state: DueState, rerun: string): string {
   if (state.reason === null) {
     decide =
       '2. 方針を変えるか、変えずに続けるかを決めて、\n' +
-      `   bun .claude/hooks/record-pr-review.ts checkpoint <${CHECKPOINT_DECISIONS.filter((decision) => decision !== ASKED).join('|')}> "<診断メモ>"\n`;
+      `   ${command} checkpoint <${CHECKPOINT_DECISIONS.filter((decision) => decision !== ASKED).join('|')}> "<診断メモ>"\n`;
   } else {
     decide =
       `2. ${checkpointReasonText(state.reason, state.counts)}ので、${consultationGuide} ユーザーの回答を得てから、\n` +
-      `   bun .claude/hooks/record-pr-review.ts checkpoint ${ASKED} "<診断メモ>"\n`;
+      `   ${command} checkpoint ${ASKED} "<診断メモ>"\n`;
   }
   return (
     `振り返りが必要です（指摘件数の推移: ${trendText(state.counts)}）。このラウンドの記録は保留しました。\n` +
@@ -109,7 +114,7 @@ if (countArg === 'checkpoint') {
     console.error(rejectionText(verdict.rejection));
     process.exit(1);
   }
-  await writeEntries(verdict.entries);
+  await appendEntry(verdict.entry);
   console.log(`振り返りを記録（${decision}）。次のラウンドから記録できます。`);
   process.exit(0);
 }
@@ -139,10 +144,11 @@ if (status.exitCode === 0 && status.text().trim()) {
 const round = roundFromFlags(Number(countArg), await reviewTargetSha(), flagArgs);
 const verdict = judgeRound(await readEntries(), round);
 if (verdict.kind === 'blocked') {
-  const rerun = `bun .claude/hooks/record-pr-review.ts ${[countArg, ...flagArgs].join(' ')}`;
+  const rerun = `${command} ${[countArg, ...flagArgs].join(' ')}`;
   console.error(blockedText(verdict.state, rerun));
   process.exit(1);
 }
+const entry: Entry = { kind: 'round', round };
 // Validate the complete report and resolve its base before changing the rounds SSOT.
 let evidence;
 if (baseRef !== undefined && evidencePath !== undefined) {
@@ -160,24 +166,51 @@ if (baseRef !== undefined && evidencePath !== undefined) {
         ? 'self-declared codex or approved independent fallback'
         : 'self-declared review',
       reportText: await readFile(evidencePath, 'utf8'),
-      roundsText: formatEntries(verdict.entries),
+      // The rounds file keeps every record, including ones outside the review range; hash
+      // the whole file as it will read after this append, as check-cloud-pr.ts does.
+      roundsText: formatEntries([...(await readRecordedEntries()), entry]),
     });
   } catch (error) {
     console.error(String(error));
     process.exit(1);
   }
 }
-await writeEntries(verdict.entries);
+await appendEntry(entry);
 // A failed sidecar write leaves the cloud gate closed: old evidence no longer matches rounds.
 if (evidence) await writeReviewEvidence(evidence);
-const roundCount = roundsOf(verdict.entries).length;
+const rounds = roundsOf(verdict.entries);
 const converged = verdict.convergence.kind === 'converged';
 const state =
   verdict.convergence.kind === 'converged'
     ? 'PR 作成前レビューは収束。既存 PR の外部指摘後は、指摘の観測以降に 2 ラウンドのレビューが必要'
     : `未収束（${convergenceReason(verdict.convergence)}）`;
 const flagText = flagArgs.map((flag) => `、${flag}`).join('');
-console.log(`ラウンド ${roundCount} を記録（指摘 ${countArg} 件${flagText}）。${state}。`);
+console.log(`ラウンド ${rounds.length} を記録（指摘 ${countArg} 件${flagText}）。${state}。`);
+// 収束した HEAD の SHA を PR 作成ゲートの証跡として台帳に残す（pr-review-gate.ts）。
+if (converged) {
+  const tree = await workingTree();
+  const [origin, branch] = await Promise.all([originRepository(tree), branchName(tree)]);
+  const repo = origin ? `${origin.owner}/${origin.repo}`.toLowerCase() : null;
+  if (origin === null || repo === null || branch === null) {
+    console.log(
+      `${repo === null ? 'origin から owner/repo を読み取れない' : 'detached HEAD である'}ため、PR 作成ゲートの証跡は書けませんでした。origin を設定し、ブランチをチェックアウトしてから記録し直してください。`,
+    );
+  } else {
+    await appendAttestation({
+      sha: round.sha,
+      repo,
+      host: origin.host,
+      branch,
+      checkout: tree,
+      rounds: rounds.map(roundSummary),
+      accepted: round.accepted,
+      at: new Date().toISOString(),
+    });
+    console.log(
+      `PR 作成ゲートの証跡を記録（${repo}@${branch} ${round.sha}）。この SHA を push すれば PR を作成できます。`,
+    );
+  }
+}
 if (verdict.next.status === 'due' && !converged) {
   const { counts, reason } = verdict.next;
   console.log(

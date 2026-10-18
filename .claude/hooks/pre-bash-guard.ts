@@ -28,12 +28,9 @@ import {
   type SimpleCommand,
 } from './command-parse.ts';
 import { dirtyFiles } from './foreign-changes.ts';
-import {
-  isPrCreateCommand,
-  ownershipFingerprint,
-  projectDirectory,
-  readEditedFiles,
-} from './hook-utils.ts';
+import { ownershipFingerprint, projectDirectory, readEditedFiles } from './hook-utils.ts';
+import { prCreateInvocation } from './pr-create-command.ts';
+import { bashPrCreateDenyReason } from './pr-review-gate.ts';
 
 const text = await Bun.stdin.text();
 let input: { session_id?: string; cwd?: string; tool_input?: { command?: string } };
@@ -381,17 +378,38 @@ async function run(path: string, cwd?: string): Promise<void> {
   // block-redash-direct-exec.sh / block-athena-exec.sh が発火しなくなる
   // 回帰が起きた）。
   const interpreter = path.endsWith('.sh') ? 'bash' : 'bun';
+  // cwd を渡すのは、ここで対象ディレクトリ（cd や git -C を解いた結果）を確定させた検査だけ。
+  // 受け手がコマンド文字列から対象を解き直さないよう、command を外して渡す。
+  const stdin = cwd
+    ? JSON.stringify({ ...input, cwd, tool_input: { ...input.tool_input, command: undefined } })
+    : text;
   const child = Bun.spawn([interpreter, join(root, path)], {
     cwd: root,
     env: process.env,
-    stdin: new Blob([cwd ? JSON.stringify({ ...input, cwd }) : text]),
+    stdin: new Blob([stdin]),
     stdout: 'inherit',
     stderr: 'inherit',
   });
   const status = await child.exited;
   if (status !== 0) process.exit(status);
 }
-if (isPrCreateCommand(command)) await run('.claude/hooks/require-pr-self-review.ts');
+// gh pr create は、対象（実行ディレクトリ・-R のリポジトリ・--head のブランチ）が実行前に確定する形だけを受け付け、
+// リモートの head の SHA に収束の証跡があるかで判定する（pr-review-gate.ts）。
+// 判定の途中で落ちたときも PR 作成は通さない。exit 2 以外の異常終了は、hook 実行系が
+// 非ブロッキングの失敗として扱い、コマンドをそのまま実行させるため。
+let prCreateReason: string | null;
+try {
+  const prCreate = prCreateInvocation(command, origin);
+  prCreateReason =
+    prCreate.kind === 'rejected'
+      ? prCreate.reason
+      : prCreate.kind === 'canonical'
+        ? await bashPrCreateDenyReason(prCreate)
+        : null;
+} catch (error) {
+  prCreateReason = `PR 作成ゲートの判定に失敗しました（${error instanceof Error ? error.message : String(error)}）。`;
+}
+if (prCreateReason) block(`PR作成をブロックしました。${prCreateReason}`);
 // PreToolUse はシェル全体の実行前に一度だけ動く。先行コマンドが HEAD を変えると、
 // この時点で検査した SHA と実際に push される SHA が異なる。
 const HEAD_MUTATIONS = new Set([
