@@ -32,7 +32,6 @@ type CloudEvidence = {
 const sha = (value: unknown): value is string =>
   typeof value === 'string' && /^[0-9a-f]{40}$/.test(value);
 
-/** Compare the effective Git remote, not a particular HTTPS/SSH serialization. */
 /**
  * GitHub はリポジトリ名の大文字小文字を区別しないため、owner/repo を含む値は小文字にそろえて比べる。
  * ブランチ名と SHA は区別されるので、この比較に使わない。
@@ -41,6 +40,7 @@ export function sameRepositoryText(actual: unknown, expected: string): boolean {
   return typeof actual === 'string' && actual.toLowerCase() === expected.toLowerCase();
 }
 
+/** Compare the effective Git remote, not a particular HTTPS/SSH serialization. */
 export function matchesGitHubRemote(remote: string, repository: string): boolean {
   const match =
     /^(?:https:\/\/github\.com(?::443)?\/|ssh:\/\/git@github\.com(?::22)?\/|git@github\.com:)([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+)\/?$/i.exec(

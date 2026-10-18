@@ -7,19 +7,24 @@ import { join } from 'node:path';
 const codexAdapter = join(import.meta.dir, '../../.codex/run-shared-hook.ts');
 const cursorAdapter = join(import.meta.dir, '../../.cursor/run-shared-hook.ts');
 
-/** 常に exit 1 で落ちる hook（ファイル名だけ本物と同じ）をアダプター経由で動かす。 */
+/** 本物と同じファイル名の hook（既定は常に exit 1 で落ちる）をアダプター経由で動かす。 */
 async function runCrashingHook(
   hookName: string,
-  payload: Record<string, unknown>,
+  payload: Record<string, unknown> | string,
   adapter = codexAdapter,
+  hookSource = 'process.exit(1);\n',
 ): Promise<{ code: number; stdout: string }> {
   const dir = await mkdtemp(join(tmpdir(), 'run-shared-hook-'));
   try {
     const hook = join(dir, hookName);
-    await writeFile(hook, 'process.exit(1);\n');
+    await writeFile(hook, hookSource);
+    const input =
+      typeof payload === 'string'
+        ? payload
+        : JSON.stringify({ cwd: dir, hook_event_name: 'PreToolUse', ...payload });
     const child = Bun.spawn(['bun', adapter, hook], {
       cwd: dir,
-      stdin: new Blob([JSON.stringify({ cwd: dir, hook_event_name: 'PreToolUse', ...payload })]),
+      stdin: new Blob([input]),
       stdout: 'pipe',
       stderr: 'pipe',
     });
@@ -97,6 +102,31 @@ describe('アダプター経由で hook 自体が落ちたとき', () => {
       );
       expect(result.code).toBe(2);
       expect(result.stdout).toContain('"permission":"deny"');
+    },
+    SPAWN_TEST_TIMEOUT_MS,
+  );
+
+  test(
+    'Cursor のアダプターでも、入力や出力を読めない PR 作成ゲートは作成を拒否する',
+    async () => {
+      const prInput = {
+        hook_event_name: 'preToolUse',
+        tool_name: 'mcp__github__create_pull_request',
+        tool_input: { owner: 'owner', repo: 'repo', head: 'feature', base: 'main' },
+      };
+      const results = await Promise.all([
+        runCrashingHook('require-pr-self-review-mcp.ts', '{not json', cursorAdapter),
+        runCrashingHook(
+          'require-pr-self-review-mcp.ts',
+          prInput,
+          cursorAdapter,
+          "console.log('not json');\n",
+        ),
+      ]);
+      for (const result of results) {
+        expect(result.code).toBe(2);
+        expect(result.stdout).toContain('"permission":"deny"');
+      }
     },
     SPAWN_TEST_TIMEOUT_MS,
   );
