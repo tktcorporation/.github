@@ -627,7 +627,7 @@ describe('Bash の PR 作成ゲート', () => {
     expect(stale.stderr).toContain(attested);
   });
 
-  test('収束後に同じ SHA へ指摘ありのラウンドを記録すると証跡を取り消し、再び収束すれば通す（指摘 0 件では取り消さない）', async () => {
+  test('収束後に同じ SHA へ指摘ありのラウンドを記録すると証跡を取り消し、再び収束すれば通す（指摘 0 件では取り消さず、直したコミットで記録すれば祖先の証跡を取り消す）', async () => {
     const command = 'cd lib && gh pr create -R github.com/acme/lib --head lib-work';
     const sha = git(at.lib, 'rev-parse', 'HEAD');
     expect((await bash(at.super, command)).code).toBe(0);
@@ -649,6 +649,19 @@ describe('Bash の PR 作成ゲート', () => {
 
     const reconverged = await run('record-pr-review.ts', at.lib, ['0', 'codex']);
     expect(reconverged.stdout).toContain('証跡を記録');
+    expect((await bash(at.super, command)).code).toBe(0);
+
+    // 指摘を直してコミットしてから記録したラウンドは、HEAD の祖先にある証跡を取り消す。
+    // リモートはまだ指摘のあったコミットを指しているので、PR を作れない。
+    const fixed = await commit(at.lib, 'fix-after-review');
+    const afterFix = await run('record-pr-review.ts', at.lib, ['1']);
+    expect(afterFix.stdout).toContain(sha);
+    expectSingleBlock(await bash(at.super, command));
+
+    // 直したコミットで収束を記録して push すれば通る。
+    expect((await run('record-pr-review.ts', at.lib, ['0', 'codex'])).stdout).toContain('証跡を記録');
+    git(at.lib, 'push', '-q', 'origin', 'lib-work');
+    expect(git(at.lib, 'rev-parse', 'HEAD')).toBe(fixed);
     expect((await bash(at.super, command)).code).toBe(0);
   });
 
