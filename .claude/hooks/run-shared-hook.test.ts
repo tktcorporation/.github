@@ -41,7 +41,7 @@ const SPAWN_TEST_TIMEOUT_MS = 30_000;
 
 describe('アダプター経由で hook が落ちたとき・入出力を読めないとき', () => {
   test(
-    '全コマンドで動く pre-bash-guard.ts は、警告を出して元の実行を続ける',
+    'Codex のアダプターで、全コマンドで動く pre-bash-guard.ts は、警告を出して元の実行を続ける',
     async () => {
       // 解析用の依存を入れられない環境では毎回落ちるため、拒否に倒すと全コマンドが止まり続ける。
       const commands = ['ls -la', 'git status', 'pnpm install'];
@@ -62,7 +62,7 @@ describe('アダプター経由で hook が落ちたとき・入出力を読め�
   );
 
   test(
-    '想定外の形の exec_command 入力では、hook を実行せずに元の実行を続ける',
+    'Codex のアダプターで、想定外の形の exec_command 入力では、hook を実行せずに元の実行を続ける',
     async () => {
       const results = await Promise.all(
         [JSON.stringify({ cmd: 'ls' }), { command: ['ls'] }].map((tool_input) =>
@@ -77,7 +77,7 @@ describe('アダプター経由で hook が落ちたとき・入出力を読め�
   );
 
   test(
-    'MCP 経由の PR 作成ゲートは、落ちたときも作成を通さない',
+    'Codex のアダプターで、MCP 経由の PR 作成ゲートは、落ちたときも作成を通さない',
     async () => {
       const result = await runStubHook('require-pr-self-review-mcp.ts', {
         tool_name: 'mcp__github__create_pull_request',
