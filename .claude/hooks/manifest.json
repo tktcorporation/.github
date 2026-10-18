@@ -219,7 +219,7 @@
       },
       "cursor": {
         "event": "preToolUse",
-        "matcher": "^mcp__.+__(?:github_)?create_pull_request$"
+        "matcher": "^MCP:(?:.+[_:])?create_pull_request$"
       },
       "codex": {
         "event": "PreToolUse",
@@ -235,7 +235,7 @@
       },
       "cursor": {
         "event": "postToolUse",
-        "matcher": "^mcp__.+__(?:github_)?create_pull_request$"
+        "matcher": "^MCP:(?:.+[_:])?create_pull_request$"
       },
       "codex": {
         "event": "PostToolUse",
