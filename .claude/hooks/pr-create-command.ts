@@ -181,13 +181,16 @@ function parsedPrCreate(command: string, origin: string, depth = 0): boolean {
     );
   return parsed.commands.some((entry) => {
     // 値を確定できない語（変数展開・コマンド置換）は、ghArgsCreatePr が実行時の値を仮定して判定する。
+    // `gh` の直後（pr の位置）の語が実行時まで決まらないことを数えるのは、実行される最上位のコマンドだけ。
+    // 引用符の中の文字列を解き直した段では、`git commit -m 'bump gh $VERSION'` のような文章にも当たるため。
     const argv = entry.argv.map((word) => wordValue(word) ?? NON_LITERAL_WORD);
     if (argv.some((value) => isPrCreateCommand(value))) return true;
     // `bash -c "g''h pr create"` のように、語の値そのものがコマンドとして解釈されうる。
     if (argv.slice(1).some((value) => parsedPrCreate(value, origin, depth + 1))) return true;
     return argv.some(
       (value, index) =>
-        basename(value) === 'gh' && ghArgsCreatePr(argv.slice(index + 1), { dynamicCommand: true }),
+        basename(value) === 'gh' &&
+        ghArgsCreatePr(argv.slice(index + 1), { dynamicCommand: depth === 0 }),
     );
   });
 }
