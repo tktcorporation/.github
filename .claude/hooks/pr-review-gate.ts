@@ -307,14 +307,27 @@ export async function bashPrCreateDenyReason(invocation: {
       return `--head の owner（${branch.slice(0, colon)}）が ${repo} の owner と異なります。フォークの PR は、フォークを origin に持つチェックアウトから作成してください。`;
     branch = branch.slice(colon + 1);
   }
-  // --base を省いた gh は、ブランチ設定の gh-merge-base があればそれを base にする。
-  const configuredBase = (
-    await $`git -C ${tree} config --get ${`branch.${branch}.gh-merge-base`}`.quiet().nothrow()
-  )
-    .text()
-    .trim();
-  const baseReason = await baseDenyReason(tree, invocation.base ?? (configuredBase || undefined));
-  if (baseReason) return baseReason;
+  if (invocation.base !== undefined) {
+    const baseReason = await baseDenyReason(tree, invocation.base);
+    if (baseReason) return baseReason;
+  } else {
+    // --base を省いた gh は、ブランチ設定の gh-merge-base があればそれを base にする。gh の説明は
+    // チェックアウト中のブランチ（branch.{current}.gh-merge-base）の設定を読むとしており、
+    // --head と異なることがある。どちらの設定を読んでも base が default branch になるよう、両方を確かめる。
+    const current = (await $`git -C ${tree} symbolic-ref --quiet --short HEAD`.quiet().nothrow())
+      .text()
+      .trim();
+    for (const name of new Set([branch, current].filter(Boolean))) {
+      const configuredBase = (
+        await $`git -C ${tree} config --get ${`branch.${name}.gh-merge-base`}`.quiet().nothrow()
+      )
+        .text()
+        .trim();
+      if (!configuredBase) continue;
+      const baseReason = await baseDenyReason(tree, configuredBase);
+      if (baseReason) return baseReason;
+    }
+  }
   return checkAttestation(repo, branch, tree);
 }
 

@@ -30,7 +30,7 @@ PR 作成ゲートは、判定の途中で落ちたときも PR を作らせな�
 
 Claude Code 以外（Cursor・Codex）での自動発火はホストごとの確認が要る。共有 MCP ゲートは `owner/repo/head` と `repository_full_name/head`（および対応する別名）を受け付け、矛盾する指定は拒否する。`functions.exec` を使うクラウドでは `.claude/guides/tools/cloud-review.md` の作成ラッパーを使う。ラッパーは、リモートの head の SHA に台帳の証跡があり、レビューの証拠（`record-pr-review.ts` の `--evidence`）が同じ head・base・記録と一致するときだけコネクタへ進む。別経路の API まで禁止するものではない。
 
-どちらの経路も、PR の base を指定するなら origin の default branch（`origin/HEAD`）と同じでなければ止める。レビューループは default branch との差分を見るので、別のブランチへ向けた PR にはレビューしていないコミットが入りうるため。Bash で `--base` を省いた場合は、gh が使うブランチ設定 `branch.<head>.gh-merge-base` を base として確かめる。base を省き、その設定も無ければ GitHub がリポジトリの default branch を使う。手元に `origin/HEAD` が無いと比べられないので止める（そのチェックアウトで `git remote set-head origin --auto` を実行する）。
+どちらの経路も、PR の base を指定するなら origin の default branch（`origin/HEAD`）と同じでなければ止める。レビューループは default branch との差分を見るので、別のブランチへ向けた PR にはレビューしていないコミットが入りうるため。Bash で `--base` を省いた場合は、gh が base に使うブランチ設定 `gh-merge-base` を、`--head` のブランチとチェックアウト中のブランチの両方について確かめる。base を省き、その設定も無ければ GitHub がリポジトリの default branch を使う。手元に `origin/HEAD` が無いと比べられないので止める（そのチェックアウトで `git remote set-head origin --auto` を実行する）。
 
 どちらの経路も、origin の取得先の URL が `url.<base>.insteadOf` で別のリポジトリへ書き換えられていれば止める。PR を作るリポジトリは書き換える前の URL で決まる一方、リモートの SHA は書き換えた先から読むので、書き換え先が古いミラーだと未レビューの head を通しうるため。書き換えの前後の URL をホストと owner/repo に分けて（大文字小文字を区別せずに）比べ、どちらかが違うか、どちらかがホストを持たない（ローカルのパスや `file://`）ときに止める。`git@github.com:` を `https://github.com/` へ向けるような、scheme やユーザー名だけを変える書き換えは同じリポジトリへ問い合わせるので止めない。`pushInsteadOf` だけの設定は取得先を変えないので止めない。
 

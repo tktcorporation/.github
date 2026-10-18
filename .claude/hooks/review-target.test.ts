@@ -911,6 +911,21 @@ describe('GitHub MCP の PR 作成ゲート', () => {
     expect((await bash(at.libWorktree, command)).code).toBe(0);
   });
 
+  test('--base を省くと、チェックアウト中のブランチの gh-merge-base も確かめる', async () => {
+    const command = 'gh pr create -R github.com/acme/lib --head lib-feature';
+    git(at.libWorktree, 'checkout', '-q', '-b', 'caller');
+    git(at.libWorktree, 'config', 'branch.caller.gh-merge-base', 'release');
+    try {
+      const result = await bash(at.libWorktree, command);
+      expectSingleBlock(result);
+      expect(result.stderr).toContain('base（release）');
+    } finally {
+      git(at.libWorktree, 'checkout', '-q', 'lib-feature');
+      git(at.libWorktree, 'branch', '-q', '-D', 'caller');
+    }
+    expect((await bash(at.libWorktree, command)).code).toBe(0);
+  });
+
   test('origin/HEAD が無いチェックアウトでは base を確かめられないので止め、設定すれば通す', async () => {
     const bare = join(base, 'remotes', 'acme', 'headless.git');
     git(base, 'init', '-q', '--bare', '-b', 'main', bare);
