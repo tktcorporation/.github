@@ -20,7 +20,7 @@
  */
 import { basename, resolve } from 'node:path';
 import { andChainArgv, parseCommands, wordValue, type ShellWord } from './command-parse.ts';
-import { isPrCreateCommand } from './hook-utils.ts';
+import { ghArgsCreatePr, isPrCreateCommand } from './hook-utils.ts';
 
 export type PrCreateInvocation =
   /** コマンドに `gh pr create` が含まれない。 */
@@ -162,7 +162,8 @@ function ghPrCreateOptions(argv: string[]): OptionsResult {
 const MAX_NESTED_PARSE = 3;
 
 /**
- * 構文解析した各コマンドの argv が `gh … pr … create|new` を含むか。引用符で語を分割した
+ * 構文解析した各コマンドの argv が `gh [オプション] pr [オプション] create|new` を含むか。サブコマンドの
+ * 位置の判定は isPrCreateCommand と同じ ghArgsCreatePr に任せる。引用符で語を分割した
  * `g''h pr create` のように、文字列の走査（isPrCreateCommand）では見えない呼び出しを拾う。
  * `gh` は argv の先頭に限らずどの位置でも探す。`timeout 5 g''h pr create` のようなラッパー越しの
  * 呼び出しも、ラッパーの種類を列挙せずに検出し、受け付ける形ではないので止める。各語の値を
@@ -178,11 +179,9 @@ function parsedPrCreate(command: string, origin: string, depth = 0): boolean {
     if (argv.some((value) => isPrCreateCommand(value))) return true;
     // `bash -c "g''h pr create"` のように、語の値そのものがコマンドとして解釈されうる。
     if (argv.slice(1).some((value) => parsedPrCreate(value, origin, depth + 1))) return true;
-    return argv.some((value, index) => {
-      if (basename(value) !== 'gh') return false;
-      const pr = argv.indexOf('pr', index + 1);
-      return pr !== -1 && argv.slice(pr + 1).some((rest) => CREATE_SUBCOMMANDS.has(rest));
-    });
+    return argv.some(
+      (value, index) => basename(value) === 'gh' && ghArgsCreatePr(argv.slice(index + 1)),
+    );
   });
 }
 

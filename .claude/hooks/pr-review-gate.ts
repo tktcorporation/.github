@@ -19,6 +19,7 @@ import {
   hookCommand,
   originRepository,
   outermostCheckout,
+  parseRemoteUrl,
   projectDirectory,
   workingTree,
 } from './hook-utils.ts';
@@ -188,10 +189,14 @@ export async function remoteHeadSha(checkout: string, branch: string): Promise<s
 }
 
 /**
- * origin の取得先が、設定に書かれた URL から `url.<base>.insteadOf` で書き換えられているか。
- * PR の対象は書き換える前の URL で決まる一方、`git ls-remote` は書き換えた先へ問い合わせる。
- * 書き換え先が読み取り用のミラーなどだと、古い SHA を見て未レビューの head を通しうるので、
- * 両者が一致するときだけ SHA を確かめる。`pushInsteadOf` は取得先を変えないので対象にならない。
+ * origin の取得先が、設定に書かれた URL から `url.<base>.insteadOf` で別のリポジトリへ書き換えられて
+ * いるか。PR の対象は書き換える前の URL で決まる一方、`git ls-remote` は書き換えた先へ問い合わせる。
+ * 書き換え先が読み取り用のミラーなどだと、古い SHA を見て未レビューの head を通しうる。
+ *
+ * 両方の URL を host・owner/repo に分けて（大文字小文字を区別せずに）比べ、どちらかが違うか、
+ * どちらかからホストを読めない（ローカルのパスや file://）ときに書き換えとみなす。
+ * `git@github.com:` を `https://github.com/` へ向けるような、scheme やユーザー名だけを変える書き換えは
+ * 同じリポジトリへ問い合わせるので対象にならない。`pushInsteadOf` は取得先を変えないので対象にならない。
  */
 async function fetchUrlRewritten(checkout: string): Promise<boolean> {
   const configured = await $`git -C ${checkout} config --get-all remote.origin.url`
@@ -203,7 +208,21 @@ async function fetchUrlRewritten(checkout: string): Promise<boolean> {
     .text()
     .split('\n')
     .filter((line) => line.trim() !== '');
-  return urls.length !== 1 || urls[0]?.trim() !== effective.text().trim();
+  if (urls.length !== 1) return true;
+  return !sameRemoteRepository(urls[0] ?? '', effective.text());
+}
+
+/**
+ * 2 つのリモート URL が、同じホストの同じ owner/repo を指すか（大文字小文字は区別しない）。
+ * どちらかからホストか owner/repo を読めなければ false。
+ */
+export function sameRemoteRepository(configured: string, effective: string): boolean {
+  const a = parseRemoteUrl(configured);
+  const b = parseRemoteUrl(effective);
+  if (a === null || b === null || a.host === null || b.host === null) return false;
+  const key = (remote: { host: string | null; owner: string; repo: string }) =>
+    `${remote.host}/${remote.owner}/${remote.repo}`.toLowerCase();
+  return key(a) === key(b);
 }
 
 /**
@@ -221,7 +240,7 @@ export async function checkAttestation(
   if (current !== repo.toLowerCase())
     return `${checkout} の origin（${current ?? '読み取れない'}）が、PR の対象 ${repo} と一致しません。対象リポジトリを origin に持つチェックアウトで収束を記録し直してください。`;
   if (await fetchUrlRewritten(checkout))
-    return `${checkout} の origin の取得先が url.<base>.insteadOf で書き換えられていて、PR を作るリポジトリと SHA を確かめる相手がずれうるので受け付けません。origin の取得先を書き換えない設定で再実行してください。`;
+    return `${checkout} の origin の取得先が url.<base>.insteadOf で書き換えられていて、PR を作るリポジトリと SHA を確かめる相手（ホストか owner/repo）がずれうるので受け付けません。origin の取得先を別のリポジトリへ書き換えない設定で再実行してください。`;
   const remote = await remoteHead(checkout, branch);
   if (remote.kind === 'error')
     return `リモートの ${branch} ブランチを確認できません（${remote.reason}）。リモートに届く状態で再実行してください。`;

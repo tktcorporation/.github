@@ -107,8 +107,19 @@ export async function originRepository(
     .split('\n')
     .filter((line) => line.trim() !== '');
   if (urls.length !== 1) return null;
+  return parseRemoteUrl(urls[0] ?? '');
+}
+
+/**
+ * リモートの URL を host・owner/repo に分ける。owner/repo を切り出せなければ null。host は、
+ * ローカルのパスや file:// のようにホストを持たない URL では null。scheme（ssh・https・scp 形式）と
+ * ユーザー名は結果に含めないので、同じリポジトリを指す URL は書き方が違っても同じ値になる。
+ */
+export function parseRemoteUrl(
+  raw: string,
+): { host: string | null; owner: string; repo: string } | null {
   // 末尾のスラッシュ（`.../repo/` 等）を落としてから owner/repo を切り出す。
-  const url = (urls[0] ?? '').trim().replace(/\/+$/u, '');
+  const url = raw.trim().replace(/\/+$/u, '');
   const match = url.match(/[:/]([^/:]+)\/([^/]+?)(\.git)?$/u);
   if (!match?.[1] || !match[2]) return null;
   return { host: urlHost(url), owner: match[1], repo: match[2] };
@@ -260,30 +271,96 @@ function indexOfWord(command: string, word: string, from: number): number {
   }
   return -1;
 }
+/** 値を次の語に取る、`gh` と `pr` の間・`pr` とサブコマンドの間に置けるオプション。 */
+const GH_REPO_FLAGS = new Set(['-R', '--repo']);
+
 /**
- * コマンド文字列が `gh pr create`、またはその別名の `gh pr new` を含むかを判定する。`gh --repo owner/repo pr create`
- * （gh と pr の間）・`gh pr --repo owner/repo create`（pr と create の間）のどちらでもオプションを
- * 挟める上、シェルの行継続（`\` + 改行）や長いオプション値で語間が伸びることもあるため、
- * `gh` → `pr` → `create`（`new`）の各語の間は改行を含めて上限なしで許す。
+ * `gh` に続く語の並び（`gh` 自身は含まない）が `pr create`・`pr new` を呼びうるか。`create`/`new` は
+ * `pr` の直後のサブコマンドの位置にあるときだけ数える。`gh pr checkout 5 && git switch -c new-x` の
+ * ように、別のサブコマンドの後ろに現れた語は PR 作成として扱わない。
  *
- * 正規表現の遅延ワイルドカード（`[\s\S]*?`）で同じことをすると、`pr`/`create` が
- * 見つからない入力（長い heredoc など）で `gh` の出現ごとに再走査が起き、入力長に対して
- * 多項式的に遅くなる（実測: 約100KBの入力で 1.3 秒超）。3 語を順に 1 回ずつ
- * `indexOf` で探す線形走査にして、この種の入力でも遅くならないようにする。
+ * `gh` と `pr` の間・`pr` とサブコマンドの間では、`-` で始まる語をオプションとして読み飛ばし、
+ * `-R`・`--repo` だけは次の語を値として読み飛ばす。受け付ける形が許すのは `-R <値>`・`--repo <値>`・
+ * `--repo=<値>` だけだが、gh は `gh -Racme/x pr create` や `gh pr -d create` も PR 作成として実行する
+ * ので、検出はそれより広く取り、受け付けない形として止める（pr-create-command.ts）。
+ */
+export function ghArgsCreatePr(words: readonly (string | undefined)[]): boolean {
+  let index = 0;
+  const skipOptions = () => {
+    for (let word = words[index]; word?.startsWith('-'); word = words[index])
+      index += GH_REPO_FLAGS.has(word) ? 2 : 1;
+  };
+  skipOptions();
+  if (words[index] !== 'pr') return false;
+  index += 1;
+  skipOptions();
+  const subcommand = words[index];
+  return subcommand === 'create' || subcommand === 'new';
+}
+
+/** 語の区切りとして扱うシェルの記号。 */
+const TOKEN_TERMINATORS = new Set([';', '|', '&', '(', ')', '<', '>']);
+
+/**
+ * `from` から次の語を読む。空白と行継続（`\` + 改行）を飛ばし、空白かシェルの記号までを 1 語とする。
+ * 引用符（`"`・`'`・`` ` ``）は語から取り除く。`bash -c "gh pr create"` の `create"` も `create` になる。
+ */
+function readToken(command: string, from: number): { token: string; end: number } | null {
+  let index = from;
+  for (;;) {
+    const char = command[index];
+    if (char === undefined) return null;
+    if (/\s/u.test(char)) index += 1;
+    else if (char === '\\' && command[index + 1] === '\n') index += 2;
+    else break;
+  }
+  const start = index;
+  let token = '';
+  for (;;) {
+    const char = command[index];
+    if (char === undefined || /\s/u.test(char) || TOKEN_TERMINATORS.has(char)) break;
+    if (char === '\\' && command[index + 1] === '\n') break;
+    if (char !== '"' && char !== "'" && char !== '`') token += char;
+    index += 1;
+  }
+  // 記号から始まる位置では記号を 1 文字だけ読み、空の語として返す（gh の並びを途切れさせる）。
+  return { token, end: index === start ? index + 1 : index };
+}
+
+/**
+ * 1 つの `gh` から読む語の数の上限。`gh` と `pr` の間・`pr` とサブコマンドの間に、それぞれ数個の
+ * オプションを置いた並びまでを拾う。
+ */
+const MAX_GH_WORDS = 16;
+
+/**
+ * コマンド文字列のどこかに、`gh [オプション] pr [オプション] create|new`（`gh pr new` は
+ * `gh pr create` の別名）の並びがあるかを判定する。語の境界で区切った `gh` の出現ごとに、続く語を
+ * ghArgsCreatePr で確かめる。シェルの行継続（`\` + 改行）は空白として読む。
  *
- * 引数の文字列やパイプ先など、実際には gh を呼ばない箇所に現れた語の並びも拾う。これは
- * ゲートを掛けるかの判定にしか使わず、拾ったコマンドは決まった形でなければ止める
- * （pr-create-command.ts）。止めすぎは書き直しで済むが、見逃しは未レビューの PR になる。
+ * 構文解析の結果ではなく文字列そのものを見るので、引用符の中（`bash -c "gh pr create"`・コミット
+ * メッセージ）や heredoc の本文に書かれた並びも拾う。これはゲートを掛けるかの判定にしか使わず、
+ * 拾ったコマンドは決まった形でなければ止める（pr-create-command.ts）。止めすぎは書き直しで済むが、
+ * 見逃しは未レビューの PR になる。
+ *
+ * 1 つの `gh` から読む語は上限（MAX_GH_WORDS）までなので、各文字を読み直す回数は定数で抑えられ、
+ * 長い heredoc のような入力でも入力長に比例する時間で終わる。
  */
 export function isPrCreateCommand(command: string): boolean {
-  const ghIndex = indexOfWord(command, 'gh', 0);
-  if (ghIndex === -1) return false;
-  const prIndex = indexOfWord(command, 'pr', ghIndex + 2);
-  if (prIndex === -1) return false;
-  return (
-    indexOfWord(command, 'create', prIndex + 2) !== -1 ||
-    indexOfWord(command, 'new', prIndex + 2) !== -1
-  );
+  let ghIndex = indexOfWord(command, 'gh', 0);
+  while (ghIndex !== -1) {
+    const words: string[] = [];
+    let position = ghIndex;
+    while (words.length < MAX_GH_WORDS) {
+      const next = readToken(command, position);
+      if (next === null) break;
+      words.push(next.token);
+      position = next.end;
+    }
+    if (words[0] === 'gh' && ghArgsCreatePr(words.slice(1))) return true;
+    ghIndex = indexOfWord(command, 'gh', ghIndex + 2);
+  }
+  return false;
 }
 export async function readInput(): Promise<HookInput | null> {
   // 端末から手で実行したときは stdin が閉じないので読まずに済ませる。

@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { originRepository, resolveTarget } from './hook-utils.ts';
 import { prCreateInvocation } from './pr-create-command.ts';
-import { ledgerFile, type Attestation } from './pr-review-gate.ts';
+import { ledgerFile, sameRemoteRepository, type Attestation } from './pr-review-gate.ts';
 import { readRounds, reviewCountFile } from './review-count.ts';
 
 const hooks = import.meta.dir;
@@ -342,6 +342,63 @@ describe('gh pr create の受け付ける形', () => {
   test('gh pr create を含まないコマンドは対象にしない', () => {
     expect(prCreateInvocation('cd lib && git push', start)).toEqual({ kind: 'none' });
   });
+
+  test.each([
+    'gh pr checkout 5 && git switch -c new-thing',
+    'gh pr view 12 --comments | grep -i new',
+    'git log | head; gh pr list --search "is:open new"',
+    'gh pr comment 5 --body "new fix"',
+    'gh pr view 3 --json title -q .title | grep create',
+    'gh -R acme/x pr list --search create',
+  ])('pr の直後以外にある create・new の %p は対象にしない', (command) => {
+    expect(prCreateInvocation(command, start)).toEqual({ kind: 'none' });
+  });
+
+  test.each([
+    ['gh pr new -R acme/x', '--head/-H'],
+    ['gh pr new -R acme/x --fill', '--head/-H'],
+  ])('--head を欠く %p は止める', (command, missing) => {
+    expect(prCreateInvocation(command, start)).toEqual({
+      kind: 'rejected',
+      reason: expect.stringContaining(`${missing} の指定が必要です`),
+    });
+  });
+
+  test.each([
+    'bash -c "gh pr create"',
+    `bash -c 'gh pr new -R acme/x --head feat'`,
+    "bash <<'EOF'\ngh pr create -R acme/x --head feat\nEOF",
+    'cat <<EOF | sh\ngh -R acme/x pr create --head feat\nEOF',
+    'echo "$(gh pr create -R acme/x --head feat)"',
+    'gh pr \\\n  create -R acme/x --head feat | cat',
+  ])('引用符・heredoc・行継続の中の %p も止める', (command) => {
+    expect(prCreateInvocation(command, start).kind).toBe('rejected');
+  });
+});
+
+describe('origin の取得先の書き換えの比較', () => {
+  test.each([
+    ['git@github.com:acme/x.git', 'https://github.com/acme/x.git'],
+    ['git@github.com:acme/x.git', 'https://github.com/acme/x'],
+    ['ssh://github.com/acme/x.git', 'git+ssh://git@github.com/acme/x.git'],
+    ['https://GitHub.com/Acme/X.git', 'ssh://git@github.com/acme/x.git'],
+  ])('scheme とユーザー名だけが違う %p と %p は同じリポジトリとみなす', (configured, effective) => {
+    expect(sameRemoteRepository(configured, effective)).toBe(true);
+  });
+
+  test.each([
+    ['git@github.com:acme/x.git', 'https://mirror.example.com/acme/x.git'],
+    ['git@github.com:acme/x.git', 'https://github.com/other/x.git'],
+    ['git@github.com:acme/x.git', 'https://github.com/acme/y.git'],
+    ['git@github.com:acme/x.git', '/srv/mirror/acme/x.git'],
+    ['git@github.com:acme/x.git', 'file:///srv/mirror/acme/x.git'],
+    ['/srv/acme/x.git', '/srv/acme/x.git'],
+  ])(
+    'ホストか owner/repo が違うか、ホストの無い %p と %p は別とみなす',
+    (configured, effective) => {
+      expect(sameRemoteRepository(configured, effective)).toBe(false);
+    },
+  );
 });
 
 describe('記録と証跡', () => {
@@ -475,6 +532,16 @@ describe('Bash の PR 作成ゲート', () => {
     const result = await bash(at.super, command, { X: at.lib });
     expectSingleBlock(result);
     expect(result.stderr).toContain('単独のコマンドとして実行してください');
+  });
+
+  test.each([
+    'gh pr checkout 5 && git switch -c new-thing',
+    'gh pr view 12 --comments | grep -i new',
+    'git log | head; gh pr list --search "is:open new"',
+    'gh pr comment 5 --body "new fix"',
+  ])('PR 作成でない %p は止めない', async (command) => {
+    const result = await bash(at.super, command);
+    expect({ code: result.code, stderr: result.stderr }).toEqual({ code: 0, stderr: '' });
   });
 
   test('サブモジュールの証跡はルートに使えず、ルートの証跡はサブモジュールに使えない', async () => {
@@ -922,6 +989,35 @@ describe('GitHub MCP の PR 作成ゲート', () => {
       (await bash(at.super, 'gh pr create -R github.com/acme/super --head root-work')).code,
     ).toBe(0);
     expect((await gate(mcp('lib-feature'))).stdout).toBe('');
+  });
+
+  test('同じリポジトリへ scheme やユーザー名だけを変える insteadOf は通し、別のホストや owner/repo へ向ける書き換えは止める', async () => {
+    const bashPass = 'gh pr create -R github.com/acme/lib --head lib-feature';
+    const withRewrite = async (target: string, check: () => Promise<void>) => {
+      const key = `url.${target}.insteadOf`;
+      git(at.lib, 'config', key, 'ssh://github.com/acme/');
+      try {
+        await check();
+      } finally {
+        git(at.lib, 'config', '--unset', key);
+      }
+    };
+    // 取得先は ssh://git@github.com/acme/lib.git（scheme の別名とユーザー名だけが変わる）。
+    await withRewrite('git+ssh://git@github.com/acme/', async () => {
+      expect((await bash(at.libWorktree, bashPass)).code).toBe(0);
+      expect((await gate(mcp('lib-feature'))).stdout).toBe('');
+    });
+    const message = 'insteadOf で書き換えられていて';
+    for (const target of ['ssh://mirror.example.com/acme/', 'ssh://github.com/other/']) {
+      await withRewrite(target, async () => {
+        const result = await bash(at.libWorktree, bashPass);
+        expectSingleBlock(result);
+        expect(result.stderr).toContain(message);
+        const viaMcp = await gate(mcp('lib-feature'));
+        expect(denied(viaMcp.stdout)).toBe(true);
+        expect(viaMcp.stdout).toContain(message);
+      });
+    }
   });
 });
 
