@@ -784,6 +784,7 @@ describe('origin の同一性の規則', () => {
     'ssh://git@github.com:22?@evil.example/owner/repo.git',
     'git@github.com#@evil.example:owner/repo.git',
     'https://us%40er:p%23w@github.com/owner/repo.git',
+    'https://github.com/other/repo.git?x=/owner/repo.git',
   ];
 
   test.each([
@@ -791,7 +792,9 @@ describe('origin の同一性の規則', () => {
     'https://github.com?@evil.example/owner/repo',
     'https://a@b@github.com/owner/repo.git',
     'git@github.com#@evil.example:owner/repo.git',
-  ])('接続先の切り出しが git とずれうる %p は一致とみなさない', (url) => {
+    'https://github.com/other/repo.git?x=/owner/repo.git',
+    'https://github.com/other/repo.git#/owner/repo.git',
+  ])('接続先やパスの切り出しが git とずれうる %p は一致とみなさない', (url) => {
     expect(matchesGitHubRemote(url, 'owner/repo')).toBe(false);
     expect(cjsMatchesGitHubRemote(url, 'owner/repo')).toBe(false);
   });

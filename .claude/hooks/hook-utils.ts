@@ -130,16 +130,17 @@ export function parseRemoteUrl(
 const USERINFO = /^[A-Za-z0-9\-._~%!$&'()*+,;=:]*$/u;
 
 /**
- * URL の接続先（`scheme://` の後ろの authority、scp 形式の `:` の前）を、git や curl と同じ
- * ホストに読めるか。`https://github.com#@evil.example/owner/repo` のように authority に `#`・`?` を
- * 含むものや、userinfo に使えない文字（`@` など）を含むものは、ここでのホストの切り出しと実際の
- * 接続先がずれうるので受け付けない。
+ * URL のホストと owner/repo を、git や curl と同じ接続先・パスに読めるか。`#`・`?` を含むもの
+ * （`https://github.com#@evil.example/owner/repo` など）や、userinfo に使えない文字（`@` など）を
+ * 含むものは、ここでの切り出しと実際の接続先・パスがずれうるので受け付けない。
  */
 function wellFormedAuthority(url: string): boolean {
+  // `?`・`#` を含む URL は、owner/repo の切り出しと git が実際に問い合わせるパスがずれうる
+  // （`…/other/repo.git?x=/acme/repo.git` は末尾を acme/repo と読めるが、git は other/repo へ行く）。
+  if (/[#?]/u.test(url)) return false;
   const scheme = url.match(/^[a-z][a-z0-9+.-]*:\/\/([^/]*)/iu);
   const authority = scheme ? scheme[1] : url.match(/^([^/:]*):/u)?.[1];
   if (authority === undefined) return true;
-  if (/[#?]/u.test(authority)) return false;
   const at = authority.lastIndexOf('@');
   return at === -1 || USERINFO.test(authority.slice(0, at));
 }
