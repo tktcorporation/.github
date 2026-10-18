@@ -32,6 +32,9 @@ const otherNames = [
   'MCP:update_pull_request',
   'MCP:create_pull_request_review',
   'MCP:gitlab_create_pull_request',
+  'xMCP:create_pull_request',
+  'mcp:create_pull_request',
+  'xmcp__github__create_pull_request',
   'Bash',
   'Shell',
 ];
