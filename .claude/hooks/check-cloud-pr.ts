@@ -6,6 +6,7 @@
  */
 import { $ } from 'bun';
 import { createHash } from 'node:crypto';
+import { matchesGitHubRemote } from './cloud-pr-feedback.ts';
 import { currentBranch, isRecord, originRepository } from './hook-utils.ts';
 import { prCreateTarget } from './pr-create-target.ts';
 import {
@@ -107,6 +108,14 @@ try {
   if ((await currentBranch(cwd)) !== headBranch)
     throw new Error(`Run from a checkout of the head branch ${headBranch}`);
   const repo = `${target.owner}/${target.repo}`.toLowerCase();
+  // コネクタは github.com に PR を作るので、証跡と head・base を読む origin も github.com の同じ
+  // リポジトリでなければならない。別ホストの同名リポジトリの証跡で github.com の PR を通さない。
+  const originUrls = (await $`git config --get-all remote.origin.url`.quiet().nothrow())
+    .text()
+    .split('\n')
+    .filter((line) => line.trim() !== '');
+  if (originUrls.length !== 1 || !matchesGitHubRemote(originUrls[0] ?? '', repo))
+    throw new Error('origin is not the GitHub.com repository the connector creates the PR in');
   const baseError = await baseDenyReason(cwd, request.base);
   if (baseError) throw new Error(baseError);
   // Convergence is decided by the attestation ledger for the remote head SHA (pr-review-gate.ts).
