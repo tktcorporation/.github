@@ -181,20 +181,11 @@ if (baseRef !== undefined && evidencePath !== undefined) {
     process.exit(1);
   }
 }
-await appendEntry(entry);
-// A failed sidecar write leaves the cloud gate closed: old evidence no longer matches rounds.
-if (evidence) await writeReviewEvidence(evidence);
 const rounds = roundsOf(verdict.entries);
 const converged = verdict.convergence.kind === 'converged';
-const state =
-  verdict.convergence.kind === 'converged'
-    ? 'PR 作成前レビューは収束。既存 PR の外部指摘後は、指摘の観測以降に 2 ラウンドのレビューが必要'
-    : `未収束（${convergenceReason(verdict.convergence)}）`;
-const flagText = flagArgs.map((flag) => `、${flag}`).join('');
-console.log(`ラウンド ${rounds.length} を記録（指摘 ${countArg} 件${flagText}）。${state}。`);
-// 収束した HEAD の SHA を PR 作成ゲートの証跡として台帳に残す（pr-review-gate.ts）。
 // 指摘のあったラウンドが、既に証跡のある SHA をレビューしたものなら、その証跡を取り消す。
 // 取り消さないと、同じコミットに後から見つかった指摘を残したまま PR を作れてしまう。
+// ラウンドの記録より先に書くので、台帳への書き込みが失敗すればラウンドも記録されず、再実行で取り消し直せる。
 // 指摘 0 件のラウンドは、収束の条件（最後が codex）を満たさなくても指摘を示さないので取り消さない。
 const tree = await workingTree();
 const [origin, branch] = await Promise.all([originRepository(tree), branchName(tree)]);
@@ -220,6 +211,16 @@ if (!converged && round.count > 0 && origin !== null && repo !== null) {
     );
   }
 }
+await appendEntry(entry);
+// A failed sidecar write leaves the cloud gate closed: old evidence no longer matches rounds.
+if (evidence) await writeReviewEvidence(evidence);
+const state =
+  verdict.convergence.kind === 'converged'
+    ? 'PR 作成前レビューは収束。既存 PR の外部指摘後は、指摘の観測以降に 2 ラウンドのレビューが必要'
+    : `未収束（${convergenceReason(verdict.convergence)}）`;
+const flagText = flagArgs.map((flag) => `、${flag}`).join('');
+console.log(`ラウンド ${rounds.length} を記録（指摘 ${countArg} 件${flagText}）。${state}。`);
+// 収束した HEAD の SHA を PR 作成ゲートの証跡として台帳に残す（pr-review-gate.ts）。
 if (converged) {
   if (origin === null || repo === null || branch === null) {
     console.log(
