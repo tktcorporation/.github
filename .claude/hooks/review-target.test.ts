@@ -363,6 +363,14 @@ describe('gh pr create の受け付ける形', () => {
   });
 
   test.each([
+    'git commit -m "docs: use gh (GitHub CLI) for releases"',
+    'git commit -m "chore: bump gh $VERSION"',
+    "cat > notes.md <<'EOF'\nInstall gh (https://cli.github.com) first.\nEOF",
+  ])('gh に続く記号や変数を含むだけの文章 %p は対象にしない', (command) => {
+    expect(prCreateInvocation(command, start)).toEqual({ kind: 'none' });
+  });
+
+  test.each([
     'gh pr checkout 5 && git switch -c new-thing',
     'gh pr view 12 --comments | grep -i new',
     'git log | head; gh pr list --search "is:open new"',

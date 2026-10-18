@@ -186,7 +186,8 @@ function parsedPrCreate(command: string, origin: string, depth = 0): boolean {
     // `bash -c "g''h pr create"` のように、語の値そのものがコマンドとして解釈されうる。
     if (argv.slice(1).some((value) => parsedPrCreate(value, origin, depth + 1))) return true;
     return argv.some(
-      (value, index) => basename(value) === 'gh' && ghArgsCreatePr(argv.slice(index + 1)),
+      (value, index) =>
+        basename(value) === 'gh' && ghArgsCreatePr(argv.slice(index + 1), { dynamicCommand: true }),
     );
   });
 }

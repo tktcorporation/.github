@@ -290,7 +290,7 @@ const GH_REPO_FLAGS = new Set(['-R', '--repo']);
  * 実行時まで値が決まらない語か（変数展開・コマンド置換を含む）。構文解析で値を確定できなかった語は
  * 呼び出し側が NON_LITERAL_WORD に置き換えて渡す。
  */
-const isNonLiteral = (word: string): boolean => /[$`(]/u.test(word);
+const isNonLiteral = (word: string): boolean => /[$`]/u.test(word);
 
 /** 値を確定できなかった語の代わりに ghArgsCreatePr へ渡す語。isNonLiteral に当たる。 */
 export const NON_LITERAL_WORD = '$';
@@ -306,10 +306,18 @@ export const NON_LITERAL_WORD = '$';
  * ので、検出はそれより広く取り、受け付けない形として止める（pr-create-command.ts）。
  *
  * 次の 2 つは、実行時に `pr create` になりうるので PR 作成として扱う（受け付けない形として止まる）。
- * - `pr` の位置かサブコマンドの位置の語が、`gh pr $SUB` のように実行時まで値が決まらない
+ * - サブコマンドの位置の語が、`gh pr $SUB` のように実行時まで値が決まらない。`pr` の位置の語は、
+ *   構文解析で値を確定できなかった語（`dynamicCommand`）だけを数える。文字列の走査では、
+ *   コミットメッセージの `gh $VERSION` のような文章にも当たるため
  * - `words` が途中で打ち切られていて（`complete` が false）、オプションを読み飛ばすうちに末尾に届いた
  */
-export function ghArgsCreatePr(words: readonly (string | undefined)[], complete = true): boolean {
+export function ghArgsCreatePr(
+  words: readonly (string | undefined)[],
+  {
+    complete = true,
+    dynamicCommand = false,
+  }: { complete?: boolean; dynamicCommand?: boolean } = {},
+): boolean {
   let index = 0;
   const skipOptions = () => {
     for (let word = words[index]; word?.startsWith('-'); word = words[index])
@@ -319,7 +327,7 @@ export function ghArgsCreatePr(words: readonly (string | undefined)[], complete 
   skipOptions();
   if (undecided()) return true;
   const command = words[index];
-  if (command !== undefined && isNonLiteral(command)) return true;
+  if (dynamicCommand && command !== undefined && isNonLiteral(command)) return true;
   if (command !== 'pr') return false;
   index += 1;
   skipOptions();
@@ -355,7 +363,7 @@ function readToken(command: string, from: number): { token: string; end: number 
     index += 1;
   }
   // 記号から始まる位置では記号を 1 文字だけ読み、その記号を語として返す（gh の並びを途切れさせる）。
-  // `(` は isNonLiteral に当たるので、`gh pr $(…)` の `$` と同じくサブコマンドの位置で PR 作成に倒れる。
+  // `gh pr $(…)` は `$` までが 1 語になり、サブコマンドの位置で PR 作成に倒れる。
   if (index === start) return { token: command[index] ?? '', end: index + 1 };
   return { token, end: index };
 }
@@ -394,7 +402,7 @@ export function isPrCreateCommand(command: string): boolean {
       words.push(next.token);
       position = next.end;
     }
-    if (words[0] === 'gh' && ghArgsCreatePr(words.slice(1), complete)) return true;
+    if (words[0] === 'gh' && ghArgsCreatePr(words.slice(1), { complete })) return true;
     ghIndex = indexOfWord(command, 'gh', ghIndex + 2);
   }
   return false;
