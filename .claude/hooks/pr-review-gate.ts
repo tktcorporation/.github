@@ -38,6 +38,12 @@ export interface Attestation {
   rounds: string[];
   accepted: boolean;
   at: string;
+  /**
+   * true の行は、同じ repo・host・SHA の証跡を取り消す。収束を記録した後に同じコミットを
+   * 再レビューして指摘が出たとき、記録用の CLI が書く。後で同じ SHA が再び収束すれば、
+   * 新しい証跡の行が取り消しを上書きする。
+   */
+  revoked?: boolean;
 }
 
 export const roundSummary = (round: Round): string =>
@@ -67,25 +73,37 @@ const isAttestation = (value: unknown): value is Attestation => {
   const host = record.host;
   return (
     ['sha', 'repo', 'branch', 'checkout'].every((key) => typeof record[key] === 'string') &&
-    (typeof host === 'string' || host === null)
+    (typeof host === 'string' || host === null) &&
+    (record.revoked === undefined || typeof record.revoked === 'boolean')
   );
 };
 
-/** 台帳の証跡を古い順に返す。読めない行は飛ばす。 */
+const attestationKey = (entry: Attestation): string =>
+  `${entry.host ?? ''}\n${entry.repo}\n${entry.sha}`;
+
+/**
+ * 有効な証跡を、最後に書かれた順に返す。読めない行は飛ばす。同じ repo・host・SHA の行は
+ * 最後の 1 行が決め、それが取り消し（revoked）なら、その SHA の証跡は無いものとして扱う。
+ */
 export async function readAttestations(): Promise<Attestation[]> {
   const file = Bun.file(await ledgerFile());
   if (!(await file.exists())) return [];
-  const result: Attestation[] = [];
+  // Map は挿入順を保つので、削除してから入れ直した証跡は末尾（最新）に並ぶ。
+  const live = new Map<string, Attestation>();
   for (const line of (await file.text()).split('\n')) {
     if (!line.trim()) continue;
+    let value: unknown;
     try {
-      const value: unknown = JSON.parse(line);
-      if (isAttestation(value)) result.push(value);
+      value = JSON.parse(line);
     } catch {
       // 書きかけや手で壊した行は証跡として扱わない
+      continue;
     }
+    if (!isAttestation(value)) continue;
+    live.delete(attestationKey(value));
+    if (value.revoked !== true) live.set(attestationKey(value), value);
   }
-  return result;
+  return [...live.values()];
 }
 
 /** 1 行を 1 回の追記で書く。短い追記は互いに混ざらないので、ロックは取らない。 */

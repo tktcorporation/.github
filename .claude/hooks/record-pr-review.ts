@@ -3,7 +3,12 @@ import { $ } from 'bun';
 import { readFile } from 'node:fs/promises';
 import { hookCommand, originRepository, workingTree } from './hook-utils.ts';
 import { formatIsoUtc, nowMs } from './iso-time.ts';
-import { appendAttestation, branchName, roundSummary } from './pr-review-gate.ts';
+import {
+  appendAttestation,
+  branchName,
+  readAttestations,
+  roundSummary,
+} from './pr-review-gate.ts';
 import { createReviewEvidence, parseRoundArgs, writeReviewEvidence } from './review-evidence.ts';
 import { appendEntry, readEntries, readRecordedEntries, reviewTargetSha } from './review-count.ts';
 import {
@@ -188,10 +193,33 @@ const state =
 const flagText = flagArgs.map((flag) => `、${flag}`).join('');
 console.log(`ラウンド ${rounds.length} を記録（指摘 ${countArg} 件${flagText}）。${state}。`);
 // 収束した HEAD の SHA を PR 作成ゲートの証跡として台帳に残す（pr-review-gate.ts）。
+// 収束しなかったラウンドが、既に証跡のある SHA をレビューしたものなら、その証跡を取り消す。
+// 取り消さないと、同じコミットに後から見つかった指摘を残したまま PR を作れてしまう。
+const tree = await workingTree();
+const [origin, branch] = await Promise.all([originRepository(tree), branchName(tree)]);
+const repo = origin ? `${origin.owner}/${origin.repo}`.toLowerCase() : null;
+if (!converged && origin !== null && repo !== null) {
+  const attested = (await readAttestations()).filter(
+    (entry) => entry.repo === repo && entry.host === origin.host && entry.sha === round.sha,
+  );
+  if (attested.length > 0) {
+    await appendAttestation({
+      sha: round.sha,
+      repo,
+      host: origin.host,
+      branch: branch ?? attested.at(-1)?.branch ?? '',
+      checkout: tree,
+      rounds: rounds.map(roundSummary),
+      accepted: false,
+      at: formatIsoUtc(nowMs()),
+      revoked: true,
+    });
+    console.log(
+      `${round.sha} の PR 作成ゲートの証跡を取り消しました。このコミットのまま PR は作れません。指摘を直して収束を記録し直してください。`,
+    );
+  }
+}
 if (converged) {
-  const tree = await workingTree();
-  const [origin, branch] = await Promise.all([originRepository(tree), branchName(tree)]);
-  const repo = origin ? `${origin.owner}/${origin.repo}`.toLowerCase() : null;
   if (origin === null || repo === null || branch === null) {
     console.log(
       `${repo === null ? 'origin から owner/repo を読み取れない' : 'detached HEAD である'}ため、PR 作成ゲートの証跡は書けませんでした。origin を設定し、ブランチをチェックアウトしてから記録し直してください。`,

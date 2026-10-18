@@ -627,6 +627,26 @@ describe('Bash の PR 作成ゲート', () => {
     expect(stale.stderr).toContain(attested);
   });
 
+  test('収束後に同じ SHA へ指摘ありのラウンドを記録すると証跡を取り消し、再び収束すれば通す', async () => {
+    const command = 'cd lib && gh pr create -R github.com/acme/lib --head lib-work';
+    const sha = git(at.lib, 'rev-parse', 'HEAD');
+    expect((await bash(at.super, command)).code).toBe(0);
+
+    const reopened = await run('record-pr-review.ts', at.lib, ['2']);
+    expect(reopened.code).toBe(0);
+    expect(reopened.stdout).toContain('証跡を取り消しました');
+    expect(ledger().at(-1)).toEqual(
+      expect.objectContaining({ sha, repo: 'acme/lib', host: 'github.com', revoked: true }),
+    );
+    const blocked = await bash(at.super, command);
+    expectSingleBlock(blocked);
+    expect(blocked.stderr).toContain(sha);
+
+    const reconverged = await run('record-pr-review.ts', at.lib, ['0', 'codex']);
+    expect(reconverged.stdout).toContain('証跡を記録');
+    expect((await bash(at.super, command)).code).toBe(0);
+  });
+
   test.each([
     'timeout 5 gh pr create',
     'bash -c "gh pr create"',
