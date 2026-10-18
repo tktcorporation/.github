@@ -372,6 +372,31 @@ describe('gh pr create の受け付ける形', () => {
     expect(prCreateInvocation(command, start).kind).toBe('rejected');
   });
 
+  test.each([
+    'env "$GH" pr create -R github.com/acme/repo --head feat',
+    'env FOO=1 -u BAR "$GH" pr create -R github.com/acme/repo --head feat',
+    'env -- "$GH" pr new -R github.com/acme/repo --head feat',
+    'gh --hostname x pr create -R github.com/acme/repo --head feat && echo done',
+  ])('env 越しや、別のコマンドが続く %p も PR 作成として止める', (command) => {
+    expect(prCreateInvocation(command, start).kind).toBe('rejected');
+  });
+
+  test.each([
+    'gh --version && gh pr view "$PR"',
+    'gh --version; gh auth status; gh pr checks "$PR"',
+    'gh --version\ngh pr view "$(git branch --show-current)"',
+    'gh --version && gh pr list --state open --json number,title,headRefName,author,url --limit 20 --repo o/r --search draft:false',
+    'gh -h | head -5 && gh pr list --state open --search new',
+    "git commit -m 'Use $GH pr new flow'",
+    "git commit -m 'fix: handle ${GH} pr new invocations'",
+    "git commit -m 'block `$GH pr create` too'",
+    `gh pr comment 5 --body 'run "$GH" pr create to reproduce'`,
+    "echo 'Total: $5 pr new'",
+    'env "$EDITOR" notes.txt',
+  ])('PR 作成でない %p は対象にしない', (command) => {
+    expect(prCreateInvocation(command, start)).toEqual({ kind: 'none' });
+  });
+
   test.each(['"$EDITOR" notes.txt', '"$X" pr list', '$X pr view 5 --json title', '"$X" create'])(
     '実行するコマンドの語が決まらなくても pr create の並びでない %p は対象にしない',
     (command) => {
@@ -475,6 +500,8 @@ describe('origin の取得先の書き換えの比較', () => {
     ['https://ghe.example.com/acme/x.git', 'https://ghe.example.com:8443/acme/x.git'],
     ['ssh://git@ghe.example.com/acme/x.git', 'ssh://git@ghe.example.com:2222/acme/x.git'],
     ['git@github.com:acme/x.git', 'ssh://git@github.com:443/acme/x.git'],
+    ['https://github.com/acme/x.git', 'https://github.com#@evil.example/acme/x.git'],
+    ['https://github.com/acme/x.git', 'https://github.com?@evil.example/acme/x.git'],
   ])(
     'ホスト・ポート・owner/repo のどれかが違うか、ホストの無い %p と %p は別とみなす',
     (configured, effective) => {

@@ -771,7 +771,24 @@ describe('origin の同一性の規則', () => {
     'https://github.com/owner/repo.git\nhttps://github.com/other/repo.git',
     'file:///srv/owner/repo.git',
     '/srv/owner/repo.git',
+    'https://github.com#@evil.example/owner/repo',
+    'https://github.com?@evil.example/owner/repo',
+    'https://user#x@github.com/owner/repo.git',
+    'https://a@b@github.com/owner/repo.git',
+    'ssh://git@github.com:22?@evil.example/owner/repo.git',
+    'git@github.com#@evil.example:owner/repo.git',
+    'https://us%40er:p%23w@github.com/owner/repo.git',
   ];
+
+  test.each([
+    'https://github.com#@evil.example/owner/repo',
+    'https://github.com?@evil.example/owner/repo',
+    'https://a@b@github.com/owner/repo.git',
+    'git@github.com#@evil.example:owner/repo.git',
+  ])('接続先の切り出しが git とずれうる %p は一致とみなさない', (url) => {
+    expect(matchesGitHubRemote(url, 'owner/repo')).toBe(false);
+    expect(cloudPrFeedback.matchesGitHubRemote(url, 'owner/repo')).toBe(false);
+  });
 
   test('ssh.github.com の 443 番ポート経由の SSH も github.com のリポジトリとして受け付ける', () => {
     expect(matchesGitHubRemote('ssh://git@ssh.github.com:443/owner/repo.git', 'owner/repo')).toBe(

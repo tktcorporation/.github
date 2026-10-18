@@ -22,8 +22,18 @@ function urlPort(url) {
   const port = Number(match[2]);
   return port === DEFAULT_PORTS[(match[1] ?? '').toLowerCase()] ? null : port;
 }
+const USERINFO = /^[A-Za-z0-9\-._~%!$&'()*+,;=:]*$/u;
+function wellFormedAuthority(url) {
+  const scheme = url.match(/^[a-z][a-z0-9+.-]*:\/\/([^/]*)/iu);
+  const authority = scheme ? scheme[1] : url.match(/^([^/:]*):/u)?.[1];
+  if (authority === undefined) return true;
+  if (/[#?]/u.test(authority)) return false;
+  const at = authority.lastIndexOf('@');
+  return at === -1 || USERINFO.test(authority.slice(0, at));
+}
 function remoteIdentity(raw) {
   const url = raw.trim().replace(/\/+$/u, '');
+  if (!wellFormedAuthority(url)) return null;
   const match = url.match(/[:/]([^/:]+)\/([^/]+?)(\.git)?$/u);
   const host = urlHost(url);
   if (!match?.[1] || !match[2] || host === null) return null;

@@ -220,7 +220,14 @@ function normalizeEnv(argv: ShellWord[], inherited: Map<string, ShellWord>): Nor
   for (; index < argv.length; index++) {
     const word = argv[index];
     const value = literal(word);
-    if (!word || value === undefined) return { argv: [], env, opaqueReason: 'dynamic env option' };
+    // A run-time word may be the executable (`env "$GH" pr create`), so keep the argv from it on.
+    if (!word || value === undefined)
+      return {
+        argv: [],
+        env,
+        opaqueReason: 'dynamic env option',
+        ...(word ? { dynamicArgv: argv.slice(index) } : {}),
+      };
     const assigned = envAssignment(word);
     if (assigned) {
       env.set(...assigned);
@@ -363,7 +370,11 @@ function walkCommand(node: SgNode, cwd: DirectoryState, context: WalkContext): D
   if (normalized.dynamicArgv) context.dynamicCommands.push(normalized.dynamicArgv);
   if (normalized.opaqueReason || normalized.argv.length === 0) return cwd;
   const rawName = literal(normalized.argv[0]);
-  if (rawName === undefined) return cwd;
+  if (rawName === undefined) {
+    // `env -- "$GH" pr create`: the executable after env is only known at run time.
+    context.dynamicCommands.push(normalized.argv);
+    return cwd;
+  }
   const effectiveCwd = normalized.chdir
     ? resolveDirectory(cwd, normalized.chdir, 'dynamic env chdir')
     : cwd;
