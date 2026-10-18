@@ -22,7 +22,7 @@ module.exports = async function createReviewedPr({ exec, poll, create }, options
   let result = checked;
   let output = result.output ?? '';
   // The preflight may wait on up to three `git ls-remote` calls of up to 15 s each
-  // (REMOTE_FETCH_TIMEOUT_MS in require-pr-self-review-mcp.ts), so keep polling past that budget.
+  // (REMOTE_FETCH_TIMEOUT_MS in .claude/hooks/pr-review-gate.ts), so keep polling past that budget.
   for (let attempt = 0; result.session_id !== undefined && poll && attempt < 60; attempt++) {
     result = await poll({
       session_id: result.session_id,

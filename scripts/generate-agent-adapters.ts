@@ -159,6 +159,17 @@ function buildCursorHooks(hooks: ManifestHook[]): {
   return { version: 1, hooks: Object.fromEntries(byEvent) };
 }
 
+/**
+ * Codex の hook コマンドが `.codex/run-shared-hook.ts` を探す場所。Codex はセッションの作業場所
+ * （サブモジュールの中もありうる）でコマンドを実行するので、そこからスーパープロジェクトを
+ * 辿りきったいちばん外側のトップレベルを使う。`--show-toplevel` だけだとサブモジュールの
+ * トップレベルを指し、アダプターが見つからない。
+ */
+const CODEX_PROJECT_ROOT =
+  '$(d=$(git rev-parse --show-toplevel); ' +
+  'while s=$(git -C "$d" rev-parse --show-superproject-working-tree) && [ -n "$s" ]; do d=$s; done; ' +
+  'printf %s "$d")';
+
 function buildCodexHooks(hooks: ManifestHook[]): {
   description: string;
   hooks: Record<string, unknown[]>;
@@ -179,7 +190,7 @@ function buildCodexHooks(hooks: ManifestHook[]): {
         hooks: group.map((hook) => {
           const entry: Record<string, string> = {
             type: 'command',
-            command: `bun "$(git rev-parse --show-toplevel)/.codex/run-shared-hook.ts" ${hook.script}`,
+            command: `bun "${CODEX_PROJECT_ROOT}/.codex/run-shared-hook.ts" ${hook.script}`,
           };
           if (hook.statusMessage) entry.statusMessage = hook.statusMessage;
           return entry;

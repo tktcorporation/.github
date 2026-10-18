@@ -478,6 +478,46 @@ export function parseCommands(source: string, base = process.cwd()): CommandPars
   return { kind: 'parsed', commands };
 }
 
+/**
+ * The argv of each command when the whole source is plain commands joined only by `&&`.
+ * Null for anything else: other operators, `;`, pipes, subshells, redirections, assignment
+ * prefixes, comments, or any word whose value is only known at run time (expansions and
+ * substitutions). Gates that must know exactly what runs accept only this shape.
+ */
+export function andChainArgv(source: string): ShellWord[][] | null {
+  let root: SgNode;
+  try {
+    root = parse('bash', source).root();
+  } catch {
+    return null;
+  }
+  if (parseErrors(root).length > 0) return null;
+  const statements = root.namedChildren();
+  if (statements.length !== 1 || !statements[0]) return null;
+  const chain: ShellWord[][] = [];
+  const collect = (node: SgNode): boolean => {
+    if (node.kind() === 'list') {
+      const operators = node.children().filter((child) => !child.isNamed());
+      const operands = node.namedChildren();
+      return (
+        operators.length === 1 &&
+        operators[0]?.kind() === '&&' &&
+        operands.length === 2 &&
+        operands.every(collect)
+      );
+    }
+    if (node.kind() !== 'command') return false;
+    const nameNode = node.field('name');
+    const args = node.fieldChildren('argument');
+    if (!nameNode || node.namedChildren().length !== args.length + 1) return false;
+    const argv = [shellWord(nameNode), ...args.map(shellWord)];
+    if (argv.some((word) => word.kind !== 'literal')) return false;
+    chain.push(argv);
+    return true;
+  };
+  return collect(statements[0]) ? chain : null;
+}
+
 export interface GitTarget {
   directory: DirectoryState;
   subcommand: ShellWord | undefined;
