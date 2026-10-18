@@ -93,6 +93,12 @@ describe('connector feedback boundary', () => {
   });
 
   test('reviewed commit, exact comment ID and author filter are preserved', () => {
+    // gh CLI 経路は生の行を渡す。本文の無いレビュー（body: null）でも観測できる。
+    expect(
+      parseGitHubFeedback({ number: 42, headRefOid: head }, 'me', comments, [
+        { ...reviews[0], body: null },
+      ]).kind,
+    ).toBe('found');
     expect(parseGitHubFeedback({ number: 42, headRefOid: head }, 'me', comments, reviews)).toEqual({
       kind: 'found',
       pr: 42,
@@ -237,7 +243,7 @@ describe('connector feedback boundary', () => {
           exec: async ({ cmd }: { cmd: string }) => {
             if (cmd.startsWith('mktemp -d'))
               return { exit_code: 0, output: '/tmp/codex-pr-feedback.abc123\n' };
-            if (cmd.startsWith('rm -rf')) return { exit_code: 0, output: '' };
+            if (cmd.startsWith('rmdir ')) return { exit_code: 0, output: '' };
             return {
               exit_code: 0,
               output: JSON.stringify({
@@ -276,7 +282,7 @@ describe('connector feedback boundary', () => {
           const body = url.includes('/comments?')
             ? comments
             : url.includes('/reviews?')
-              ? reviews
+              ? [...reviews, { ...reviews[0], id: 10, state: 'APPROVED', body: null }]
               : pr;
           return { structuredContent: { content: JSON.stringify(body) } };
         },
@@ -284,7 +290,7 @@ describe('connector feedback boundary', () => {
           commands.push(cmd);
           if (cmd.startsWith('mktemp -d'))
             return { exit_code: 0, output: '/tmp/codex-pr-feedback.abc123\n' };
-          if (cmd.startsWith('rm -rf')) return { exit_code: 0, output: '' };
+          if (cmd.startsWith('rmdir ')) return { exit_code: 0, output: '' };
           return {
             exit_code: 0,
             output: JSON.stringify({
@@ -321,10 +327,23 @@ describe('connector feedback boundary', () => {
       viewerLogin: 'me',
       comments,
     });
-    expect(evidence.reviews[0]).toMatchObject({ id: 9, commit_id: reviewed, body: '' });
-    expect(patches).toHaveLength(1);
+    // 判定は state で行うので本文は渡さない。本文の無いレビュー（GitHub は body: null で返す）も検証を通る。
+    expect(evidence.reviews[0]).toMatchObject({ id: 9, commit_id: reviewed });
+    expect(evidence.reviews.every((review: object) => !('body' in review))).toBe(true);
+    expect(
+      parseGitHubFeedback(
+        { number: 42, headRefOid: head },
+        'me',
+        evidence.comments,
+        evidence.reviews,
+      ).kind,
+    ).toBe('found');
+    // 証跡は保存と同じ apply_patch で消す。functions.exec のホストは rm -f / rm -rf を拒否する。
+    expect(patches).toHaveLength(2);
+    expect(patches[1]).toContain('*** Delete File: /tmp/codex-pr-feedback.abc123/evidence.json');
+    expect(commands.some((cmd) => /^rm\s/.test(cmd))).toBe(false);
     expect(commands[1]).toContain('<');
-    expect(commands.at(-1)).toContain('rm -rf');
+    expect(commands.at(-1)).toContain('rmdir');
     expect(Math.abs(nowMs() - (parseIsoUtcMs(evidence.observedAt) ?? Number.NaN))).toBeLessThan(
       10_000,
     );
@@ -373,7 +392,7 @@ describe('connector feedback boundary', () => {
             commands.push(cmd);
             if (cmd.startsWith('mktemp -d'))
               return { exit_code: 0, output: '/tmp/codex-pr-feedback.abc123\n' };
-            if (cmd.startsWith('rm -rf')) return { exit_code: 0, output: '' };
+            if (cmd.startsWith('rmdir ')) return { exit_code: 0, output: '' };
             return { exit_code: 2, output: 'review_locally' };
           },
           patch: async () => ({}),
@@ -386,7 +405,46 @@ describe('connector feedback boundary', () => {
     );
     expect(gateError).toContain('Feedback push gate failed');
     expect(commands.some((cmd) => cmd.startsWith('git push'))).toBe(false);
-    expect(commands.at(-1)).toContain('rm -rf');
+    expect(commands.at(-1)).toContain('rmdir');
+  });
+
+  test('cleanup still removes the directory and keeps the gate error when deleting evidence throws', async () => {
+    const commands: string[] = [];
+    const error = await Promise.resolve(
+      cloudPrFeedback(
+        {
+          getUserLogin: async () => ({ structuredContent: { login: 'me' } }),
+          now: async () => ({
+            current_time: currentToolTime(),
+          }),
+          fetch: async ({ url }: { url: string }) => ({
+            structuredContent: {
+              content: JSON.stringify(
+                url.includes('/comments?') ? comments : url.includes('/reviews?') ? reviews : pr,
+              ),
+            },
+          }),
+          exec: async ({ cmd }: { cmd: string }) => {
+            commands.push(cmd);
+            if (cmd.startsWith('mktemp -d'))
+              return { exit_code: 0, output: '/tmp/codex-pr-feedback.abc123\n' };
+            if (cmd.startsWith('rmdir ')) return { exit_code: 0, output: '' };
+            throw new Error('gate crashed');
+          },
+          patch: async (patch: string) => {
+            if (patch.includes('*** Delete File:')) throw new Error('delete rejected');
+            return {};
+          },
+        },
+        { ...options, mode: 'push' },
+      ),
+    ).then(
+      () => '',
+      (reason: unknown) => String(reason),
+    );
+    expect(error).toContain('gate crashed');
+    expect(commands.at(-1)).toContain('rmdir');
+    expect(commands.some((cmd) => cmd.startsWith('git push'))).toBe(false);
   });
 
   test('push pins the reviewed SHA and refuses a moved local HEAD', async () => {
@@ -413,7 +471,7 @@ describe('connector feedback boundary', () => {
         commands.push(cmd);
         if (cmd.startsWith('mktemp -d'))
           return { exit_code: 0, output: '/tmp/codex-pr-feedback.abc123\n' };
-        if (cmd.startsWith('rm -rf')) return { exit_code: 0, output: '' };
+        if (cmd.startsWith('rmdir ')) return { exit_code: 0, output: '' };
         if (cmd.includes('cloud-pr-feedback.ts'))
           return {
             exit_code: 0,
@@ -501,7 +559,7 @@ describe('connector feedback boundary', () => {
             commands.push(cmd);
             if (cmd.startsWith('mktemp -d'))
               return { exit_code: 0, output: '/tmp/codex-pr-feedback.abc123\n' };
-            if (cmd.startsWith('rm -rf')) return { exit_code: 0, output: '' };
+            if (cmd.startsWith('rmdir ')) return { exit_code: 0, output: '' };
             if (cmd.includes('cloud-pr-feedback.ts'))
               return {
                 exit_code: 0,
@@ -550,14 +608,14 @@ describe('connector feedback boundary', () => {
           },
         }),
         patch: async (patch: string) => {
-          expect(patch).toContain(note);
+          if (patch.includes('*** Add File:')) expect(patch).toContain(note);
           return {};
         },
         exec: async ({ cmd }: { cmd: string }) => {
           commands.push(cmd);
           if (cmd.startsWith('mktemp -d'))
             return { exit_code: 0, output: '/tmp/codex-pr-feedback.abc123\n' };
-          if (cmd.startsWith('rm -rf')) return { exit_code: 0, output: '' };
+          if (cmd.startsWith('rmdir ')) return { exit_code: 0, output: '' };
           return {
             exit_code: 0,
             output: JSON.stringify({

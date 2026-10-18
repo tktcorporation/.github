@@ -1,6 +1,6 @@
 /// <reference types="bun" />
 import { describe, expect, test } from 'bun:test';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -140,6 +140,56 @@ describe('アダプター経由で hook が落ちたとき・入出力を読め�
         expect(result.code).toBe(2);
         expect(result.stdout).toContain('"permission":"deny"');
       }
+    },
+    SPAWN_TEST_TIMEOUT_MS,
+  );
+
+  test('Cursor の設定で、PR 作成ゲートだけを、起動できない・時間切れのときも拒否に倒す', async () => {
+    // アダプターが動く前に bun の起動失敗やタイムアウトが起きると、Cursor は既定で操作を通す。
+    const config: { hooks: Record<string, { command: string; failClosed?: boolean }[]> } =
+      JSON.parse(await readFile(join(import.meta.dir, '../../.cursor/hooks.json'), 'utf8'));
+    const entries = Object.values(config.hooks).flat();
+    const failClosed = entries.filter((entry) => entry.failClosed === true);
+    expect(failClosed.map((entry) => entry.command)).toEqual([
+      'bun .cursor/run-shared-hook.ts .claude/hooks/require-pr-self-review-mcp.ts',
+    ]);
+  });
+
+  test('Claude Code の設定で、PR 作成ゲートだけを、起動できない・時間切れのときも拒否に倒す', async () => {
+    // onFailure が無いと、Claude Code も起動失敗やタイムアウトを許可扱いにして操作を通す。
+    const settings: {
+      hooks: Record<string, { hooks: { command: string; onFailure?: string }[] }[]>;
+    } = JSON.parse(await readFile(join(import.meta.dir, '../settings.json'), 'utf8'));
+    const entries = Object.values(settings.hooks).flatMap((groups) =>
+      groups.flatMap((group) => group.hooks),
+    );
+    expect(
+      entries
+        .filter((entry) => entry.onFailure !== undefined)
+        .map((entry) => [entry.command, entry.onFailure]),
+    ).toEqual([
+      [
+        'bun "$CLAUDE_PROJECT_DIR"/.claude/hooks/run-or-skip-for-cursor.ts .claude/hooks/require-pr-self-review-mcp.ts',
+        'block',
+      ],
+    ]);
+  });
+
+  test(
+    'Cursor のアダプターで、PR 作成ゲートが何も出さずに通したときは、許可を明示して返す',
+    async () => {
+      const result = await runStubHook(
+        'require-pr-self-review-mcp.ts',
+        {
+          hook_event_name: 'preToolUse',
+          tool_name: 'mcp__github__create_pull_request',
+          tool_input: { owner: 'owner', repo: 'repo', head: 'feature', base: 'main' },
+        },
+        cursorAdapter,
+        'process.exit(0);\n',
+      );
+      expect(result.code).toBe(0);
+      expect(JSON.parse(result.stdout)).toEqual({ permission: 'allow' });
     },
     SPAWN_TEST_TIMEOUT_MS,
   );

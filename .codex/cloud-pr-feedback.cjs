@@ -79,7 +79,6 @@ module.exports = async function cloudPrFeedback(tools, options) {
       commit_id: review?.commit_id,
       submitted_at: review?.submitted_at,
       state: review?.state,
-      body: typeof review?.body === 'string' ? '' : review?.body,
       user: review?.user === null ? null : { login: review?.user?.login },
     })),
     ...(mode === 'consult' ? { consultationNote } : {}),
@@ -132,17 +131,33 @@ module.exports = async function cloudPrFeedback(tools, options) {
     throw new Error('Could not create a private evidence directory');
   const snapshotPath = `${directory}/evidence.json`;
   let check;
+  let saved = false;
   let cleanupFailed = false;
   try {
-    const saved = await tools.patch(
+    const added = await tools.patch(
       `*** Begin Patch\n*** Add File: ${snapshotPath}\n+${JSON.stringify(evidence)}\n*** End Patch`,
     );
-    if (saved?.isError) throw new Error('Could not save connector evidence');
+    if (added?.isError) throw new Error('Could not save connector evidence');
+    saved = true;
     const command = `${quote(bun)} ${quote(script)} ${mode === 'push' ? 'prepush' : mode} < ${quote(snapshotPath)}`;
     check = await run(command, 1000, 60);
   } finally {
-    const removed = await run(`rm -rf -- ${quote(directory)}`, 100);
-    cleanupFailed = removed.exit_code !== 0;
+    // functions.exec のホストは rm -f / rm -rf の形のコマンドを実行前に拒否する。保存に使った
+    // apply_patch で証跡を消し、空になった一時ディレクトリだけを rmdir で消す。
+    // 削除が例外を投げても rmdir まで進め、try 側の元の例外を上書きしない。
+    let deleteFailed = false;
+    if (saved) {
+      try {
+        const deleted = await tools.patch(
+          `*** Begin Patch\n*** Delete File: ${snapshotPath}\n*** End Patch`,
+        );
+        deleteFailed = Boolean(deleted?.isError);
+      } catch {
+        deleteFailed = true;
+      }
+    }
+    const removed = await run(`rmdir -- ${quote(directory)}`, 100);
+    cleanupFailed = deleteFailed || removed.exit_code !== 0;
   }
   if (cleanupFailed) throw new Error('Could not remove private connector evidence');
   if (check.exit_code !== 0) throw new Error(`Feedback ${mode} gate failed: ${check.output}`);
