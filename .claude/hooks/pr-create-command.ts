@@ -158,6 +158,24 @@ function ghPrCreateOptions(argv: string[]): OptionsResult {
   return { kind: 'ok', target: found };
 }
 
+/** 引数の文字列をシェルのコマンドとして実行するコマンド。 */
+const SHELLS = new Set(['bash', 'sh', 'zsh', 'dash', 'ksh']);
+
+/**
+ * argv のうち、シェルのコマンドとして実行される引数が始まる位置。`bash -c '…'`・`sh -ec '…'`・
+ * `eval '…'` のように、ラッパー越し（`timeout 5 bash -c`）も含めて探す。無ければ null。
+ */
+function shellArgumentStart(argv: readonly string[]): number | null {
+  for (let index = 0; index < argv.length; index++) {
+    const name = basename(argv[index] ?? '');
+    if (name === 'eval') return index + 1;
+    if (!SHELLS.has(name)) continue;
+    const option = argv.findIndex((value, at) => at > index && /^-[a-z]*c[a-z]*$/u.test(value));
+    if (option !== -1) return option + 1;
+  }
+  return null;
+}
+
 /** 語の値をコマンドとして解析し直す深さ。`bash -c` の入れ子を数段まで追えば足りる。 */
 const MAX_NESTED_PARSE = 3;
 
@@ -169,7 +187,7 @@ const MAX_NESTED_PARSE = 3;
  * 呼び出しも、ラッパーの種類を列挙せずに検出し、受け付ける形ではないので止める。各語の値を
  * isPrCreateCommand にもかけ、`bash -c "gh pr create"` のような文字列の中の呼び出しも拾う。
  */
-function parsedPrCreate(command: string, origin: string, depth = 0): boolean {
+function parsedPrCreate(command: string, origin: string, depth = 0, executed = true): boolean {
   const parsed = parseCommands(command, origin);
   if (parsed.kind !== 'parsed') return false;
   // 上限まで入れ子になった文字列は、中身を確かめずに `gh` という語の有無だけで決める。引用符で
@@ -179,19 +197,40 @@ function parsedPrCreate(command: string, origin: string, depth = 0): boolean {
     return [command, ...parsed.commands.flatMap((entry) => entry.argv.map(wordValue))].some(
       (value) => value !== undefined && indexOfWord(value, 'gh', 0) !== -1,
     );
-  return parsed.commands.some((entry) => {
+  const literalCommand = parsed.commands.some((entry) => {
     // 値を確定できない語（変数展開・コマンド置換）は、ghArgsCreatePr が実行時の値を仮定して判定する。
     // `gh` の直後（pr の位置）の語が実行時まで決まらないことを数えるのは、実行される最上位のコマンドだけ。
     // 引用符の中の文字列を解き直した段では、`git commit -m 'bump gh $VERSION'` のような文章にも当たるため。
     const argv = entry.argv.map((word) => wordValue(word) ?? NON_LITERAL_WORD);
     if (argv.some((value) => isPrCreateCommand(value))) return true;
     // `bash -c "g''h pr create"` のように、語の値そのものがコマンドとして解釈されうる。
-    if (argv.slice(1).some((value) => parsedPrCreate(value, origin, depth + 1))) return true;
+    const runsFrom = shellArgumentStart(argv);
+    if (
+      argv
+        .slice(1)
+        .some((value, index) =>
+          parsedPrCreate(value, origin, depth + 1, runsFrom !== null && index + 1 >= runsFrom),
+        )
+    )
+      return true;
     return argv.some(
       (value, index) =>
-        basename(value) === 'gh' &&
-        ghArgsCreatePr(argv.slice(index + 1), { dynamicCommand: depth === 0 }),
+        (basename(value) === 'gh' &&
+          ghArgsCreatePr(argv.slice(index + 1), { dynamicCommand: depth === 0 })) ||
+        // `timeout 5 "$GH" pr create` のように、ラッパー越しに実行する語が実行時まで決まらない。
+        // 実行されない文字列（コミットメッセージや本文）の中の `$GH pr new` は数えない。
+        (executed && value === NON_LITERAL_WORD && ghArgsCreatePr(argv.slice(index + 1))),
     );
+  });
+  if (literalCommand) return true;
+  // `GH=gh; "$GH" pr create` のように、実行するコマンドの語そのものが実行時まで決まらなくても、
+  // 続く語が `pr` とサブコマンドの位置の create/new なら gh でありうる。`pr` の位置は値の確定した
+  // 語だけを数え、`"$EDITOR" notes.txt` や `"$X" pr list` は対象にしない。実行されない文字列を
+  // 解き直した段（`git commit -m 'Use $GH pr new flow'`）では数えない。
+  if (!executed) return false;
+  return parsed.dynamicCommands.some((words) => {
+    const argv = words.map((word) => wordValue(word) ?? NON_LITERAL_WORD);
+    return argv.slice(1).some((value) => isPrCreateCommand(value)) || ghArgsCreatePr(argv.slice(1));
   });
 }
 

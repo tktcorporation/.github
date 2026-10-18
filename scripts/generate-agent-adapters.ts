@@ -164,10 +164,21 @@ function buildCursorHooks(hooks: ManifestHook[]): {
  * （サブモジュールの中もありうる）でコマンドを実行するので、そこからスーパープロジェクトを
  * 辿りきったいちばん外側のトップレベルを使う。`--show-toplevel` だけだとサブモジュールの
  * トップレベルを指し、アダプターが見つからない。
+ *
+ * サブモジュールの linked worktree からは `--show-superproject-working-tree` が空を返す。そのときは
+ * 共通の git ディレクトリ（親の `.git/modules/<名前>`）に記録された作業ツリー（`core.worktree`）、
+ * つまりサブモジュールの本来の作業ツリーへ移ってからスーパープロジェクトを引く。通常のリポジトリの
+ * linked worktree では共通ディレクトリに作業ツリーの記録が無く同じ場所を指すので、そこで止まる。
  */
 const CODEX_PROJECT_ROOT =
   '$(d=$(git rev-parse --show-toplevel); ' +
-  'while s=$(git -C "$d" rev-parse --show-superproject-working-tree) && [ -n "$s" ]; do d=$s; done; ' +
+  'while s=$(git -C "$d" rev-parse --show-superproject-working-tree); do ' +
+  'if [ -z "$s" ]; then ' +
+  'c=$(git -C "$d" rev-parse --path-format=absolute --git-common-dir) && ' +
+  'm=$(git -C "$d" --git-dir="$c" rev-parse --show-toplevel) && [ "$m" != "$d" ] && ' +
+  's=$(git -C "$m" rev-parse --show-superproject-working-tree) || break; ' +
+  'fi; ' +
+  '[ -n "$s" ] || break; d=$s; done; ' +
   'printf %s "$d")';
 
 function buildCodexHooks(hooks: ManifestHook[]): {

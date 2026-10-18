@@ -120,9 +120,28 @@ export function parseRemoteUrl(
 ): { host: string | null; owner: string; repo: string } | null {
   // 末尾のスラッシュ（`.../repo/` 等）を落としてから owner/repo を切り出す。
   const url = raw.trim().replace(/\/+$/u, '');
+  if (!wellFormedAuthority(url)) return null;
   const match = url.match(/[:/]([^/:]+)\/([^/]+?)(\.git)?$/u);
   if (!match?.[1] || !match[2]) return null;
   return { host: urlHost(url), owner: match[1], repo: match[2] };
+}
+
+/** RFC 3986 の userinfo に使える文字（unreserved・pct-encoded・sub-delims・`:`）。 */
+const USERINFO = /^[A-Za-z0-9\-._~%!$&'()*+,;=:]*$/u;
+
+/**
+ * URL の接続先（`scheme://` の後ろの authority、scp 形式の `:` の前）を、git や curl と同じ
+ * ホストに読めるか。`https://github.com#@evil.example/owner/repo` のように authority に `#`・`?` を
+ * 含むものや、userinfo に使えない文字（`@` など）を含むものは、ここでのホストの切り出しと実際の
+ * 接続先がずれうるので受け付けない。
+ */
+function wellFormedAuthority(url: string): boolean {
+  const scheme = url.match(/^[a-z][a-z0-9+.-]*:\/\/([^/]*)/iu);
+  const authority = scheme ? scheme[1] : url.match(/^([^/:]*):/u)?.[1];
+  if (authority === undefined) return true;
+  if (/[#?]/u.test(authority)) return false;
+  const at = authority.lastIndexOf('@');
+  return at === -1 || USERINFO.test(authority.slice(0, at));
 }
 
 /**
@@ -144,6 +163,45 @@ function urlHost(url: string): string | null {
     return url.toLowerCase().startsWith('file:') || !scheme[1] ? null : canonicalHost(scheme[1]);
   const scp = url.match(/^(?:[^@/]+@)?([^/:]+):/u);
   return scp?.[1] ? canonicalHost(scp[1]) : null;
+}
+
+/** scheme ごとの既定ポート。既定ポートの明示は省いたものと同じ接続先になる。 */
+const DEFAULT_PORTS: Record<string, number> = {
+  https: 443,
+  http: 80,
+  ssh: 22,
+  'git+ssh': 22,
+  'ssh+git': 22,
+  git: 9418,
+};
+
+/**
+ * URL の接続先ポート。既定ポートと省略は null にそろえる。scp 形式（`host:path`）はポートを
+ * 書けないので null。
+ */
+function urlPort(url: string): number | null {
+  const match = url.match(/^([a-z][a-z0-9+.-]*):\/\/(?:[^@/]*@)?[^/:]*(?::(\d*))?(?:\/|$)/iu);
+  if (!match?.[2]) return null;
+  const port = Number(match[2]);
+  return port === DEFAULT_PORTS[(match[1] ?? '').toLowerCase()] ? null : port;
+}
+
+/**
+ * リモートの URL が指すリポジトリの同一性（`host[:port]/owner/repo` を小文字にした文字列）。
+ * scheme とユーザー名は含めず、ポートは既定のものを省いて含める。同じホストでもポートが違えば
+ * 別のサーバーでありうるので、別の値にする。`ssh.github.com:443` は github.com へ SSH で届く
+ * 公式の接続先なので（canonicalHost）、github.com そのものとして扱う。ホストか owner/repo を
+ * 読めなければ null。
+ */
+export function remoteIdentity(raw: string): string | null {
+  const parsed = parseRemoteUrl(raw);
+  if (parsed === null || parsed.host === null) return null;
+  const url = raw.trim().replace(/\/+$/u, '');
+  let port = urlPort(url);
+  if (port === 443 && /^[a-z][a-z0-9+.-]*:\/\/(?:[^@/]*@)?ssh\.github\.com:/iu.test(url))
+    port = null;
+  const endpoint = port === null ? parsed.host : `${parsed.host}:${port}`;
+  return `${endpoint}/${parsed.owner}/${parsed.repo}`.toLowerCase();
 }
 
 /**
@@ -300,10 +358,14 @@ export const NON_LITERAL_WORD = '$';
  * `pr` の直後のサブコマンドの位置にあるときだけ数える。`gh pr checkout 5 && git switch -c new-x` の
  * ように、別のサブコマンドの後ろに現れた語は PR 作成として扱わない。
  *
- * `gh` と `pr` の間・`pr` とサブコマンドの間では、`-` で始まる語をオプションとして読み飛ばし、
- * `-R`・`--repo` だけは次の語を値として読み飛ばす。受け付ける形が許すのは `-R <値>`・`--repo <値>`・
- * `--repo=<値>` だけだが、gh は `gh -Racme/x pr create` や `gh pr -d create` も PR 作成として実行する
- * ので、検出はそれより広く取り、受け付けない形として止める（pr-create-command.ts）。
+ * `gh` と `pr` の間・`pr` とサブコマンドの間では、`-R <値>`・`--repo <値>`・`--repo=<値>` だけを
+ * オプションとして読み飛ばす。それ以外のオプションがあると、gh がそれを値を取るフラグとして次の語を
+ * 読むかどうかで、どの語がサブコマンドになるかが変わり、hook と gh の解釈がずれうる。そのときは
+ * 同じコマンドの以降の語に `pr` → `create`/`new` の順の並びが（語の位置を問わず）あるか、`pr` の
+ * 直後の語が実行時まで決まらなければ PR 作成として扱い、
+ * 受け付けない形として止める（pr-create-command.ts）。`gh --version` や `gh pr -x list` のように、
+ * その並びが無ければどの解釈でも PR 作成にならないので扱わない。サブコマンドより後ろのオプション
+ * （`gh pr list --search new`）は位置の判定に関わらないので見ない。
  *
  * 次の 2 つは、実行時に `pr create` になりうるので PR 作成として扱う（受け付けない形として止まる）。
  * - サブコマンドの位置の語が、`gh pr $SUB` のように実行時まで値が決まらない。`pr` の位置の語は、
@@ -319,18 +381,40 @@ export function ghArgsCreatePr(
   }: { complete?: boolean; dynamicCommand?: boolean } = {},
 ): boolean {
   let index = 0;
-  const skipOptions = () => {
-    for (let word = words[index]; word?.startsWith('-'); word = words[index])
-      index += GH_REPO_FLAGS.has(word) ? 2 : 1;
+  // 受け付ける -R/--repo の形以外のオプションがあれば true にする。
+  const skipOptions = (): boolean => {
+    let ambiguous = false;
+    for (let word = words[index]; word?.startsWith('-'); word = words[index]) {
+      if (GH_REPO_FLAGS.has(word)) index += 2;
+      else {
+        if (!word.startsWith('--repo=')) ambiguous = true;
+        index += 1;
+      }
+    }
+    return ambiguous;
   };
   const undecided = () => !complete && index >= words.length;
-  skipOptions();
+  const isPr = (word: string | undefined) =>
+    word === 'pr' || (dynamicCommand && word !== undefined && isNonLiteral(word));
+  // 語の位置を確定できないときに、from 以降のどこかに（needPr なら pr の後ろに）値の確定した
+  // create/new があるか、pr の直後の語が実行時まで決まらないか。`gh pr view "$PR"` のように、
+  // サブコマンドより後ろの引数にある変数展開は数えない。
+  const mayCreateAfter = (from: number, needPr: boolean): boolean => {
+    const prAt = needPr ? words.findIndex((word, at) => at >= from && isPr(word)) : from - 1;
+    if (prAt === -1) return false;
+    const next = words[prAt + 1];
+    if (next !== undefined && isNonLiteral(next)) return true;
+    return words.some((word, at) => at > prAt && (word === 'create' || word === 'new'));
+  };
+  const start = index;
+  if (skipOptions()) return mayCreateAfter(start, true) || undecided();
   if (undecided()) return true;
   const command = words[index];
   if (dynamicCommand && command !== undefined && isNonLiteral(command)) return true;
   if (command !== 'pr') return false;
   index += 1;
-  skipOptions();
+  const afterPr = index;
+  if (skipOptions()) return mayCreateAfter(afterPr, false) || undecided();
   if (undecided()) return true;
   const subcommand = words[index];
   if (subcommand !== undefined && isNonLiteral(subcommand)) return true;
@@ -344,12 +428,19 @@ const TOKEN_TERMINATORS = new Set([';', '|', '&', '(', ')', '<', '>']);
  * `from` から次の語を読む。空白と行継続（`\` + 改行）を飛ばし、空白かシェルの記号までを 1 語とする。
  * 引用符（`"`・`'`・`` ` ``）は語から取り除く。`bash -c "gh pr create"` の `create"` も `create` になる。
  */
-function readToken(command: string, from: number): { token: string; end: number } | null {
+function readToken(
+  command: string,
+  from: number,
+): { token: string; end: number; afterNewline: boolean } | null {
   let index = from;
+  let afterNewline = false;
   for (;;) {
     const char = command[index];
     if (char === undefined) return null;
-    if (/\s/u.test(char)) index += 1;
+    if (char === '\n') {
+      afterNewline = true;
+      index += 1;
+    } else if (/\s/u.test(char)) index += 1;
     else if (char === '\\' && command[index + 1] === '\n') index += 2;
     else break;
   }
@@ -364,8 +455,8 @@ function readToken(command: string, from: number): { token: string; end: number 
   }
   // 記号から始まる位置では記号を 1 文字だけ読み、その記号を語として返す（gh の並びを途切れさせる）。
   // `gh pr $(…)` は `$` までが 1 語になり、サブコマンドの位置で PR 作成に倒れる。
-  if (index === start) return { token: command[index] ?? '', end: index + 1 };
-  return { token, end: index };
+  if (index === start) return { token: command[index] ?? '', end: index + 1, afterNewline };
+  return { token, end: index, afterNewline };
 }
 
 /**
@@ -395,7 +486,12 @@ export function isPrCreateCommand(command: string): boolean {
     let complete = false;
     while (words.length < MAX_GH_WORDS) {
       const next = readToken(command, position);
-      if (next === null) {
+      // 改行や `;`・`&&`・`|` などの記号で、1 つの gh コマンドの語は終わる。その先の語は別の
+      // コマンドのものなので、`gh --version && gh pr view "$PR"` の後半を前半の gh の語として数えない。
+      if (
+        next === null ||
+        (words.length > 0 && (next.afterNewline || TOKEN_TERMINATORS.has(next.token)))
+      ) {
         complete = true;
         break;
       }

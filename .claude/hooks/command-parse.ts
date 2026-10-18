@@ -32,7 +32,15 @@ export interface SimpleCommand {
 }
 
 export type CommandParseResult =
-  | { kind: 'parsed'; commands: SimpleCommand[] }
+  | {
+      kind: 'parsed';
+      commands: SimpleCommand[];
+      /**
+       * Argv (executable first) of commands whose executable is only known at run time, such as
+       * `"$GH" pr create`. They are not in `commands`, which needs a literal name.
+       */
+      dynamicCommands: ShellWord[][];
+    }
   | { kind: 'parse-error'; errors: { line: number; column: number; source: string }[] };
 
 const OPAQUE_NODES = new Set(['function_definition', 'heredoc_body']);
@@ -182,6 +190,8 @@ interface NormalizedCommand {
   chdir?: ShellWord;
   wrapped?: boolean;
   opaqueReason?: string;
+  /** The full argv when the executable name is only known at run time. */
+  dynamicArgv?: ShellWord[];
 }
 
 function assignment(node: SgNode): [string, ShellWord] | null {
@@ -210,7 +220,14 @@ function normalizeEnv(argv: ShellWord[], inherited: Map<string, ShellWord>): Nor
   for (; index < argv.length; index++) {
     const word = argv[index];
     const value = literal(word);
-    if (!word || value === undefined) return { argv: [], env, opaqueReason: 'dynamic env option' };
+    // A run-time word may be the executable (`env "$GH" pr create`), so keep the argv from it on.
+    if (!word || value === undefined)
+      return {
+        argv: [],
+        env,
+        opaqueReason: 'dynamic env option',
+        ...(word ? { dynamicArgv: argv.slice(index) } : {}),
+      };
     const assigned = envAssignment(word);
     if (assigned) {
       env.set(...assigned);
@@ -263,7 +280,8 @@ function normalizeCommand(node: SgNode): NormalizedCommand {
   if (!nameNode) return { argv: [], env, opaqueReason: 'missing command name' };
   const argv = [shellWord(nameNode), ...node.fieldChildren('argument').map(shellWord)];
   const name = literal(argv[0]);
-  if (name === undefined) return { argv: [], env, opaqueReason: 'dynamic executable name' };
+  if (name === undefined)
+    return { argv: [], env, opaqueReason: 'dynamic executable name', dynamicArgv: argv };
   return basename(name) === 'env' ? normalizeEnv(argv, env) : { argv, env };
 }
 
@@ -289,6 +307,7 @@ function cdResult(command: NormalizedCommand, cwd: DirectoryState): DirectorySta
 
 interface WalkContext {
   commands: SimpleCommand[];
+  dynamicCommands: ShellWord[][];
   direct: boolean;
 }
 
@@ -348,9 +367,14 @@ function conditionOutcome(nodes: SgNode[], cwd: DirectoryState, context: WalkCon
 
 function walkCommand(node: SgNode, cwd: DirectoryState, context: WalkContext): DirectoryState {
   const normalized = normalizeCommand(node);
+  if (normalized.dynamicArgv) context.dynamicCommands.push(normalized.dynamicArgv);
   if (normalized.opaqueReason || normalized.argv.length === 0) return cwd;
   const rawName = literal(normalized.argv[0]);
-  if (rawName === undefined) return cwd;
+  if (rawName === undefined) {
+    // `env -- "$GH" pr create`: the executable after env is only known at run time.
+    context.dynamicCommands.push(normalized.argv);
+    return cwd;
+  }
   const effectiveCwd = normalized.chdir
     ? resolveDirectory(cwd, normalized.chdir, 'dynamic env chdir')
     : cwd;
@@ -474,8 +498,9 @@ export function parseCommands(source: string, base = process.cwd()): CommandPars
   const errors = parseErrors(root);
   if (errors.length > 0) return { kind: 'parse-error', errors };
   const commands: SimpleCommand[] = [];
-  walk(root, { kind: 'known', path: base }, { commands, direct: true });
-  return { kind: 'parsed', commands };
+  const dynamicCommands: ShellWord[][] = [];
+  walk(root, { kind: 'known', path: base }, { commands, dynamicCommands, direct: true });
+  return { kind: 'parsed', commands, dynamicCommands };
 }
 
 /**

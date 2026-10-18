@@ -19,8 +19,8 @@ import {
   hookCommand,
   originRepository,
   outermostCheckout,
-  parseRemoteUrl,
   projectDirectory,
+  remoteIdentity,
   workingTree,
 } from './hook-utils.ts';
 import type { Round } from './review-policy.ts';
@@ -193,8 +193,9 @@ export async function remoteHeadSha(checkout: string, branch: string): Promise<s
  * いるか。PR の対象は書き換える前の URL で決まる一方、`git ls-remote` は書き換えた先へ問い合わせる。
  * 書き換え先が読み取り用のミラーなどだと、古い SHA を見て未レビューの head を通しうる。
  *
- * 両方の URL を host・owner/repo に分けて（大文字小文字を区別せずに）比べ、どちらかが違うか、
- * どちらかからホストを読めない（ローカルのパスや file://）ときに書き換えとみなす。
+ * 両方の URL を host・ポート・owner/repo に分けて（大文字小文字を区別せずに）比べ、どれかが違うか、
+ * どちらかからホストを読めない（ローカルのパスや file://）ときに書き換えとみなす。既定ポートの明示
+ * （https の 443・ssh の 22）は省いたものと同じに扱う。
  * `git@github.com:` を `https://github.com/` へ向けるような、scheme やユーザー名だけを変える書き換えは
  * 同じリポジトリへ問い合わせるので対象にならない。`pushInsteadOf` は取得先を変えないので対象にならない。
  */
@@ -213,16 +214,12 @@ async function fetchUrlRewritten(checkout: string): Promise<boolean> {
 }
 
 /**
- * 2 つのリモート URL が、同じホストの同じ owner/repo を指すか（大文字小文字は区別しない）。
- * どちらかからホストか owner/repo を読めなければ false。
+ * 2 つのリモート URL が、同じホスト・ポートの同じ owner/repo を指すか（大文字小文字は区別しない、
+ * remoteIdentity）。どちらかからホストか owner/repo を読めなければ false。
  */
 export function sameRemoteRepository(configured: string, effective: string): boolean {
-  const a = parseRemoteUrl(configured);
-  const b = parseRemoteUrl(effective);
-  if (a === null || b === null || a.host === null || b.host === null) return false;
-  const key = (remote: { host: string | null; owner: string; repo: string }) =>
-    `${remote.host}/${remote.owner}/${remote.repo}`.toLowerCase();
-  return key(a) === key(b);
+  const a = remoteIdentity(configured);
+  return a !== null && a === remoteIdentity(effective);
 }
 
 /**
