@@ -93,6 +93,12 @@ describe('connector feedback boundary', () => {
   });
 
   test('reviewed commit, exact comment ID and author filter are preserved', () => {
+    // gh CLI 経路は生の行を渡す。本文の無いレビュー（body: null）でも観測できる。
+    expect(
+      parseGitHubFeedback({ number: 42, headRefOid: head }, 'me', comments, [
+        { ...reviews[0], body: null },
+      ]).kind,
+    ).toBe('found');
     expect(parseGitHubFeedback({ number: 42, headRefOid: head }, 'me', comments, reviews)).toEqual({
       kind: 'found',
       pr: 42,
