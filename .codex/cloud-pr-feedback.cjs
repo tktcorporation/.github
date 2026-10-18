@@ -79,7 +79,9 @@ module.exports = async function cloudPrFeedback(tools, options) {
       commit_id: review?.commit_id,
       submitted_at: review?.submitted_at,
       state: review?.state,
-      body: typeof review?.body === 'string' ? '' : review?.body,
+      // 判定は state で行い本文は使わない。本文の無いレビュー（承認など）は GitHub が null で返すので、
+      // 文字列かどうかに関わらず空文字にそろえる。
+      body: '',
       user: review?.user === null ? null : { login: review?.user?.login },
     })),
     ...(mode === 'consult' ? { consultationNote } : {}),

@@ -276,7 +276,7 @@ describe('connector feedback boundary', () => {
           const body = url.includes('/comments?')
             ? comments
             : url.includes('/reviews?')
-              ? reviews
+              ? [...reviews, { ...reviews[0], id: 10, state: 'APPROVED', body: null }]
               : pr;
           return { structuredContent: { content: JSON.stringify(body) } };
         },
@@ -322,6 +322,16 @@ describe('connector feedback boundary', () => {
       comments,
     });
     expect(evidence.reviews[0]).toMatchObject({ id: 9, commit_id: reviewed, body: '' });
+    // 本文の無いレビュー（GitHub は body: null で返す）も、Bun 側の検証を通る形に渡す。
+    expect(evidence.reviews[1]).toMatchObject({ id: 10, body: '' });
+    expect(
+      parseGitHubFeedback(
+        { number: 42, headRefOid: head },
+        'me',
+        evidence.comments,
+        evidence.reviews,
+      ).kind,
+    ).toBe('found');
     expect(patches).toHaveLength(1);
     expect(commands[1]).toContain('<');
     expect(commands.at(-1)).toContain('rm -rf');
