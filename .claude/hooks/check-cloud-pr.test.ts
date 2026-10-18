@@ -12,7 +12,14 @@ function git(cwd: string, ...args: string[]): void {
 }
 
 /** origin だけを差し替えた、head ブランチをチェックアウトした作業ツリーで事前チェックを走らせる。 */
-function preflight(originUrl: string): { decision: string; reason?: string } {
+function preflight(
+  originUrl: string,
+  extraOriginUrls: string[] = [],
+): {
+  schemaVersion?: number;
+  decision: string;
+  reason?: string;
+} {
   const dir = mkdtempSync(join(tmpdir(), 'check-cloud-pr-'));
   try {
     git(dir, 'init', '-q', '-b', 'feat');
@@ -31,6 +38,7 @@ function preflight(originUrl: string): { decision: string; reason?: string } {
       'x',
     );
     git(dir, 'remote', 'add', 'origin', originUrl);
+    for (const url of extraOriginUrls) git(dir, 'config', '--add', 'remote.origin.url', url);
     const payload = {
       request: {
         repository_full_name: 'acme/repo',
@@ -70,6 +78,11 @@ describe('check-cloud-pr.ts の origin の照合', () => {
     // 後段（origin/HEAD の無い base の確認など）で止まるが、origin の照合では止まらない。
     expect(verdict.decision).toBe('deny');
     expect(verdict.reason).not.toBe(ORIGIN_ERROR);
+  });
+
+  test('origin の URL が複数あれば、どれも github.com の同じリポジトリでも拒否する', () => {
+    const verdict = preflight('https://github.com/acme/repo.git', ['git@github.com:acme/repo.git']);
+    expect(verdict.reason).toBe(ORIGIN_ERROR);
   });
 
   test('github.com でも別のリポジトリの origin は拒否する', () => {

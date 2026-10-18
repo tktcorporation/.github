@@ -627,6 +627,51 @@ describe('Bash の PR 作成ゲート', () => {
     expect(stale.stderr).toContain(attested);
   });
 
+  test('収束後に同じ SHA へ指摘ありのラウンドを記録すると証跡を取り消し、再び収束すれば通す（指摘 0 件では取り消さず、直したコミットで記録すれば祖先の証跡を取り消す）', async () => {
+    const command = 'cd lib && gh pr create -R github.com/acme/lib --head lib-work';
+    const sha = git(at.lib, 'rev-parse', 'HEAD');
+    expect((await bash(at.super, command)).code).toBe(0);
+
+    // 指摘 0 件のラウンドは、codex でなく収束しなくても証跡を取り消さない。
+    const clean = await run('record-pr-review.ts', at.lib, ['0']);
+    expect(clean.stdout).not.toContain('証跡を取り消しました');
+    expect((await bash(at.super, command)).code).toBe(0);
+
+    const reopened = await run('record-pr-review.ts', at.lib, ['2']);
+    expect(reopened.code).toBe(0);
+    expect(reopened.stdout).toContain('証跡を取り消しました');
+    expect(ledger().at(-1)).toEqual(
+      expect.objectContaining({ sha, repo: 'acme/lib', host: 'github.com', revoked: true }),
+    );
+    const blocked = await bash(at.super, command);
+    expectSingleBlock(blocked);
+    expect(blocked.stderr).toContain(sha);
+
+    const reconverged = await run('record-pr-review.ts', at.lib, ['0', 'codex']);
+    expect(reconverged.stdout).toContain('証跡を記録');
+    expect((await bash(at.super, command)).code).toBe(0);
+
+    // 指摘を直してコミットしてから記録したラウンドは、HEAD の祖先にある証跡を取り消す。
+    // リモートはまだ指摘のあったコミットを指しているので、PR を作れない。
+    // 別のブランチ（lib-feature）だけで記録した、HEAD の祖先でない証跡は取り消さない。
+    const otherBranch = ledger()
+      .filter((entry) => entry.branch === 'lib-feature' && entry.revoked !== true)
+      .at(-1)?.sha;
+    expect(otherBranch).toBeDefined();
+    const fixed = await commit(at.lib, 'fix-after-review');
+    const afterFix = await run('record-pr-review.ts', at.lib, ['1']);
+    expect(afterFix.stdout).toContain(sha);
+    expect(afterFix.stdout).not.toContain(otherBranch ?? '');
+    expect(afterFix.stderr).toBe('');
+    expectSingleBlock(await bash(at.super, command));
+
+    // 直したコミットで収束を記録して push すれば通る。
+    expect((await run('record-pr-review.ts', at.lib, ['0', 'codex'])).stdout).toContain('証跡を記録');
+    git(at.lib, 'push', '-q', 'origin', 'lib-work');
+    expect(git(at.lib, 'rev-parse', 'HEAD')).toBe(fixed);
+    expect((await bash(at.super, command)).code).toBe(0);
+  });
+
   test.each([
     'timeout 5 gh pr create',
     'bash -c "gh pr create"',
@@ -837,6 +882,21 @@ describe('GitHub MCP の PR 作成ゲート', () => {
     expect(result.stdout).toContain('証跡を記録');
     expect((await gate(mcp('lib-feature'))).stdout).toBe('');
     expect((await gate(mcp('acme:lib-feature'))).stdout).toBe('');
+  });
+
+  test('同じ SHA を別のブランチでも収束させても、先のブランチの証跡は残る', async () => {
+    const file = join(at.super, '.git', 'claude', 'pr-review', 'attestations.jsonl');
+    const original = readFileSync(file, 'utf8');
+    const first = ledger().filter((entry) => entry.branch === 'lib-feature').at(-1);
+    expect(first).toBeDefined();
+    try {
+      // 先のブランチの証跡がこの 1 件だけの台帳に、同じコミットを別ブランチで収束させた記録が続く。
+      const twin = { ...first, branch: 'lib-twin' };
+      await writeFile(file, `${JSON.stringify(first)}\n${JSON.stringify(twin)}\n`);
+      expect((await gate(mcp('lib-feature'))).stdout).toBe('');
+    } finally {
+      await writeFile(file, original);
+    }
   });
 
   test('別ホストの同名リポジトリの証跡は使わず、ホストが決まらなければ止める', async () => {

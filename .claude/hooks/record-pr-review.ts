@@ -3,7 +3,12 @@ import { $ } from 'bun';
 import { readFile } from 'node:fs/promises';
 import { hookCommand, originRepository, workingTree } from './hook-utils.ts';
 import { formatIsoUtc, nowMs } from './iso-time.ts';
-import { appendAttestation, branchName, roundSummary } from './pr-review-gate.ts';
+import {
+  appendAttestation,
+  branchName,
+  readAttestations,
+  roundSummary,
+} from './pr-review-gate.ts';
 import { createReviewEvidence, parseRoundArgs, writeReviewEvidence } from './review-evidence.ts';
 import { appendEntry, readEntries, readRecordedEntries, reviewTargetSha } from './review-count.ts';
 import {
@@ -176,11 +181,64 @@ if (baseRef !== undefined && evidencePath !== undefined) {
     process.exit(1);
   }
 }
+const rounds = roundsOf(verdict.entries);
+const converged = verdict.convergence.kind === 'converged';
+// 指摘があって収束しなかったラウンド（accepted で収束したものを除く）は、HEAD の証跡と、このブランチ（detached HEAD ならこのチェックアウト）で
+// 記録した証跡のうち HEAD の祖先にあるものを取り消す。
+// ラウンドは指摘を直してコミットした後に記録するので、指摘の見つかったコミットは HEAD ではなく
+// その祖先にあることが多い。取り消しは SHA ごとなので、同じコミットを指す他のブランチの証跡も
+// 無効になる。他のブランチだけで記録した証跡（積み重ねたブランチの土台や、default branch に
+// 取り込まれたコミット）は、このブランチの指摘の対象とは限らないので取り消さない。
+// 取り消したコミットは、そのコミットで収束を記録し直すまでゲートを通らない。
+// 祖先かどうかを確かめられない（オブジェクトが無い等）ときは、取り消して警告する。
+// ラウンドの記録より先に書くので、台帳への書き込みが失敗すればラウンドも記録されず、再実行で取り消し直せる。
+// 指摘 0 件のラウンドは、収束の条件（最後が codex）を満たさなくても指摘を示さないので取り消さない。
+const tree = await workingTree();
+const [origin, branch] = await Promise.all([originRepository(tree), branchName(tree)]);
+const repo = origin ? `${origin.owner}/${origin.repo}`.toLowerCase() : null;
+if (!converged && round.count > 0 && origin !== null && repo !== null) {
+  const candidates = (await readAttestations()).filter(
+    (entry) =>
+      entry.repo === repo &&
+      entry.host === origin.host &&
+      // detached HEAD ではブランチで絞れないので、このチェックアウトで記録した証跡を候補にする。
+      (entry.sha === round.sha ||
+        (branch === null ? entry.checkout === tree : entry.branch === branch)),
+  );
+  const revoked = new Set<string>();
+  for (const entry of candidates) {
+    if (revoked.has(entry.sha)) continue;
+    if (entry.sha !== round.sha) {
+      const ancestor = await $`git -C ${tree} merge-base --is-ancestor ${entry.sha} ${round.sha}`
+        .quiet()
+        .nothrow();
+      if (ancestor.exitCode === 1) continue;
+      if (ancestor.exitCode !== 0)
+        console.error(
+          `${entry.sha} が HEAD の祖先か確かめられないため、念のため証跡を取り消します（git merge-base の終了コード ${ancestor.exitCode}）。`,
+        );
+    }
+    revoked.add(entry.sha);
+    await appendAttestation({
+      sha: entry.sha,
+      repo,
+      host: origin.host,
+      branch: branch ?? entry.branch,
+      checkout: tree,
+      rounds: rounds.map(roundSummary),
+      accepted: false,
+      at: formatIsoUtc(nowMs()),
+      revoked: true,
+    });
+  }
+  if (revoked.size > 0)
+    console.log(
+      `PR 作成ゲートの証跡を取り消しました（${[...revoked].join(', ')}）。指摘を直したコミットで収束を記録し直すまで、これらのコミットのまま PR は作れません。`,
+    );
+}
 await appendEntry(entry);
 // A failed sidecar write leaves the cloud gate closed: old evidence no longer matches rounds.
 if (evidence) await writeReviewEvidence(evidence);
-const rounds = roundsOf(verdict.entries);
-const converged = verdict.convergence.kind === 'converged';
 const state =
   verdict.convergence.kind === 'converged'
     ? 'PR 作成前レビューは収束。既存 PR の外部指摘後は、指摘の観測以降に 2 ラウンドのレビューが必要'
@@ -189,9 +247,6 @@ const flagText = flagArgs.map((flag) => `、${flag}`).join('');
 console.log(`ラウンド ${rounds.length} を記録（指摘 ${countArg} 件${flagText}）。${state}。`);
 // 収束した HEAD の SHA を PR 作成ゲートの証跡として台帳に残す（pr-review-gate.ts）。
 if (converged) {
-  const tree = await workingTree();
-  const [origin, branch] = await Promise.all([originRepository(tree), branchName(tree)]);
-  const repo = origin ? `${origin.owner}/${origin.repo}`.toLowerCase() : null;
   if (origin === null || repo === null || branch === null) {
     console.log(
       `${repo === null ? 'origin から owner/repo を読み取れない' : 'detached HEAD である'}ため、PR 作成ゲートの証跡は書けませんでした。origin を設定し、ブランチをチェックアウトしてから記録し直してください。`,

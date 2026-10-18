@@ -38,6 +38,13 @@ export interface Attestation {
   rounds: string[];
   accepted: boolean;
   at: string;
+  /**
+   * true の行は、それより前に書かれた同じ repo・host・SHA の証跡を、ブランチを問わず取り消す。
+   * 指摘はコミットの内容に対するものなので、同じコミットを指す他のブランチの証跡も無効にする。
+   * どの SHA について書くかは record-pr-review.ts が決める。
+   * 取り消しより後に書かれた証跡は有効なので、再び収束すればそのブランチの証跡が戻る。
+   */
+  revoked?: boolean;
 }
 
 export const roundSummary = (round: Round): string =>
@@ -67,25 +74,38 @@ const isAttestation = (value: unknown): value is Attestation => {
   const host = record.host;
   return (
     ['sha', 'repo', 'branch', 'checkout'].every((key) => typeof record[key] === 'string') &&
-    (typeof host === 'string' || host === null)
+    (typeof host === 'string' || host === null) &&
+    (record.revoked === undefined || typeof record.revoked === 'boolean')
   );
 };
 
-/** 台帳の証跡を古い順に返す。読めない行は飛ばす。 */
+const sameCommit = (a: Attestation, b: Attestation): boolean =>
+  a.host === b.host && a.repo === b.repo && a.sha === b.sha;
+
+/**
+ * 有効な証跡を古い順に返す。読めない行は飛ばす。取り消し（revoked）の行は、同じ repo・host・SHA
+ * について、それより前に書かれた証跡をブランチやチェックアウトを問わずすべて無効にする。
+ * 取り消しの後に書かれた証跡は有効なまま残る。
+ */
 export async function readAttestations(): Promise<Attestation[]> {
   const file = Bun.file(await ledgerFile());
   if (!(await file.exists())) return [];
-  const result: Attestation[] = [];
+  let live: Attestation[] = [];
   for (const line of (await file.text()).split('\n')) {
     if (!line.trim()) continue;
+    let value: unknown;
     try {
-      const value: unknown = JSON.parse(line);
-      if (isAttestation(value)) result.push(value);
+      value = JSON.parse(line);
     } catch {
       // 書きかけや手で壊した行は証跡として扱わない
+      continue;
     }
+    if (!isAttestation(value)) continue;
+    const entry = value;
+    if (entry.revoked === true) live = live.filter((kept) => !sameCommit(kept, entry));
+    else live.push(entry);
   }
-  return result;
+  return live;
 }
 
 /** 1 行を 1 回の追記で書く。短い追記は互いに混ざらないので、ロックは取らない。 */
