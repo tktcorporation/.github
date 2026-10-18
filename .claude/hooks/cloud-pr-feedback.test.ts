@@ -321,9 +321,9 @@ describe('connector feedback boundary', () => {
       viewerLogin: 'me',
       comments,
     });
-    expect(evidence.reviews[0]).toMatchObject({ id: 9, commit_id: reviewed, body: '' });
-    // 本文の無いレビュー（GitHub は body: null で返す）も、Bun 側の検証を通る形に渡す。
-    expect(evidence.reviews[1]).toMatchObject({ id: 10, body: '' });
+    // 判定は state で行うので本文は渡さない。本文の無いレビュー（GitHub は body: null で返す）も検証を通る。
+    expect(evidence.reviews[0]).toMatchObject({ id: 9, commit_id: reviewed });
+    expect(evidence.reviews.every((review: object) => !('body' in review))).toBe(true);
     expect(
       parseGitHubFeedback(
         { number: 42, headRefOid: head },
