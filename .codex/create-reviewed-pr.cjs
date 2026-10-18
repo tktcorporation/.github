@@ -40,7 +40,7 @@ function sha256Hex(text) {
     0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19,
   ];
   const rotr = (x, n) => (x >>> n) | (x << (32 - n));
-  const w = new Array(64);
+  const w = Array.from({ length: 64 }, () => 0);
   for (let offset = 0; offset < bytes.length; offset += 64) {
     for (let i = 0; i < 16; i++) {
       const j = offset + i * 4;

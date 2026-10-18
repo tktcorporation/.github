@@ -4,6 +4,7 @@ import { chmod, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { originRepository, resolveTarget } from './hook-utils.ts';
+import { formatIsoUtc, nowMs } from './iso-time.ts';
 import { prCreateInvocation } from './pr-create-command.ts';
 import { ledgerFile, sameRemoteRepository, type Attestation } from './pr-review-gate.ts';
 import { readRounds, reviewCountFile } from './review-count.ts';
@@ -855,7 +856,7 @@ describe('GitHub MCP の PR 作成ゲート', () => {
       checkout: gheCheckout,
       rounds: ['0(codex)'],
       accepted: false,
-      at: new Date().toISOString(),
+      at: formatIsoUtc(nowMs()),
     };
     try {
       await writeFile(file, `${original}${JSON.stringify(foreign)}\n`);

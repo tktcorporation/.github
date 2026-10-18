@@ -2,6 +2,7 @@
 import { $ } from 'bun';
 import { readFile } from 'node:fs/promises';
 import { hookCommand, originRepository, workingTree } from './hook-utils.ts';
+import { formatIsoUtc, nowMs } from './iso-time.ts';
 import { appendAttestation, branchName, roundSummary } from './pr-review-gate.ts';
 import { createReviewEvidence, parseRoundArgs, writeReviewEvidence } from './review-evidence.ts';
 import { appendEntry, readEntries, readRecordedEntries, reviewTargetSha } from './review-count.ts';
@@ -204,7 +205,7 @@ if (converged) {
       checkout: tree,
       rounds: rounds.map(roundSummary),
       accepted: round.accepted,
-      at: new Date().toISOString(),
+      at: formatIsoUtc(nowMs()),
     });
     console.log(
       `PR 作成ゲートの証跡を記録（${repo}@${branch} ${round.sha}）。この SHA を push すれば PR を作成できます。`,
