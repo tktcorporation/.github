@@ -42,7 +42,7 @@
     ".claude/rules/agent-work-discipline.md",
     ".claude/rules/pr-writing-style.md",
     ".claude/rules/template-sync-boundary.md",
-    ".claude/skills/functional-ddd/SKILL.md",
+    ".claude/skills/design-improvement",
     ".codex/config.toml",
     ".codex/hooks.json",
     "AGENTS.md",
