@@ -6,7 +6,7 @@
 ## 目次
 
 1. [演出・アニメーション系](#1-演出アニメーション系)
-2. [AI生成ツールのベース](#2-ai生成ツールのベース)
+2. [headless / コピー型の基盤](#2-headless--コピー型の基盤)
 3. [大規模コンポーネントコレクション](#3-大規模コンポーネントコレクション)
 4. [UIパーツ検索用リスト](#4-uiパーツ検索用リスト)
 5. [UIパターン集（デザイン参考）](#5-uiパターン集デザイン参考)
@@ -32,7 +32,7 @@
   - particle / aurora backgrounds
   - number ticker / counting animations
   - marquee / scroll-based animations
-- いつ使う: ランディングページ、hero セクション、動きのあるUIが必要なとき
+- いつ使う: 印象的なファーストビューが必要で、演出を 1 か所に絞れるとき
 
 ### Aceternity UI
 
@@ -62,17 +62,17 @@
   - micro interactions
   - creative form inputs
   - animated checkboxes
-- いつ使う: 小さいUIパーツで個性を出したいとき。ボタンやトグルの見た目参考
+- いつ使う: ランディングページの小さなパーツに個性を出したいとき。業務画面のボタンやフォームの参考にはしない
 
 ---
 
-## 2. AI生成ツールのベース
+## 2. headless / コピー型の基盤
 
 ### shadcn/ui
 
 - URL: https://ui.shadcn.com
 - スタック: Radix UI + Tailwind CSS
-- 特徴: コピペ型。CLIで追加。v0/bolt のベース
+- 特徴: コピペ型。CLIで追加し、プロジェクトのコードとして持つ
 - 得意分野:
   - Dialog / Sheet / Drawer
   - Dropdown / Context Menu
@@ -180,13 +180,15 @@
 ├── ある → それを使う（このカタログは読まない）
 └── ない → プロジェクトが既に使っている UI ライブラリに該当コンポーネントがある？
     ├── ある → それを使う
-    └── ない → 作りたいUIは何？
-        ├── フォーム/データ入力系 → shadcn/ui
-        ├── ダッシュボード/チャート → Tremor + shadcn/ui
-        ├── 複雑なコンポーネント（date picker等） → Mantine or shadcn/ui
-        ├── 小さなUIパーツ（ボタン, トグル等） → shadcn/ui → 見た目の参考に UIverse
-        ├── ランディングページの演出 → Magic UI or Aceternity UI（1 か所に絞る）
-        └── わからない → shadcn/ui から始める
+    └── ない → React と Tailwind を使っている？
+        ├── 使っていない → そのフレームワーク向けの headless ライブラリ（Vue なら Headless UI など）を探す
+        └── 使っている → 作りたいUIは何？
+            ├── フォーム/データ入力系 → shadcn/ui
+            ├── ダッシュボード/チャート → Tremor + shadcn/ui
+            ├── 複雑なコンポーネント（date picker等） → Mantine or shadcn/ui
+            ├── 小さなUIパーツ（ボタン, トグル等） → shadcn/ui
+            ├── ランディングページの演出 → Magic UI or Aceternity UI（1 か所に絞る）。小さなパーツの見た目の参考に UIverse
+            └── わからない → shadcn/ui から始める
 ```
 
 ## ドキュメントの取得
