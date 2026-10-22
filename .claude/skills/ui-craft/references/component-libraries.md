@@ -180,9 +180,10 @@
 ├── ある → それを使う（このカタログは読まない）
 └── ない → プロジェクトが既に使っている UI ライブラリに該当コンポーネントがある？
     ├── ある → それを使う
-    └── ない → React と Tailwind を使っている？
-        ├── 使っていない → そのフレームワーク向けの headless ライブラリ（Vue なら Headless UI など）を探す
-        └── 使っている → 作りたいUIは何？
+    └── ない → どのスタック？
+        ├── React 以外 → そのフレームワーク向けの headless ライブラリ（Vue なら Headless UI など）を探す
+        ├── React で Tailwind なし → Radix UI をプロジェクトの CSS の書き方でスタイルする
+        └── React と Tailwind → 作りたいUIは何？
             ├── フォーム/データ入力系 → shadcn/ui
             ├── ダッシュボード/チャート → Tremor + shadcn/ui
             ├── 複雑なコンポーネント（date picker等） → Mantine or shadcn/ui
