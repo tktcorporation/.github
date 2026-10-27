@@ -30,7 +30,7 @@ import {
   type SimpleCommand,
 } from './command-parse.ts';
 import { dirtyFiles } from './foreign-changes.ts';
-import { ownershipFingerprint, projectDirectory, readEditedFiles } from './hook-utils.ts';
+import { isRecord, ownershipFingerprint, projectDirectory, readEditedFiles } from './hook-utils.ts';
 import { prCreateInvocation } from './pr-create-command.ts';
 import { bashPrCreateDenyReason } from './pr-review-gate.ts';
 
@@ -373,7 +373,10 @@ for (const entry of commands) {
 // ---------------------------------------------------------------------------
 
 const root = await projectDirectory();
-async function run(path: string, cwd?: string): Promise<void> {
+// 子が返す additionalContext。push ごとに子を起動するので、1 つのコマンドに push が複数あると
+// 子の JSON が連結されて読めなくなる。集めて最後に 1 個の JSON として出す。
+const notes: string[] = [];
+async function run(path: string, cwd?: string, capture = false): Promise<void> {
   // project hook は bash と bun (TypeScript) の両方で書かれているため、
   // 拡張子で実行系を選ぶ。bun 固定だと .sh は構文エラーで落ち、glob を
   // *.ts に絞ると .sh は黙ってスキャン対象から外れる（後者で実際に
@@ -389,11 +392,25 @@ async function run(path: string, cwd?: string): Promise<void> {
     cwd: root,
     env: process.env,
     stdin: new Blob([stdin]),
-    stdout: 'inherit',
+    stdout: capture ? 'pipe' : 'inherit',
     stderr: 'inherit',
   });
+  const out = capture ? (await new Response(child.stdout).text()).trim() : '';
   const status = await child.exited;
   if (status !== 0) process.exit(status);
+  if (!out) return;
+  // 子の出力が読めなくても止めずに知らせ、後続の検査（project hook）は続ける。
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(out);
+  } catch {
+    notes.push(`WARNING: ${path} の出力を読めません: ${out.slice(0, 200)}`);
+    return;
+  }
+  const context = isRecord(parsed) && isRecord(parsed.hookSpecificOutput)
+    ? parsed.hookSpecificOutput.additionalContext
+    : undefined;
+  if (typeof context === 'string' && context) notes.push(context);
 }
 // gh pr create は、対象（実行ディレクトリ・-R のリポジトリ・--head のブランチ）が実行前に確定する形だけを受け付け、
 // リモートの head の SHA に収束の証跡があるかで判定する（pr-review-gate.ts）。
@@ -446,7 +463,7 @@ for (const entry of commands) {
       '同じ Bash コマンド内で git add/commit 等の後に push すると、push 前に確定した HEAD をレビューできません。変更・commit を先に実行し、git push を別の Bash コマンドで実行してください。',
     );
   if (target.directory.kind === 'known')
-    await run('.claude/hooks/require-pr-feedback-review.ts', target.directory.path);
+    await run('.claude/hooks/require-pr-feedback-review.ts', target.directory.path, true);
   else
     console.error(
       'NOTICE: git push の作業ツリーを特定できません。LLM が送信先 PR のレビュー指摘を確認してください。',
@@ -454,3 +471,13 @@ for (const entry of commands) {
 }
 for await (const path of new Glob('.claude/hooks/project/*.{ts,sh}').scan({ cwd: root }))
   await run(path);
+// 同じ作業ツリーへの push が並ぶと同じ警告が繰り返されるため、重複を除いて 1 個にまとめる。
+if (notes.length > 0)
+  console.log(
+    JSON.stringify({
+      hookSpecificOutput: {
+        hookEventName: 'PreToolUse',
+        additionalContext: [...new Set(notes)].join('\n'),
+      },
+    }),
+  );

@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
+import { pullsPayload, writeFakeGh } from './fake-gh.ts';
 import { externalReviewFile, reviewTargetSha, writeEntries } from './review-count.ts';
 import type { Entry } from './review-policy.ts';
 
@@ -9,6 +10,7 @@ const script = join(import.meta.dir, 'require-pr-feedback-review.ts');
 const record = join(import.meta.dir, 'record-pr-feedback.ts');
 const observeScript = join(import.meta.dir, 'observe-pr-feedback.ts');
 const preBash = join(import.meta.dir, 'pre-bash-guard.ts');
+const ORIGIN = 'https://github.com/owner/repo.git';
 interface FakeThread {
   comments: {
     nodes: {
@@ -56,6 +58,7 @@ async function checkPush(
       ]),
       FAKE_REVIEWS: JSON.stringify([reviews]),
       FAKE_PR_ERROR: prError ? '1' : '',
+      FAKE_GH_PULLS: pullsPayload(42),
     },
     stdin: new Blob([JSON.stringify({ cwd })]),
     stdout: 'pipe',
@@ -79,11 +82,8 @@ describe('外部指摘後の push ガード', () => {
       const bin = join(root, 'bin');
       await Promise.all([mkdir(caller), mkdir(target), mkdir(bin)]);
       git(target, 'init', '-q');
-      await writeFile(
-        join(bin, 'gh'),
-        '#!/bin/sh\nif [ "$1" = "pr" ]; then if [ "$PWD" != "$FAKE_TARGET" ]; then echo "no pull requests found for branch" >&2; exit 1; fi; printf \'{"number":42}\\n\'; exit 0; fi\nif [ "$1" = "api" ] && [ "$2" = "user" ]; then printf "testuser\\n"; exit 0; fi\nif [ "$1" = "api" ]; then case "$2" in */reviews?*) printf \'[[]]\\n\';; *) printf \'[[{"id":1,"commit_id":"test-head","created_at":"2026-09-23T00:00:01Z","user":{"login":"reviewer"}}]]\\n\';; esac; exit 0; fi\nexit 1\n',
-        { mode: 0o755 },
-      );
+      git(target, 'remote', 'add', 'origin', ORIGIN);
+      await writeFakeGh(bin);
       const child = Bun.spawn(['bun', preBash], {
         cwd: caller,
         env: {
@@ -91,6 +91,17 @@ describe('外部指摘後の push ガード', () => {
           PATH: `${bin}:${process.env.PATH}`,
           CLAUDE_PROJECT_DIR: join(import.meta.dir, '../..'),
           FAKE_TARGET: target,
+          FAKE_GH_PULLS: pullsPayload(42),
+          FAKE_COMMENTS: JSON.stringify([
+            [
+              {
+                id: 1,
+                commit_id: 'test-head',
+                created_at: '2026-09-23T00:00:01Z',
+                user: { login: 'reviewer' },
+              },
+            ],
+          ]),
         },
         stdin: new Blob([
           JSON.stringify({ cwd: caller, tool_input: { command: `git -C ${target} push` } }),
@@ -135,11 +146,9 @@ describe('外部指摘後の push ガード', () => {
       await writeFile(join(cwd, 'README'), 'fresh');
       git(cwd, 'commit', '-qam', 'fresh');
       const sha = await reviewTargetSha({ cwd });
-      await writeFile(
-        join(bin, 'gh'),
-        '#!/bin/sh\nif [ "$1" = "pr" ]; then printf \'{"number":42}\\n\'; exit 0; fi\nif [ "$1" = "api" ] && [ "$2" = "user" ]; then printf "testuser\\n"; exit 0; fi\nif [ "$1" = "api" ]; then case "$2" in */reviews?*) printf "%s\\n" "$FAKE_REVIEWS";; *) printf "%s\\n" "$FAKE_COMMENTS";; esac; exit 0; fi\nexit 1\n',
-        { mode: 0o755 },
-      );
+      // PR の検索は origin の URL から owner/repo を決めるので、手元の bare リポジトリから GitHub の URL へ向け直す。
+      git(cwd, 'remote', 'set-url', 'origin', ORIGIN);
+      await writeFakeGh(bin);
       await Bun.write(
         await externalReviewFile({ cwd }),
         JSON.stringify({
@@ -172,11 +181,8 @@ describe('外部指摘後の push ガード', () => {
       await Promise.all([mkdir(target), mkdir(bin)]);
       git(root, 'init', '-q');
       git(target, 'init', '-q');
-      await writeFile(
-        join(bin, 'gh'),
-        '#!/bin/sh\nif [ "$1" = "pr" ]; then if [ "$PWD" != "$FAKE_TARGET" ]; then echo "no pull requests found for branch" >&2; exit 1; fi; printf \'{"number":42}\\n\'; exit 0; fi\nif [ "$1" = "api" ] && [ "$2" = "user" ]; then printf "testuser\\n"; exit 0; fi\nif [ "$1" = "api" ]; then case "$2" in */reviews?*) printf \'[[]]\\n\';; *) printf \'[[{"id":1,"commit_id":"test-head","created_at":"2026-09-23T00:00:01Z","user":{"login":"reviewer"}}]]\\n\';; esac; exit 0; fi\nexit 1\n',
-        { mode: 0o755 },
-      );
+      git(target, 'remote', 'add', 'origin', ORIGIN);
+      await writeFakeGh(bin);
       const child = Bun.spawn(['bun', preBash], {
         cwd: root,
         env: {
@@ -184,6 +190,17 @@ describe('外部指摘後の push ガード', () => {
           PATH: `${bin}:${process.env.PATH}`,
           CLAUDE_PROJECT_DIR: join(import.meta.dir, '../..'),
           FAKE_TARGET: target,
+          FAKE_GH_PULLS: pullsPayload(42),
+          FAKE_COMMENTS: JSON.stringify([
+            [
+              {
+                id: 1,
+                commit_id: 'test-head',
+                created_at: '2026-09-23T00:00:01Z',
+                user: { login: 'reviewer' },
+              },
+            ],
+          ]),
         },
         stdin: new Blob([
           JSON.stringify({ cwd: root, tool_input: { command: 'cd "nested repo" && git push' } }),
@@ -234,14 +251,10 @@ describe('外部指摘後の push ガード', () => {
       await writeFile(join(cwd, 'README'), 'test');
       git(cwd, 'add', 'README');
       git(cwd, 'commit', '-qm', 'test');
+      git(cwd, 'remote', 'add', 'origin', ORIGIN);
       const bin = join(cwd, 'bin');
       await mkdir(bin);
-      const gh = join(bin, 'gh');
-      await writeFile(
-        gh,
-        '#!/bin/sh\nif [ "$1" = "pr" ]; then if [ "$FAKE_PR_ERROR" = "1" ]; then echo "network error" >&2; exit 1; fi; printf \'{"number":42}\\n\'; exit 0; fi\nif [ "$1" = "api" ] && [ "$2" = "user" ]; then printf "testuser\\n"; exit 0; fi\nif [ "$1" = "api" ]; then case "$2" in */reviews?*) printf "%s\\n" "$FAKE_REVIEWS";; *) printf "%s\\n" "$FAKE_COMMENTS";; esac; exit 0; fi\nexit 1\n',
-        { mode: 0o755 },
-      );
+      await writeFakeGh(bin);
       const sha = await reviewTargetSha({ cwd });
       const historyPath = await externalReviewFile({ cwd });
       const comment = (id: number, head: string, isResolved = false, login = 'reviewer') => ({
@@ -267,7 +280,8 @@ describe('外部指摘後の push ガード', () => {
           },
         },
       ];
-      expect((await checkPush(cwd, bin, [], true)).code).toBe(2);
+      // PR を確かめられないときは止めずに通す（警告は github-env-matrix.test.ts で確かめる）。
+      expect((await checkPush(cwd, bin, [], true)).code).toBe(0);
       expect((await checkPush(cwd, bin, firstComment)).code).toBe(2);
       expect(await Bun.file(historyPath).exists()).toBe(true);
       await mkdir(dirname(historyPath), { recursive: true });
@@ -365,13 +379,10 @@ describe('外部指摘後の push ガード', () => {
       await writeFile(join(cwd, 'README'), 'test');
       git(cwd, 'add', 'README');
       git(cwd, 'commit', '-qm', 'test');
+      git(cwd, 'remote', 'add', 'origin', ORIGIN);
       const bin = join(cwd, 'bin');
       await mkdir(bin);
-      await writeFile(
-        join(bin, 'gh'),
-        '#!/bin/sh\nif [ "$1" = "pr" ]; then printf \'{"number":42}\\n\'; exit 0; fi\nif [ "$1" = "api" ] && [ "$2" = "user" ]; then printf "testuser\\n"; exit 0; fi\nif [ "$1" = "api" ]; then case "$2" in */reviews?*) printf "%s\\n" "$FAKE_REVIEWS";; *) printf "%s\\n" "$FAKE_COMMENTS";; esac; exit 0; fi\nexit 1\n',
-        { mode: 0o755 },
-      );
+      await writeFakeGh(bin);
       const review = (id: number, head: string) => ({
         id,
         commit_id: head,
@@ -429,6 +440,7 @@ describe('外部指摘後の push ガード', () => {
         env: {
           ...process.env,
           PATH: `${bin}:${process.env.PATH}`,
+          FAKE_GH_PULLS: pullsPayload(42),
           FAKE_REVIEWS: JSON.stringify([[...first]]),
           FAKE_COMMENTS: JSON.stringify(inlinePayload),
         },
@@ -461,6 +473,7 @@ describe('外部指摘後の push ガード', () => {
           env: {
             ...process.env,
             PATH: `${bin}:${process.env.PATH}`,
+            FAKE_GH_PULLS: pullsPayload(42),
             FAKE_REVIEWS: JSON.stringify([[...first, review(3, 'head-c')]]),
             FAKE_COMMENTS: JSON.stringify(inlinePayload),
           },

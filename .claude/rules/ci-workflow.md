@@ -37,6 +37,16 @@ PR 作成後の追加コミットでセルフレビューを回すかどうか�
 3. 修正して push し、再度監視する
 4. 全チェックが pass するまでこのサイクルを回す
 
+`gh pr checks` は内部で GraphQL を使うので、GraphQL を拒否して REST だけを通す環境では失敗する。その環境では同じ情報を REST で読む。head の SHA は `git ls-remote origin refs/heads/<branch>` で取る。
+
+| 知りたいこと                          | REST の呼び出し                                                                                              |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| チェック（GitHub Actions など）の状態 | `gh api --paginate repos/<owner>/<repo>/commits/<sha>/check-runs --jq '.check_runs[] \| {name, status, conclusion}'`    |
+| 外部 CI がコミットに付けた状態        | `gh api --paginate repos/<owner>/<repo>/commits/<sha>/status --jq '.statuses[] \| {context, state}'`                    |
+| 失敗したジョブのログ                  | `gh api repos/<owner>/<repo>/actions/jobs/<job-id>/logs`（job-id は check-run の `details_url` の末尾の数字） |
+
+`--watch` の代わりに、間隔を空けて読み直す（1 分未満の間隔で叩かない）。環境で何が使えるかは `bun "$CLAUDE_PROJECT_DIR"/.claude/hooks/github-doctor.ts` で確かめる。この診断は gh の有無と認証、REST と GraphQL のどちらが通るか、push のゲートが通るか、PR をどの経路で作るべきかを示し、何も書き換えない。
+
 **全チェックが pass するまでユーザーに「完了」と報告しない。**
 
 失敗が自分の変更と無関係だと判断したときは、その根拠（base branch でも再現する / ローカルで再現しない / 失敗箇所が差分に触れていない）を示す。根拠なしに flake と断定しない。
@@ -52,6 +62,8 @@ PR 作成後の追加コミットでセルフレビューを回すかどうか�
 記録用のスクリプトは実行したディレクトリのチェックアウトを対象にする（サブモジュールや worktree の PR ならその中で実行する）。`$CLAUDE_PROJECT_DIR` はルートプロジェクトのディレクトリで、設定されていない環境ではルートプロジェクトの絶対パスに置き換える。
 
 Stop フック（`.claude/hooks/stop-pr-comments.ts`）が未対応スレッドを知らせる。Stop フックが見るのはセッションの現在地のチェックアウトの PR だけで、コマンドごとに `cd` してサブモジュールで作業しているとその PR は知らせない。外部指摘の観測履歴は指摘を読んだ時点、push 前のゲート、相談記録時に共通の処理で更新し、ユーザーが選んだ方針は `record-pr-feedback.ts` が記録する。通常の Bash の直接 `git push` では、`git -C` や `cd` で移った先の push 元チェックアウトについて、PreToolUse フックが GitHub の新規インラインコメントと変更要求レビュー本文を確認し、同じ PR で異なる HEAD への指摘が規定回数に達していればユーザー判断の記録を要求する。初回の指摘から、指摘後に追加したローカルレビューのラウンドが収束するまでは push を止める。同じ HEAD への複数コメントは相談の回数では 1 回と数える。通常のコメント付きレビューを対象にする簡易ガードで、短い返信や一般コメントの指摘性は機械的に確定しない。フックは特殊な refspec やリモート設定も完全には解析しない。LLM は送信先を確認し、別の経路で push するときも同じ手順を守る。
+
+この push のゲートは、基本の経路（origin の、いま作業しているブランチの PR）で外部指摘に気付き、セルフレビューへ戻るための緩いガードレールである。gh が無い・認証できない・アクセスを拒否される・通信できない・origin から対象を決められないなどで PR を確かめられないときは、push を止めずに通し、確かめられなかった内容と `github-doctor.ts` で確かめる手順を警告として示す。fork からの PR、SSH の Host 別名を使う origin、origin 以外のリモートへの push、refspec でのブランチ名の変更、同じ head からの複数の PR といったまれな構成は対象外で、それらを塞ぐためにゲートの設計を広げない。
 
 `gh` が認証できないクラウドでは、指摘を読んだ直後に `.claude/guides/tools/cloud-review.md` の GitHub コネクタ用ラッパーを `observe` モードで実行する。観測後の 2 ラウンドを記録したら、同じラッパーの `push` モードで指摘を再取得してゲートを通す。直接の `git push` に置き換えない。
 
