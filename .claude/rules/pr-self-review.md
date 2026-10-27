@@ -12,6 +12,8 @@ PR の作成は、PR の head になるコミットにレビュー収束の証�
 
 PR 作成のゲート（`.claude/hooks/pr-review-gate.ts`）は、リモートの head ブランチが指す SHA を `git ls-remote` で引き、同じ owner/repo でその SHA の証跡があれば通す。収束の判定は記録の時点で済んでいるので、ゲートは対象のチェックアウトを推測しない。収束後に積んだコミットは別の SHA なので、その HEAD でレビューを回して記録し直すまで通らない。指摘が残って収束しなかったラウンドを記録すると、記録用の CLI は、指摘の対象になりうる HEAD とその祖先の証跡を取り消し、取り消したコミットはそのコミットで収束を記録し直すまでゲートを通らない（取り消す範囲は `.claude/hooks/record-pr-review.ts` のコメントを参照）。手順は、収束を記録してから push し、`gh pr create -R <host/owner/repo> --head <branch>` を実行する。
 
+`gh pr create` は内部で GraphQL を使うので、GraphQL を拒否して REST だけを通す実行環境では PR を作れない。どの環境でも同じ手順で作れる入口として、PR の head にするブランチのチェックアウトで `bun "$CLAUDE_PROJECT_DIR"/.claude/hooks/create-pr.ts --title <題> --body-file <ファイル> [--draft]` を使う。この CLI は対象を実行時に確定させる（repo とホストは origin、head は現在のブランチ、base は `origin/HEAD` の default branch で、`--base` に別のブランチを渡すと止める）。Bash の経路と同じ判定（`pr-review-gate.ts`。下の base と `insteadOf` の規則を含む）でリモートの head の SHA に証跡があることを確かめてから REST で作成し、応答の head と base を確かめた値と照合する。同じ head の open な PR が既にあれば作らずにその URL を返す。作成の要求が曖昧に失敗したときは再試行せず、同じ head の PR を探し直して実在を確かめてから結果を返す。終了コードと出力の形は `.claude/hooks/create-pr.ts` の冒頭にある。どの経路が使える環境かは `bun "$CLAUDE_PROJECT_DIR"/.claude/hooks/github-doctor.ts` で確かめる。
+
 Bash の `gh pr create`（別名の `gh pr new` も同じ）は、対象が実行前に確定する次の形だけを受け付け、それ以外で `gh pr create` か `gh pr new` を含むコマンドは止める（`.claude/hooks/pr-create-command.ts`）。`create`・`new` は `pr` の直後のサブコマンドの位置（`gh` と `pr` の間、`pr` とサブコマンドの間に挟めるのはオプションだけ）にあるときだけ数えるので、`gh pr checkout 5 && git switch -c new-x` や `gh pr list --search new` は対象にならない。ただし `gh` と `pr` の間・`pr` とサブコマンドの間に `-R <値>`・`--repo <値>`・`--repo=<値>` 以外のオプションがあると、gh がそれを値を取るフラグとして読むかでサブコマンドの位置が変わるので、同じコマンドの（改行や `;`・`&&`・`|` で区切られる前の）後ろの語に `pr` → `create`/`new` の並びがあれば PR 作成として扱う。また、引用符の中や heredoc の本文に書かれた並びも数えるので、`bash -c "gh pr create"` やコミットメッセージ中の `gh pr create` は止める。サブコマンドの位置が `gh pr $SUB` のように実行時まで決まらない書き方や、実行するコマンドが `"$GH" pr create`・`env "$GH" pr create` のように実行時まで決まる書き方も、PR 作成になりうるので止める（引数の文字列の中では、`bash -c`・`eval` のように実行される場合だけ数える）。`-R <host/owner/repo>`（`--repo`）と `--head <branch>`（`-H`）は必須で、`-R` は `gh` と `pr` の間に置いてもよい。`-R` はホストまで書いた `host/owner/repo` の形（例: `github.com/owner/repo`）で書き、ホストと owner/repo が origin の URL と一致しなければ止める。ホストを省くと gh は `GH_HOST` やログイン済みのホストから補い、ゲートの確かめるホストとずれうるため。origin のホストに SSH 設定（`~/.ssh/config`）の Host 別名を使うチェックアウトは、git の設定から実際のホストを決められず Bash の経路を通らないので、MCP の経路で作成するか、origin を実際のホスト名で設定する。origin の URL は `insteadOf` で書き換える前の値を見て、URL が複数あるときは止める。
 
 ```
@@ -40,7 +42,7 @@ Claude Code 以外（Cursor・Codex）での自動発火はホストごとの確
 - ゲートは手元の git の設定を通してリモートの SHA を読む。`core.sshCommand`・`remote.origin.uploadpack`・プロキシなどの通信設定、origin を独自スキーム（`foo://` など。git は `git-remote-foo` に通信を任せる）にする設定、gh の設定を意図的に変えれば、ゲートが確かめる相手と gh が PR を作る相手を分けられる
 - ゲートはリモートへ届く必要があり、`git ls-remote` が失敗・タイムアウトすれば止める
 - rebase や squash でコミットの SHA が変わると、内容が同じでも証跡は無くなり、レビューのやり直しが要る
-- close した PR の reopen や、`gh pr` を経由しない生の API 呼び出しは対象外で、運用上の禁止事項として扱う
+- close した PR の reopen や、`gh pr` と `create-pr.ts` を経由しない生の API 呼び出しは対象外で、運用上の禁止事項として扱う
 
 ## 手順
 
@@ -78,7 +80,7 @@ bun "$CLAUDE_PROJECT_DIR"/.claude/hooks/record-pr-review.ts checkpoint <continue
 
 ### 3. PR 作成
 
-2 ラウンド以上・最後が codex review で現在の HEAD に対して 0 件になれば、記録用の CLI がその HEAD の証跡を書く。その HEAD を push すれば `gh pr create` が通る。途中収束（直しても指摘の根本原因が変わらない）は自分では閉じない。残る指摘と直さない理由をユーザーに示し、ユーザーが残りを受け入れたときだけ、その判断を PR 本文に書いて、現在の HEAD に対する codex review のラウンドを実際の指摘件数のまま `accepted` を付けて記録する（0 件だったと偽らない）。
+2 ラウンド以上・最後が codex review で現在の HEAD に対して 0 件になれば、記録用の CLI がその HEAD の証跡を書く。その HEAD を push すれば `gh pr create`（GraphQL が使えない環境では `create-pr.ts`）が通る。途中収束（直しても指摘の根本原因が変わらない）は自分では閉じない。残る指摘と直さない理由をユーザーに示し、ユーザーが残りを受け入れたときだけ、その判断を PR 本文に書いて、現在の HEAD に対する codex review のラウンドを実際の指摘件数のまま `accepted` を付けて記録する（0 件だったと偽らない）。
 
 ## レビュー指摘への対応方針
 

@@ -165,7 +165,7 @@ type RemoteHead =
  * SSH のプロンプトは既存の SSH コマンドに BatchMode=yes を足して止める。GIT_SSH だけが
  * 設定されている（-o を受け付けない実装かもしれない）ときは BatchMode を足さない。
  */
-async function remoteHead(checkout: string, branch: string): Promise<RemoteHead> {
+export async function remoteHead(checkout: string, branch: string): Promise<RemoteHead> {
   const existingSshCommand =
     process.env.GIT_SSH_COMMAND ||
     (await $`git -C ${checkout} config --get core.sshCommand`.quiet().nothrow()).text().trim();
@@ -242,6 +242,9 @@ export function sameRemoteRepository(configured: string, effective: string): boo
   return a !== null && a === remoteIdentity(effective);
 }
 
+/** 証跡の判定結果。通すときは、判定に使ったリモートの head の SHA を持つ。 */
+type AttestedHead = { kind: 'attested'; sha: string } | { kind: 'denied'; reason: string };
+
 /**
  * PR の head（`repo` の `branch`）を通してよければ null、止めるなら理由を返す。リモートの
  * branch が指す SHA に、同じ repo の証跡があるときだけ通す。`checkout` は origin を引く場所。
@@ -251,29 +254,52 @@ export async function checkAttestation(
   branch: string,
   checkout: string,
 ): Promise<string | null> {
+  const verdict = await attestedRemoteHead(repo, branch, checkout);
+  return verdict.kind === 'attested' ? null : verdict.reason;
+}
+
+/**
+ * checkAttestation と同じ判定で、通すときは確かめたリモートの head の SHA を返す。PR を自分で
+ * 作る入口（create-pr.ts）が、作成後の応答の head をこの SHA と照合するために使う。
+ */
+export async function attestedRemoteHead(
+  repo: string,
+  branch: string,
+  checkout: string,
+): Promise<AttestedHead> {
+  const denied = (reason: string): AttestedHead => ({ kind: 'denied', reason });
   // 記録の後に origin の向き先が変わっていれば、ls-remote は別のリポジトリを見る。
   const origin = await originRepository(checkout);
   const current = origin ? `${origin.owner}/${origin.repo}`.toLowerCase() : null;
   if (current !== repo.toLowerCase())
-    return `${checkout} の origin（${current ?? '読み取れない'}）が、PR の対象 ${repo} と一致しません。対象リポジトリを origin に持つチェックアウトで収束を記録し直してください。`;
+    return denied(
+      `${checkout} の origin（${current ?? '読み取れない'}）が、PR の対象 ${repo} と一致しません。対象リポジトリを origin に持つチェックアウトで収束を記録し直してください。`,
+    );
   if (await fetchUrlRewritten(checkout))
-    return `${checkout} の origin の取得先が url.<base>.insteadOf で書き換えられていて、PR を作るリポジトリと SHA を確かめる相手（ホストか owner/repo）がずれうるので受け付けません。origin の取得先を別のリポジトリへ書き換えない設定で再実行してください。`;
+    return denied(
+      `${checkout} の origin の取得先が url.<base>.insteadOf で書き換えられていて、PR を作るリポジトリと SHA を確かめる相手（ホストか owner/repo）がずれうるので受け付けません。origin の取得先を別のリポジトリへ書き換えない設定で再実行してください。`,
+    );
   const remote = await remoteHead(checkout, branch);
   if (remote.kind === 'error')
-    return `リモートの ${branch} ブランチを確認できません（${remote.reason}）。リモートに届く状態で再実行してください。`;
+    return denied(
+      `リモートの ${branch} ブランチを確認できません（${remote.reason}）。リモートに届く状態で再実行してください。`,
+    );
   if (remote.kind === 'missing')
-    return `${repo} のリモートに ${branch} ブランチがありません。レビュー済みの HEAD を push してから再実行してください。`;
+    return denied(
+      `${repo} のリモートに ${branch} ブランチがありません。レビュー済みの HEAD を push してから再実行してください。`,
+    );
   const attestations = (await readAttestations()).filter(
     (entry) => entry.repo === repo.toLowerCase() && entry.host === (origin?.host ?? null),
   );
-  if (attestations.some((entry) => entry.sha === remote.sha)) return null;
+  if (attestations.some((entry) => entry.sha === remote.sha))
+    return { kind: 'attested', sha: remote.sha };
   const last = attestations.filter((entry) => entry.branch === branch).at(-1);
-  return (
+  return denied(
     `リモートの ${branch}（${repo}）の HEAD ${remote.sha} に、レビューループ収束の記録がありません` +
-    `（このブランチで最後に収束を記録した SHA: ${last?.sha ?? 'なし'}）。` +
-    '.claude/skills/pr-review-loop/SKILL.md の手順でこのコミットをレビューし、そのチェックアウトで ' +
-    `${hookCommand('record-pr-review.ts')} <指摘件数> [codex] [accepted] を実行して収束を記録してから、` +
-    'push して再実行してください。'
+      `（このブランチで最後に収束を記録した SHA: ${last?.sha ?? 'なし'}）。` +
+      '.claude/skills/pr-review-loop/SKILL.md の手順でこのコミットをレビューし、そのチェックアウトで ' +
+      `${hookCommand('record-pr-review.ts')} <指摘件数> [codex] [accepted] を実行して収束を記録してから、` +
+      'push して再実行してください。',
   );
 }
 
@@ -359,21 +385,27 @@ export async function baseDenyReason(
   base: string | undefined,
 ): Promise<string | null> {
   if (base === undefined) return null;
+  const defaultBranch = await originDefaultBranch(checkout);
+  if (defaultBranch === null)
+    return `${checkout} で origin の default branch が分からないので、base（${base}）を確かめられません。git remote set-head origin --auto を実行してから再実行してください。`;
+  if (base !== defaultBranch)
+    return `PR の base（${base}）が origin の default branch（${defaultBranch}）と異なります。レビューは ${defaultBranch} との差分に対して行うので、base は ${defaultBranch} にするか省いてください。`;
+  return null;
+}
+
+/** origin の default branch の名前（`origin/HEAD` が指すブランチ）。手元に設定が無ければ null。 */
+export async function originDefaultBranch(checkout: string): Promise<string | null> {
   const head = await $`git -C ${checkout} symbolic-ref --quiet --short refs/remotes/origin/HEAD`
     .quiet()
     .nothrow();
-  const defaultBranch =
+  const name =
     head.exitCode === 0
       ? head
           .text()
           .trim()
           .replace(/^origin\//u, '')
       : '';
-  if (defaultBranch === '')
-    return `${checkout} で origin の default branch が分からないので、base（${base}）を確かめられません。git remote set-head origin --auto を実行してから再実行してください。`;
-  if (base !== defaultBranch)
-    return `PR の base（${base}）が origin の default branch（${defaultBranch}）と異なります。レビューは ${defaultBranch} との差分に対して行うので、base は ${defaultBranch} にするか省いてください。`;
-  return null;
+  return name === '' ? null : name;
 }
 
 /** PreToolUse の deny 応答（Claude Code の hookSpecificOutput プロトコル）。 */

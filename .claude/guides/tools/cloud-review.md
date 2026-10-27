@@ -1,6 +1,11 @@
 # Cloudでのレビュー付きDraft PR作成
 
-`functions.exec` でツールを呼び出すクラウド環境では、リポジトリの `PreToolUse` フックが自動適用されるとは限らない。PR作成には `.codex/create-reviewed-pr.cjs` を使う。このラッパーは共有レビュー判定を実行してからGitHubコネクタを呼ぶ。チェックを単独実行した後、コネクタを直接呼ぶ手順にはしない。
+クラウドで PR を作る経路は、gh の REST がリポジトリに届くかで分かれる。どちらの環境かは `bun .claude/hooks/github-doctor.ts` で確かめる（gh の有無と認証、REST と GraphQL のどちらが通るか、勧める作成経路を示す）。
+
+- **gh の REST が届く**（GraphQL を拒否して `gh pr create` が失敗する環境を含む）：`bun .claude/hooks/create-pr.ts --title <題> --body-file <ファイル> [--draft]` で作る。Bash の `gh pr create` と同じ証跡（`.claude/rules/pr-self-review.md` の「仕組み」節）で判定し、作成の応答の head・base を照合する。終了コードと出力の形はスクリプト冒頭にある
+- **gh を使えず、GitHub コネクタを `functions.exec` から呼ぶ**：以下の `.codex/create-reviewed-pr.cjs` を使う
+
+`functions.exec` でツールを呼び出すクラウド環境では、リポジトリの `PreToolUse` フックが自動適用されるとは限らない。このラッパーは共有レビュー判定を実行してからGitHubコネクタを呼ぶ。チェックを単独実行した後、コネクタを直接呼ぶ手順にはしない。
 
 ## レビューを終えて記録する
 
@@ -76,7 +81,7 @@ CIのフックテストは判定実装の検証であり、各PRの独立レビ�
 
 GitHub コネクタが利用可能な場合、レビュー前の観測と push 直前の再取得には `.codex/cloud-pr-feedback.cjs` を使う。`functions.exec` 内でレビュー済みのソースを読み、`exec`・`github_fetch`・`github_get_user_login` を注入する。コネクタが PR 本体、全ページのインラインコメントとレビューを取得し、Bun 側がリポジトリ・PR・ブランチ・remote head・観測時刻・指摘 ID・レビュー対象 commit を検証して既存の `.rounds.external` と同じ判定を使う。欠損、取得失敗、対象不一致では履歴を進めない。origin の照合は共有ゲートと同じ規則で、scheme・ユーザー名・既定ポート・`.git` の違いと、github.com へ 443 番ポートで SSH 接続する `ssh.github.com` を同じリポジトリとして扱う。証跡の一時ファイルを消せなかったときは、ゲートの結果にかかわらず残った場所を添えて失敗を返す。ゲートも失敗していれば、その失敗を主にして片付けの失敗を添える。`mode: 'push'` は直前にもう一度取得してゲートを判定し、origin の push 先が観測した GitHub リポジトリと一致するときだけ検証済みのローカル SHA を指定して通常の fast-forward push を行い、push 後は対象ブランチの ref だけを `git ls-remote` で引いてリモートの head を確かめる。観測後に 2 ラウンドの実レビューが必要な規則は変わらない。
 
-ホストがリポジトリの PreToolUse フックを発火させる場合、この `git push` にも `require-pr-feedback-review.ts` が走り、`gh` で指摘を取り直そうとする。`gh` が使えないと取得できず止まるため、`mode: 'push'` のゲートは許可した時点でブランチと HEAD に紐づく 120 秒限りの許可（`.rounds.external.cloud-push.json`、`cloud-push-grant.ts`）を残す。フックは `gh` で取得できないときに限ってこの許可を確認し、ブランチと HEAD が一致して期限内なら 1 回だけ通して許可を消す。`gh` が使える環境では許可を見ず、従来どおり `gh` の結果で判定する。許可はレビュー記録と同じく自己申告の記録である。
+ホストがリポジトリの PreToolUse フックを発火させる場合、この `git push` にも `require-pr-feedback-review.ts` が走り、`gh` で指摘を取り直そうとする。`gh` が使えないとフックは指摘を取得できず、push を止めずに警告して通す（`.claude/rules/ci-workflow.md` の「push 後: レビューコメントに対応する」）。同じ判定はラッパーが済ませているので、`mode: 'push'` のゲートは許可した時点でブランチと HEAD に紐づく 120 秒限りの許可（`.rounds.external.cloud-push.json`、`cloud-push-grant.ts`）を残す。フックは `gh` で取得できないときに限ってこの許可を確認し、ブランチと HEAD が一致して期限内なら警告を出さずに 1 回だけ通して許可を消す。`gh` が使える環境では許可を見ず、`gh` の結果で判定する。許可はレビュー記録と同じく自己申告の記録である。
 
 ```javascript
 const sourceTree = '/workspace/repository/.claude/worktrees/reviewed-tooling';
