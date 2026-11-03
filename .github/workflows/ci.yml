@@ -29,6 +29,12 @@ jobs:
 
       - uses: oven-sh/setup-bun@v2
 
+      - name: Install hook dependencies
+        # hook は Bash の構文解析に使う依存を初回の import 時に入れる。入れた直後の同じプロセスでは
+        # 読み込めないので、テストより先に入れておく。
+        working-directory: .claude/hooks
+        run: bun --eval "await (await import('./ensure-bash-parser-deps.ts')).ensureBashParserDeps(process.cwd())"
+
       - name: Test review-loop hooks
         # bun test は隠しディレクトリを探索しないため、hooks ディレクトリで実行する。
         working-directory: .claude/hooks
