@@ -256,7 +256,9 @@ function parseRulePaths(rulePath: string, markdown: string): string[] {
     if (line.trim() === '' || /^\s*#/.test(line)) continue;
     const match = line.match(/^\s*-\s*(?:['"]([^'"]+)['"]|([^\s#]+))\s*(?:#.*)?$/);
     if (!match) break;
-    paths.push((match[1] ?? match[2]) as string);
+    const path = match[1] ?? match[2];
+    if (path === undefined) break;
+    paths.push(path);
   }
   if (i < lines.length && /^\s*-/.test(lines[i]))
     throw new Error(`${rulePath}: paths: block list の ${i + 1} 行目を解析できません: ${lines[i]}`);

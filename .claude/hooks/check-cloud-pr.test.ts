@@ -152,7 +152,8 @@ describe('check-cloud-pr.ts の base の判定', () => {
       stdout: 'pipe',
       stderr: 'pipe',
     });
-    return JSON.parse(result.stdout.toString()) as { decision: string; reason?: string };
+    const verdict: unknown = JSON.parse(result.stdout.toString());
+    return verdict;
   }
 
   test(
@@ -179,8 +180,12 @@ describe('check-cloud-pr.ts の base の判定', () => {
       gitIn(repo.cwd, 'push', '-q', repo.bare, 'main:refs/heads/release');
       const mainSha = gitIn(repo.cwd, 'rev-parse', 'main');
       const verdict = check(repo, 'release', mainSha);
-      expect(verdict.decision).toBe('deny');
-      expect(verdict.reason).toContain('default branch（main）に無いコミットを持たない');
+      expect(verdict).toEqual(
+        expect.objectContaining({
+          decision: 'deny',
+          reason: expect.stringContaining('default branch（main）に無いコミットを持たない'),
+        }),
+      );
     },
     CASE_TIMEOUT_MS,
   );
