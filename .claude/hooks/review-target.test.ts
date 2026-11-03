@@ -477,6 +477,50 @@ describe('gh pr create の受け付ける形', () => {
   });
 });
 
+describe('gh api での PR の直接作成', () => {
+  const start = '/work/root';
+  const fields = '-f head=feat -f base=main';
+  test.each([
+    `gh api repos/acme/x/pulls ${fields} -f title=t`,
+    `gh api -X POST /repos/acme/x/pulls ${fields}`,
+    `gh api --method=POST repos/acme/x/pulls/ ${fields}`,
+    `gh api -Xpost repos/acme/x/pulls ${fields}`,
+    `gh api https://api.github.com/repos/acme/x/pulls ${fields}`,
+    `gh api "repos/acme/x/pulls?x=1" ${fields}`,
+    'gh api repos/acme/x/pulls --input pr.json',
+    `cd lib && gh api repos/acme/x/pulls ${fields} --jq .html_url`,
+    `gh api repos/acme/x/pulls ${fields} | cat`,
+    `bash -c 'gh api repos/acme/x/pulls ${fields}'`,
+    'gh api repos/acme/x/pulls -fhead=feat -fbase=main',
+    `gh api graphql -f query='mutation { createPullRequest(input: {}) { clientMutationId } }'`,
+  ])('%p は止め、create-pr.ts へ案内する', (command) => {
+    expect(prCreateInvocation(command, start)).toEqual({
+      kind: 'rejected',
+      reason: expect.stringContaining('create-pr.ts'),
+    });
+  });
+
+  test.each([
+    'gh api repos/acme/x/pulls',
+    'gh api repos/acme/x/pulls --jq ".[].number"',
+    'gh api repos/acme/x/pulls | jq length',
+    'gh api -X GET repos/acme/x/pulls -f state=open',
+    'gh api -X POST repos/acme/x/pulls -X GET -f head=feat',
+    'gh api repos/acme/x/pulls/554 --jq .mergeable',
+    'gh api -X POST repos/acme/x/pulls/554/requested_reviewers -f reviewers[]=a',
+    'gh api repos/acme/x/pulls/554/comments -f body=hello',
+    'gh api "repos/acme/x/pulls/$PR/comments/$ID/replies" -f body=done',
+    'gh api -X PATCH "repos/$REPO/pulls/$PR" -f body=x',
+    'gh api repos/acme/x/issues -f title=t',
+    'rg -F "gh api repos/{owner}/{repo}/pulls" docs',
+    'bun .claude/hooks/create-pr.ts --title t --body-file body.md',
+    `gh api graphql -f query='{ viewer { login } }'`,
+  ])('PR の直接作成でない %p は対象にしない', (command) => {
+    expect(prCreateInvocation(command, start)).toEqual({ kind: 'none' });
+  });
+});
+
+
 describe('origin の取得先の書き換えの比較', () => {
   test.each([
     ['git@github.com:acme/x.git', 'https://github.com/acme/x.git'],

@@ -15,7 +15,8 @@
  *
  * 対象外: 一度 close した PR を state: "open" で reopen する経路
  * （mcp__github__update_pull_request）は新規 PR 作成に当たらないため塞いでいない。
- * `gh api -X POST .../pulls` のような、gh の pr サブコマンドを経由しない生の API 呼び出しも対象外。
+ * `gh api` で pulls へ直接 POST する呼び出しは Bash のゲート（pr-create-command.ts）が止める。
+ * `curl` など gh を経由しない API 呼び出しは対象外。
  */
 import { existsSync } from 'node:fs';
 import { originRepository } from './hook-utils.ts';
