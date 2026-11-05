@@ -7,7 +7,7 @@ function envNames(source: string): string[] {
   if (result.kind !== 'parsed') throw new Error(`parse failed: ${source}`);
   const [command] = result.commands;
   if (!command) throw new Error(`no command: ${source}`);
-  return [...command.env.keys()].toSorted();
+  return [...command.env.keys()].sort();
 }
 
 describe('env の環境変数の扱い', () => {
